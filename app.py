@@ -75,7 +75,7 @@ def get_html_body(msg):
 def extract_code_from_html(html_body):
     # Padrão 1: letter-spacing (estilo típico de código)
     m = re.search(
-        r'letter-spacing\s*:\s*["\'][^"\']+["\'][^>]*>\s*([A-Z0-9]{4,8})\s*<',
+        r'letter-spacing\s*:\s*["\'][^"\']+["\''][^>]*>\s*([A-Z0-9]{4,8})\s*<',
         html_body, re.IGNORECASE
     )
     if m:
@@ -91,7 +91,7 @@ def extract_code_from_html(html_body):
 
     # Padrão 3: classe contendo "cod"
     m = re.search(
-        r'class=["\''][^\'"]*cod[^"\']*["\''][^>]*>\s*([A-Z0-9]{4,8})\s*<',
+        r'class=["\''][^\'\"]*cod[^"\']*["\''][^>]*>\s*([A-Z0-9]{4,8})\s*<',
         html_body, re.IGNORECASE
     )
     if m:
