@@ -9,26 +9,16 @@ import os
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# ========== CONFIGURACOES ==========
 IMAP_SERVER = os.environ.get("IMAP_SERVER", "imap.hostinger.com")
 IMAP_PORT   = int(os.environ.get("IMAP_PORT", 993))
 EMAIL_USER  = os.environ.get("EMAIL_USER", "mestre@codigo.log.br")
 EMAIL_PASS  = os.environ.get("EMAIL_PASS", "Mcodigo10@")
 
 PLATFORM_CONFIG = {
-    "netflix": {
-        "from_keyword": "netflix.com",
-        "subject_keyword": "digo de acesso",
-        "name": "Netflix"
-    },
-    "disney": {
-        "from_keyword": "disneyplus.com",
-        "subject_keyword": "digo de acesso",
-        "name": "Disney+"
-    }
+    "netflix": {"from_keyword": "netflix.com", "subject_keyword": "digo de acesso", "name": "Netflix", "type": "code"},
+    "disney": {"from_keyword": "disneyplus.com", "subject_keyword": "digo de acesso", "name": "Disney+", "type": "code"},
+    "netflix-residence": {"from_keyword": "netflix.com", "subject_keyword": "atualizar", "name": "Residencia Netflix", "type": "link"}
 }
-
-# ========== UTILITARIOS ==========
 
 def decode_str(s):
     if not s:
@@ -47,8 +37,8 @@ def get_html_body(msg):
     plain = ""
     if msg.is_multipart():
         for part in msg.walk():
-            ct  = part.get_content_type()
-            cd  = str(part.get("Content-Disposition", ""))
+            ct = part.get_content_type()
+            cd = str(part.get("Content-Disposition", ""))
             if "attachment" in cd:
                 continue
             payload = part.get_payload(decode=True)
@@ -72,26 +62,14 @@ def get_html_body(msg):
     return html or plain
 
 def extract_code_from_html(html_body):
-    # Padrao 1: letter-spacing
-    m = re.search(
-        r"letter-spacing\s*:\s*[^;>]+[^>]*>\s*([A-Z0-9]{4,8})\s*<",
-        html_body, re.IGNORECASE
-    )
+    m = re.search(r"letter-spacing\s*:\s*[^;>]+[^>]*>\s*([A-Z0-9]{4,8})\s*<", html_body, re.IGNORECASE)
     if m:
         return m.group(1).strip()
-
-    # Padrao 2: font-size grande
-    m = re.search(
-        r"font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*([A-Z0-9]{4,8})\s*<",
-        html_body, re.IGNORECASE
-    )
+    m = re.search(r"font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*([A-Z0-9]{4,8})\s*<", html_body, re.IGNORECASE)
     if m:
         return m.group(1).strip()
-
-    # Remover tags HTML e buscar no texto limpo
     clean = re.sub(r"<[^>]+>", " ", html_body)
     clean = re.sub(r"\s+", " ", clean)
-
     patterns_text = [
         r"c[o\u00f3]digo\s*(?:de acesso)?\s*[:\-]?\s*([A-Z0-9]{4,8})",
         r"access\s*code\s*[:\-]?\s*([A-Z0-9]{4,8})",
@@ -102,27 +80,33 @@ def extract_code_from_html(html_body):
         m = re.search(pat, clean, re.IGNORECASE)
         if m:
             return m.group(1).strip()
+    return None
 
+def extract_residence_link(html_body):
+    links = re.findall(r'href=["\']([^"\']+)["\']', html_body, re.IGNORECASE)
+    netflix_links = [l for l in links if "netflix.com" in l.lower() and len(l) > 50]
+    update_patterns = [
+        r'href=["\']([^"\']*netflix\.com[^"\']*(?:update|atualiz|resid|location)[^"\']*)["\']',
+        r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
+        r'href=["\']([^"\']*netflix\.com[^"\']*)["\']',
+    ]
+    for pat in update_patterns:
+        m = re.search(pat, html_body, re.IGNORECASE)
+        if m:
+            link = m.group(1)
+            if len(link) > 30:
+                return link
+    if netflix_links:
+        return netflix_links[0]
     return None
 
 def email_matches_user(msg, html_body, user_email):
     user_lower = user_email.lower()
-
     if user_lower in html_body.lower():
         return True
-
-    to_header = decode_str(msg.get("To", "")).lower()
-    if user_lower in to_header:
-        return True
-
-    delivered_to = decode_str(msg.get("Delivered-To", "")).lower()
-    if user_lower in delivered_to:
-        return True
-
-    original_to = decode_str(msg.get("X-Original-To", "")).lower()
-    if user_lower in original_to:
-        return True
-
+    for header in ["To", "Delivered-To", "X-Original-To"]:
+        if user_lower in decode_str(msg.get(header, "")).lower():
+            return True
     return False
 
 def connect_imap():
@@ -133,24 +117,20 @@ def connect_imap():
 def search_code(user_email, platform):
     config = PLATFORM_CONFIG.get(platform)
     if not config:
-        return None, "Plataforma nao suportada."
-
+        return None, None, "Plataforma nao suportada."
     try:
         mail = connect_imap()
         mail.select("INBOX")
-
         from_kw = config["from_keyword"]
         subj_kw = config["subject_keyword"]
-
+        result_type = config.get("type", "code")
         status, msgs = mail.search(None, "FROM", from_kw)
         if status != "OK" or not msgs[0]:
             mail.logout()
-            return None, "Nenhum email da plataforma encontrado."
-
+            return None, None, "Nenhum email da plataforma encontrado."
         all_ids = msgs[0].split()
         recent_ids = all_ids[-100:]
         recent_ids.reverse()
-
         code_email_ids = []
         for eid in recent_ids:
             try:
@@ -163,43 +143,35 @@ def search_code(user_email, platform):
                     code_email_ids.append(eid)
             except Exception:
                 continue
-
         if not code_email_ids:
             mail.logout()
-            return None, (
-                "Nenhum email de codigo " + config["name"] + " encontrado. "
-                "Solicite o codigo no app/site da plataforma primeiro."
-            )
-
+            return None, None, ("Nenhum email de " + config["name"] + " encontrado. Verifique se o email ja chegou na caixa de entrada.")
         for eid in code_email_ids:
             try:
                 status, data = mail.fetch(eid, "(RFC822)")
                 if status != "OK":
                     continue
-
                 msg = email.message_from_bytes(data[0][1])
                 html_body = get_html_body(msg)
-
                 if email_matches_user(msg, html_body, user_email):
-                    code = extract_code_from_html(html_body)
-                    if code:
-                        mail.logout()
-                        return code, None
+                    if result_type == "link":
+                        link = extract_residence_link(html_body)
+                        if link:
+                            mail.logout()
+                            return None, link, None
+                    else:
+                        code = extract_code_from_html(html_body)
+                        if code:
+                            mail.logout()
+                            return code, None, None
             except Exception:
                 continue
-
         mail.logout()
-        return None, (
-            "Email da conta nao encontrado nos emails recentes de " + config["name"] + ". "
-            "Verifique se digitou o email correto e solicite um novo codigo."
-        )
-
+        return None, None, ("Email da conta nao encontrado nos emails recentes de " + config["name"] + ". Verifique se digitou o email correto.")
     except imaplib.IMAP4.error as e:
-        return None, "Erro de conexao com servidor de email: " + str(e)
+        return None, None, "Erro de conexao com servidor de email: " + str(e)
     except Exception as e:
-        return None, "Erro interno: " + str(e)
-
-# ========== ROTAS ==========
+        return None, None, "Erro interno: " + str(e)
 
 @app.route("/")
 def index():
@@ -210,25 +182,21 @@ def get_code():
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"success": False, "message": "Dados invalidos."}), 400
-
     user_email = data.get("email", "").strip().lower()
     platform   = data.get("platform", "").strip().lower()
-
     if not user_email:
         return jsonify({"success": False, "message": "Por favor, informe seu email."}), 400
-
     if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", user_email):
         return jsonify({"success": False, "message": "Email invalido. Verifique e tente novamente."}), 400
-
     if platform not in PLATFORM_CONFIG:
         return jsonify({"success": False, "message": "Plataforma nao suportada."}), 400
-
-    code, error = search_code(user_email, platform)
-
+    code, link, error = search_code(user_email, platform)
     if code:
-        return jsonify({"success": True, "code": code, "platform": platform})
+        return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})
+    elif link:
+        return jsonify({"success": True, "link": link, "platform": platform, "type": "link"})
     else:
-        return jsonify({"success": False, "message": error or "Codigo nao encontrado."})
+        return jsonify({"success": False, "message": error or "Nao encontrado."})
 
 @app.route("/api/health", methods=["GET"])
 def health():
