@@ -50,6 +50,18 @@ PLATFORM_CONFIG = {
         ],
         "name": "Redefinicao de Senha Netflix",
         "type": "link"
+    },
+    "disney-residence": {
+        "from_keyword": "disneyplus.com",
+        "subject_keywords": [
+            "Quer atualizar sua Residencia do Disney+",
+            "atualizar sua Residencia do Disney",
+            "Residencia do Disney",
+            "update your Disney+ Home",
+            "Disney+ Home"
+        ],
+        "name": "Residencia Disney+",
+        "type": "link"
     }
 }
 
@@ -181,6 +193,41 @@ def extract_netflix_link(html_body, link_type="generic"):
 
     return None
 
+def extract_link(html_body, platform):
+    """Extrai o link principal do email de acordo com a plataforma."""
+    if platform == "netflix-residence":
+        patterns = [
+            r'href=["\']([^"\']* netflix\.com[^"\']* (?:update|atualiz|resid|location)[^"\']*)["\']',
+            r'href=["\']([^"\']* netflix\.com[^"\']* account[^"\']*)["\']',
+        ]
+        domain = "netflix.com"
+    elif platform == "password-reset":
+        patterns = [
+            r'href=["\']([^"\']* netflix\.com[^"\']* (?:password|reset|redefin|senha)[^"\']*)["\']',
+            r'href=["\']([^"\']* netflix\.com[^"\']* account[^"\']*)["\']',
+        ]
+        domain = "netflix.com"
+    elif platform == "disney-residence":
+        patterns = [
+            r'href=["\']([^"\']* (?:disneyplus|disney)\.com[^"\']* (?:update|atualiz|resid|home|location)[^"\']*)["\']',
+            r'href=["\']([^"\']* disneyplus\.com[^"\']*)["\']',
+        ]
+        domain = "disney"
+    else:
+        patterns = []
+        domain = "netflix.com"
+    for pat in patterns:
+        m2 = re.search(pat, html_body, re.IGNORECASE)
+        if m2:
+            link = m2.group(1)
+            if len(link) > 30:
+                return link
+    all_links = re.findall(r'href=["\']([^"\']+)["\']', html_body, re.IGNORECASE)
+    domain_links = [l for l in all_links if domain in l.lower() and len(l) > 50]
+    if domain_links:
+        return domain_links[0]
+    return None
+
 def email_matches_user(msg, html_body, user_email):
     user_lower = user_email.lower()
     if user_lower in html_body.lower():
@@ -248,8 +295,7 @@ def search_code(user_email, platform):
 
                 if email_matches_user(msg, html_body, user_email):
                     if result_type == "link":
-                        ltype = "password" if platform == "password-reset" else "residence"
-                        link  = extract_netflix_link(html_body, link_type=ltype)
+                        link  = extract_link(html_body, platform)
                         if link:
                             mail.logout()
                             return None, link, None
