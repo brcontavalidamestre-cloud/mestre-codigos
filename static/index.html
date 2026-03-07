@@ -246,6 +246,7 @@
     .selected-platform-badge.netflix  { border-color: rgba(229,9,20,0.5); color: #ff6b6b; background: rgba(229,9,20,0.1); }
     .selected-platform-badge.disney   { border-color: rgba(17,117,183,0.5); color: #60a5fa; background: rgba(17,117,183,0.1); }
     .selected-platform-badge.netflix-residence { border-color: rgba(220,38,38,0.5); color: #fca5a5; background: rgba(220,38,38,0.1); }
+    .selected-platform-badge.password-reset { border-color: rgba(16,185,129,0.5); color: #6ee7b7; background: rgba(16,185,129,0.1); }
 
     .tabs {
       display: flex;
@@ -283,6 +284,7 @@
     .tab-btn.netflix.active  { background: linear-gradient(135deg, #b91c1c, #7f1d1d); box-shadow: 0 0 15px rgba(229,9,20,0.4); }
     .tab-btn.disney.active   { background: linear-gradient(135deg, #1d4ed8, #1e3a5f); box-shadow: 0 0 15px rgba(17,117,183,0.4); }
     .tab-btn.residence.active { background: linear-gradient(135deg, #7f1d1d, #991b1b); box-shadow: 0 0 15px rgba(220,38,38,0.4); }
+    .tab-btn.password.active  { background: linear-gradient(135deg, #065f46, #047857); box-shadow: 0 0 15px rgba(16,185,129,0.4); }
 
     .form-group { margin-bottom: 16px; }
     .form-label {
@@ -535,6 +537,11 @@
           <div class="platform-name">Residência Netflix</div>
           <div class="platform-desc">Link de atualização de local</div>
         </div>
+        <div class="platform-card" onclick="selectPlatform('password-reset')" id="card-password-reset">
+          <span class="platform-logo">🔑</span>
+          <div class="platform-name">Redefinição de Senha</div>
+          <div class="platform-desc">Link de redefinição Netflix</div>
+        </div>
       </div>
     </section>
 
@@ -575,6 +582,9 @@
         </button>
         <button class="tab-btn residence" id="tab-netflix-residence" onclick="switchTab('netflix-residence')">
           🏠 Residência Netflix
+        </button>
+        <button class="tab-btn password" id="tab-password-reset" onclick="switchTab('password-reset')">
+          🔑 Redefinição de Senha
         </button>
       </div>
 
@@ -669,7 +679,8 @@
     const platformLabels = {
       netflix: '🎬 Netflix — Código de acesso temporário',
       disney:  '✨ Disney+ — Código de acesso único',
-      'netflix-residence': '🏠 Residência Netflix — Link de atualização'
+      'netflix-residence': '🏠 Residência Netflix — Link de atualização',
+      'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição'
     };
 
     function selectPlatform(p) {
@@ -741,10 +752,22 @@
 
     function showSuccess(data) {
       const box = document.getElementById('result-box');
-      const names = { netflix: 'Netflix', disney: 'Disney+', 'netflix-residence': 'Residência Netflix' };
+      const names = { netflix: 'Netflix', disney: 'Disney+', 'netflix-residence': 'Residência Netflix', 'password-reset': 'Redefinição de Senha Netflix' };
       box.className = 'result-box success';
 
-      if (data.type === 'link' && data.link) {
+      if (data.type === 'link' && data.link && data.platform === 'password-reset') {
+        box.innerHTML = `
+          <span class="result-emoji">🔑</span>
+          <div class="result-label">Link de redefinição encontrado!</div>
+          <div class="result-platform">Redefinição de Senha Netflix</div>
+          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
+             style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#065f46,#047857);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
+            🔗 Abrir Link de Redefinição
+          </a>
+          <br/>
+          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
+        `;
+      } else if (data.type === 'link' && data.link) {
         box.innerHTML = `
           <span class="result-emoji">🏠</span>
           <div class="result-label">Link de atualização encontrado!</div>
