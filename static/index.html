@@ -527,7 +527,12 @@
           <span class="platform-logo">✨</span>
           <div class="platform-name">Disney+</div>
           <div class="platform-desc">Código de acesso único</div>
+               <div class="platform-card" onclick="selectPlatform('netflix-residence')" id="card-netflix-residence">
+          <span class="platform-logo">🏠</span>
+          <div class="platform-name">Residência Netflix</div>
+          <div class="platform-desc">Link de atualização de local</div>
         </div>
+ </div>
       </div>
     </section>
 
@@ -565,7 +570,10 @@
         </button>
         <button class="tab-btn disney" id="tab-disney" onclick="switchTab('disney')">
           ✨ Código Disney+
+              <button class="tab-btn residence" id="tab-netflix-residence" onclick="switchTab('netflix-residence')">
+          🏠 Residência Netflix
         </button>
+  </button>
       </div>
 
       <div id="selected-badge" class="selected-platform-badge netflix">
