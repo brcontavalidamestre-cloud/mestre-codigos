@@ -15,23 +15,40 @@ IMAP_PORT   = int(os.environ.get("IMAP_PORT", 993))
 EMAIL_USER  = os.environ.get("EMAIL_USER", "mestre@codigo.log.br")
 EMAIL_PASS  = os.environ.get("EMAIL_PASS", "Mcodigo10@")
 
+# subject_keywords aceita lista (qualquer item que bater serve)
 PLATFORM_CONFIG = {
     "netflix": {
         "from_keyword": "netflix.com",
-        "subject_keyword": "digo de acesso",
+        "subject_keywords": ["digo de acesso"],
         "name": "Netflix",
         "type": "code"
     },
     "disney": {
         "from_keyword": "disneyplus.com",
-        "subject_keyword": "digo de acesso",
+        "subject_keywords": ["digo de acesso"],
         "name": "Disney+",
         "type": "code"
     },
     "netflix-residence": {
         "from_keyword": "netflix.com",
-        "subject_keyword": "atualizar",
+        "subject_keywords": ["atualizar"],
         "name": "Residencia Netflix",
+        "type": "link"
+    },
+    "password-reset": {
+        "from_keyword": "netflix.com",
+        "subject_keywords": [
+            "Complete a solicitacao de redefinicao de senha",
+            "redefinicao de senha",
+            "Completa tu solicitud de restablecimiento de contrasena",
+            "restablecimiento de contrasena",
+            "Tapusin ang request mong i-reset ang password",
+            "reset ang password",
+            "reset password",
+            "password reset",
+            "redefini"
+        ],
+        "name": "Redefinicao de Senha Netflix",
         "type": "link"
     }
 }
@@ -49,6 +66,24 @@ def decode_str(s):
         else:
             result += str(part)
     return result
+
+def normalize(text):
+    """Remove acentos e converte para minusculo para comparacao robusta."""
+    import unicodedata
+    text = text.lower()
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+def subject_matches(subject, keywords):
+    """Verifica se alguma keyword bate no assunto (com e sem acentos)."""
+    subj_norm = normalize(subject)
+    subj_lower = subject.lower()
+    for kw in keywords:
+        kw_norm = normalize(kw)
+        kw_lower = kw.lower()
+        if kw_norm in subj_norm or kw_lower in subj_lower:
+            return True
+    return False
 
 def get_html_body(msg):
     html = ""
@@ -110,59 +145,49 @@ def extract_code_from_html(html_body):
 
     return None
 
-def extract_residence_link(html_body):
+def extract_netflix_link(html_body, link_type="generic"):
     """
-    Extrai o link de atualizacao de residencia do email da Netflix.
-    Procura o botao/link 'Atualizar residencia' ou similar.
+    Extrai links da Netflix do corpo HTML.
+    link_type: 'residence' para atualizacao de residencia, 
+               'password' para redefinicao de senha,
+               'generic' para qualquer link da Netflix.
     """
-    # Padrao 1: href em ancora com texto "atualizar" proximo
-    # Busca todos os hrefs de netflix
-    links = re.findall(r'href=["\']([^"\']+)["\']', html_body, re.IGNORECASE)
-    
-    netflix_links = []
-    for link in links:
-        if "netflix.com" in link.lower() and len(link) > 50:
-            netflix_links.append(link)
-    
-    # Tenta encontrar o link especifico do botao de atualizar residencia
-    # Geralmente aparece perto de texto como "Atualizar residência" ou "update location"
-    update_patterns = [
-        r'href=["\']([^"\']*netflix\.com[^"\']*(?:update|atualiz|resid|location)[^"\']*)["\']',
-        r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
-        r'href=["\']([^"\']*netflix\.com[^"\']*)["\']',
-    ]
-    
-    for pat in update_patterns:
+    # Padroes especificos por tipo
+    if link_type == "password":
+        specific_patterns = [
+            r'href=["\']([^"\']*netflix\.com[^"\']*(?:password|reset|redefin|senha)[^"\']*)["\']',
+            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
+        ]
+    elif link_type == "residence":
+        specific_patterns = [
+            r'href=["\']([^"\']*netflix\.com[^"\']*(?:update|atualiz|resid|location)[^"\']*)["\']',
+            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
+        ]
+    else:
+        specific_patterns = []
+
+    for pat in specific_patterns:
         m = re.search(pat, html_body, re.IGNORECASE)
         if m:
             link = m.group(1)
             if len(link) > 30:
                 return link
-    
-    # Fallback: retorna o primeiro link longo da Netflix encontrado
+
+    # Fallback: qualquer link longo da Netflix
+    all_links = re.findall(r'href=["\']([^"\']+)["\']', html_body, re.IGNORECASE)
+    netflix_links = [l for l in all_links if "netflix.com" in l.lower() and len(l) > 50]
     if netflix_links:
         return netflix_links[0]
-    
+
     return None
 
 def email_matches_user(msg, html_body, user_email):
     user_lower = user_email.lower()
-
     if user_lower in html_body.lower():
         return True
-
-    to_header = decode_str(msg.get("To", "")).lower()
-    if user_lower in to_header:
-        return True
-
-    delivered_to = decode_str(msg.get("Delivered-To", "")).lower()
-    if user_lower in delivered_to:
-        return True
-
-    original_to = decode_str(msg.get("X-Original-To", "")).lower()
-    if user_lower in original_to:
-        return True
-
+    for header in ["To", "Delivered-To", "X-Original-To"]:
+        if user_lower in decode_str(msg.get(header, "")).lower():
+            return True
     return False
 
 def connect_imap():
@@ -179,8 +204,8 @@ def search_code(user_email, platform):
         mail = connect_imap()
         mail.select("INBOX")
 
-        from_kw = config["from_keyword"]
-        subj_kw = config["subject_keyword"]
+        from_kw    = config["from_keyword"]
+        subj_kws   = config["subject_keywords"]
         result_type = config.get("type", "code")
 
         status, msgs = mail.search(None, "FROM", from_kw)
@@ -188,42 +213,43 @@ def search_code(user_email, platform):
             mail.logout()
             return None, None, "Nenhum email da plataforma encontrado."
 
-        all_ids = msgs[0].split()
+        all_ids    = msgs[0].split()
         recent_ids = all_ids[-100:]
         recent_ids.reverse()
 
-        code_email_ids = []
+        matched_ids = []
         for eid in recent_ids:
             try:
                 status, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
                 if status != "OK":
                     continue
-                hdr = email.message_from_bytes(data[0][1])
+                hdr  = email.message_from_bytes(data[0][1])
                 subj = decode_str(hdr.get("Subject", ""))
-                if subj_kw.lower() in subj.lower():
-                    code_email_ids.append(eid)
+                if subject_matches(subj, subj_kws):
+                    matched_ids.append(eid)
             except Exception:
                 continue
 
-        if not code_email_ids:
+        if not matched_ids:
             mail.logout()
             return None, None, (
                 "Nenhum email de " + config["name"] + " encontrado. "
                 "Verifique se o email ja chegou na caixa de entrada."
             )
 
-        for eid in code_email_ids:
+        for eid in matched_ids:
             try:
                 status, data = mail.fetch(eid, "(RFC822)")
                 if status != "OK":
                     continue
 
-                msg = email.message_from_bytes(data[0][1])
+                msg       = email.message_from_bytes(data[0][1])
                 html_body = get_html_body(msg)
 
                 if email_matches_user(msg, html_body, user_email):
                     if result_type == "link":
-                        link = extract_residence_link(html_body)
+                        ltype = "password" if platform == "password-reset" else "residence"
+                        link  = extract_netflix_link(html_body, link_type=ltype)
                         if link:
                             mail.logout()
                             return None, link, None
