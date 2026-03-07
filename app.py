@@ -9,13 +9,12 @@ import os
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# ========== CONFIGURAÇÕES ==========
+# ========== CONFIGURACOES ==========
 IMAP_SERVER = os.environ.get("IMAP_SERVER", "imap.hostinger.com")
 IMAP_PORT   = int(os.environ.get("IMAP_PORT", 993))
 EMAIL_USER  = os.environ.get("EMAIL_USER", "mestre@codigo.log.br")
 EMAIL_PASS  = os.environ.get("EMAIL_PASS", "Mcodigo10@")
 
-# Remetentes e palavras-chave por plataforma
 PLATFORM_CONFIG = {
     "netflix": {
         "from_keyword": "netflix.com",
@@ -29,7 +28,7 @@ PLATFORM_CONFIG = {
     }
 }
 
-# ========== UTILITÁRIOS ==========
+# ========== UTILITARIOS ==========
 
 def decode_str(s):
     if not s:
@@ -73,40 +72,31 @@ def get_html_body(msg):
     return html or plain
 
 def extract_code_from_html(html_body):
-    # Padrão 1: letter-spacing (estilo típico de código)
+    # Padrao 1: letter-spacing
     m = re.search(
-        r'letter-spacing\s*:\s*["\'][^"\']+["\''][^>]*>\s*([A-Z0-9]{4,8})\s*<',
+        r"letter-spacing\s*:\s*[^;>]+[^>]*>\s*([A-Z0-9]{4,8})\s*<",
         html_body, re.IGNORECASE
     )
     if m:
         return m.group(1).strip()
 
-    # Padrão 2: font-size grande (código destacado)
+    # Padrao 2: font-size grande
     m = re.search(
-        r'font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*([A-Z0-9]{4,8})\s*<',
-        html_body, re.IGNORECASE
-    )
-    if m:
-        return m.group(1).strip()
-
-    # Padrão 3: classe contendo "cod"
-    m = re.search(
-        r'class=["\''][^\'\"]*cod[^"\']*["\''][^>]*>\s*([A-Z0-9]{4,8})\s*<',
+        r"font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*([A-Z0-9]{4,8})\s*<",
         html_body, re.IGNORECASE
     )
     if m:
         return m.group(1).strip()
 
     # Remover tags HTML e buscar no texto limpo
-    clean = re.sub(r'<[^>]+>', ' ', html_body)
-    clean = re.sub(r'\s+', ' ', clean)
+    clean = re.sub(r"<[^>]+>", " ", html_body)
+    clean = re.sub(r"\s+", " ", clean)
 
     patterns_text = [
-        r'c[oó]digo\s*(?:de acesso)?\s*[:\-]?\s*([A-Z0-9]{4,8})',
-        r'access\s*code\s*[:\-]?\s*([A-Z0-9]{4,8})',
-        r'\b([0-9]{4,8})\b(?=\s*(?:é seu|é o seu|para entrar|para acessar))',
-        # Padrão 4: número de 6 dígitos isolado (código típico Disney+/Netflix)
-        r'\b([0-9]{6})\b',
+        r"c[o\u00f3]digo\s*(?:de acesso)?\s*[:\-]?\s*([A-Z0-9]{4,8})",
+        r"access\s*code\s*[:\-]?\s*([A-Z0-9]{4,8})",
+        r"\b([0-9]{4,8})\b(?=\s*(?:\u00e9 seu|\u00e9 o seu|para entrar|para acessar))",
+        r"\b([0-9]{6})\b",
     ]
     for pat in patterns_text:
         m = re.search(pat, clean, re.IGNORECASE)
@@ -116,27 +106,19 @@ def extract_code_from_html(html_body):
     return None
 
 def email_matches_user(msg, html_body, user_email):
-    """
-    Verifica se o email do usuário está associado a este email.
-    Verifica no corpo HTML, no header To: e no header Delivered-To:
-    """
     user_lower = user_email.lower()
 
-    # 1. Verificar no corpo HTML
     if user_lower in html_body.lower():
         return True
 
-    # 2. Verificar no header To:
     to_header = decode_str(msg.get("To", "")).lower()
     if user_lower in to_header:
         return True
 
-    # 3. Verificar no header Delivered-To:
     delivered_to = decode_str(msg.get("Delivered-To", "")).lower()
     if user_lower in delivered_to:
         return True
 
-    # 4. Verificar no header X-Original-To:
     original_to = decode_str(msg.get("X-Original-To", "")).lower()
     if user_lower in original_to:
         return True
@@ -151,7 +133,7 @@ def connect_imap():
 def search_code(user_email, platform):
     config = PLATFORM_CONFIG.get(platform)
     if not config:
-        return None, "Plataforma não suportada."
+        return None, "Plataforma nao suportada."
 
     try:
         mail = connect_imap()
@@ -185,8 +167,8 @@ def search_code(user_email, platform):
         if not code_email_ids:
             mail.logout()
             return None, (
-                f"Nenhum email de código {config['name']} encontrado. "
-                "Solicite o código no app/site da plataforma primeiro."
+                "Nenhum email de codigo " + config["name"] + " encontrado. "
+                "Solicite o codigo no app/site da plataforma primeiro."
             )
 
         for eid in code_email_ids:
@@ -208,14 +190,14 @@ def search_code(user_email, platform):
 
         mail.logout()
         return None, (
-            f"Email da conta não encontrado nos emails recentes de {config['name']}. "
-            "Verifique se digitou o email correto e solicite um novo código."
+            "Email da conta nao encontrado nos emails recentes de " + config["name"] + ". "
+            "Verifique se digitou o email correto e solicite um novo codigo."
         )
 
     except imaplib.IMAP4.error as e:
-        return None, f"Erro de conexão com servidor de email: {str(e)}"
+        return None, "Erro de conexao com servidor de email: " + str(e)
     except Exception as e:
-        return None, f"Erro interno: {str(e)}"
+        return None, "Erro interno: " + str(e)
 
 # ========== ROTAS ==========
 
@@ -227,7 +209,7 @@ def index():
 def get_code():
     data = request.get_json(silent=True)
     if not data:
-        return jsonify({"success": False, "message": "Dados inválidos."}), 400
+        return jsonify({"success": False, "message": "Dados invalidos."}), 400
 
     user_email = data.get("email", "").strip().lower()
     platform   = data.get("platform", "").strip().lower()
@@ -236,21 +218,21 @@ def get_code():
         return jsonify({"success": False, "message": "Por favor, informe seu email."}), 400
 
     if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", user_email):
-        return jsonify({"success": False, "message": "Email inválido. Verifique e tente novamente."}), 400
+        return jsonify({"success": False, "message": "Email invalido. Verifique e tente novamente."}), 400
 
     if platform not in PLATFORM_CONFIG:
-        return jsonify({"success": False, "message": "Plataforma não suportada."}), 400
+        return jsonify({"success": False, "message": "Plataforma nao suportada."}), 400
 
     code, error = search_code(user_email, platform)
 
     if code:
         return jsonify({"success": True, "code": code, "platform": platform})
     else:
-        return jsonify({"success": False, "message": error or "Código não encontrado."})
+        return jsonify({"success": False, "message": error or "Codigo nao encontrado."})
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "Mestre Códigos"})
+    return jsonify({"status": "ok", "service": "Mestre Codigos"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
