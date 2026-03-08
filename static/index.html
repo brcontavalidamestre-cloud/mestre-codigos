@@ -247,6 +247,7 @@
     .selected-platform-badge.disney   { border-color: rgba(17,117,183,0.5); color: #60a5fa; background: rgba(17,117,183,0.1); }
     .selected-platform-badge.netflix-residence { border-color: rgba(220,38,38,0.5); color: #fca5a5; background: rgba(220,38,38,0.1); }
     .selected-platform-badge.password-reset { border-color: rgba(16,185,129,0.5); color: #6ee7b7; background: rgba(16,185,129,0.1); }
+    .selected-platform-badge.disney-residence { border-color: rgba(29,78,216,0.5); color: #93c5fd; background: rgba(29,78,216,0.1); }
 
     .tabs {
       display: flex;
@@ -285,6 +286,7 @@
     .tab-btn.disney.active   { background: linear-gradient(135deg, #1d4ed8, #1e3a5f); box-shadow: 0 0 15px rgba(17,117,183,0.4); }
     .tab-btn.residence.active { background: linear-gradient(135deg, #7f1d1d, #991b1b); box-shadow: 0 0 15px rgba(220,38,38,0.4); }
     .tab-btn.password.active  { background: linear-gradient(135deg, #065f46, #047857); box-shadow: 0 0 15px rgba(16,185,129,0.4); }
+    .tab-btn.disney-res.active { background: linear-gradient(135deg, #1e3a8a, #1d4ed8); box-shadow: 0 0 15px rgba(29,78,216,0.5); }
 
     .form-group { margin-bottom: 16px; }
     .form-label {
@@ -542,6 +544,11 @@
           <div class="platform-name">Redefinição de Senha</div>
           <div class="platform-desc">Link de redefinição Netflix</div>
         </div>
+        <div class="platform-card" onclick="selectPlatform('disney-residence')" id="card-disney-residence">
+          <span class="platform-logo">🏡</span>
+          <div class="platform-name">Residência Disney+</div>
+          <div class="platform-desc">Link de atualização Disney+</div>
+        </div>
       </div>
     </section>
 
@@ -585,6 +592,9 @@
         </button>
         <button class="tab-btn password" id="tab-password-reset" onclick="switchTab('password-reset')">
           🔑 Redefinição de Senha
+        </button>
+        <button class="tab-btn disney-res" id="tab-disney-residence" onclick="switchTab('disney-residence')">
+          🏡 Residência Disney+
         </button>
       </div>
 
@@ -680,7 +690,8 @@
       netflix: '🎬 Netflix — Código de acesso temporário',
       disney:  '✨ Disney+ — Código de acesso único',
       'netflix-residence': '🏠 Residência Netflix — Link de atualização',
-      'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição'
+      'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição',
+      'disney-residence':  '🏡 Residência Disney+ — Link de atualização'
     };
 
     function selectPlatform(p) {
@@ -752,7 +763,13 @@
 
     function showSuccess(data) {
       const box = document.getElementById('result-box');
-      const names = { netflix: 'Netflix', disney: 'Disney+', 'netflix-residence': 'Residência Netflix', 'password-reset': 'Redefinição de Senha Netflix' };
+      const names = {
+        netflix: 'Netflix',
+        disney: 'Disney+',
+        'netflix-residence': 'Residência Netflix',
+        'password-reset': 'Redefinição de Senha Netflix',
+        'disney-residence': 'Residência Disney+'
+      };
       box.className = 'result-box success';
 
       if (data.type === 'link' && data.link && data.platform === 'password-reset') {
@@ -763,6 +780,18 @@
           <a href="${data.link}" target="_blank" rel="noopener noreferrer"
              style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#065f46,#047857);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
             🔗 Abrir Link de Redefinição
+          </a>
+          <br/>
+          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
+        `;
+      } else if (data.type === 'link' && data.link && data.platform === 'disney-residence') {
+        box.innerHTML = `
+          <span class="result-emoji">🏡</span>
+          <div class="result-label">Link de atualização encontrado!</div>
+          <div class="result-platform">Residência Disney+</div>
+          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
+             style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
+            🔗 Abrir Link de Atualização Disney+
           </a>
           <br/>
           <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>

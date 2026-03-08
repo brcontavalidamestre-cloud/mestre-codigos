@@ -18,7 +18,7 @@ app.secret_key = os.environ.get("SECRET_KEY", "mestre-codigos-secret-2025")
 app.permanent_session_lifetime = timedelta(hours=8)
 
 # ─── ARQUIVO DE USUARIOS ───────────────────────────────────────────────────────
-USERS_FILE = os.environ.get("USERS_FILE", "/app/users.json")
+USERS_FILE = os.environ.get("USERS_FILE", "/tmp/users.json")
 
 def load_users():
     if os.path.exists(USERS_FILE):

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mestre Códigos ✦ — Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg-deep:#06000f; --bg-dark:#0d0020; --bg-card:#130029;
+      --purple-deep:#3b0764; --purple-mid:#6d28d9; --purple-bright:#a855f7;
+      --gold:#f59e0b; --gold-light:#fcd34d;
+      --text-white:#f5f0ff; --text-muted:#c4b5fd;
+      --border:rgba(168,85,247,0.25); --border-gold:rgba(245,158,11,0.35);
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg-deep);color:var(--text-white);font-family:'Raleway',sans-serif;
+      min-height:100vh;display:flex;align-items:center;justify-content:center;
+      position:relative;overflow:hidden;}
+    .mist{position:fixed;border-radius:50%;filter:blur(120px);opacity:0.12;z-index:0;pointer-events:none;}
+    .m1{width:600px;height:600px;background:var(--purple-mid);top:-150px;left:-150px;}
+    .m2{width:500px;height:500px;background:var(--gold);bottom:-100px;right:-100px;}
+    .card{
+      position:relative;z-index:1;
+      background:linear-gradient(135deg,rgba(19,0,41,0.95),rgba(26,0,53,0.9));
+      border:1px solid var(--border-gold);
+      border-radius:20px;padding:48px 40px;width:100%;max-width:420px;
+      box-shadow:0 0 60px rgba(109,40,217,0.3),0 0 120px rgba(245,158,11,0.1);
+    }
+    .logo{text-align:center;margin-bottom:32px;}
+    .logo-icon{
+      width:80px;height:80px;margin:0 auto 16px;
+      background:linear-gradient(135deg,var(--purple-deep),var(--purple-mid));
+      border-radius:50%;display:flex;align-items:center;justify-content:center;
+      font-size:36px;border:2px solid var(--border-gold);
+      box-shadow:0 0 30px rgba(109,40,217,0.5);
+    }
+    h1{font-family:'Cinzel',serif;font-size:1.8rem;font-weight:900;
+      background:linear-gradient(135deg,var(--gold-light),var(--gold),var(--purple-bright));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+      text-align:center;letter-spacing:0.08em;}
+    .subtitle{text-align:center;color:var(--text-muted);font-size:0.85rem;margin-top:6px;}
+    .form-group{margin-bottom:18px;}
+    label{display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);
+      letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;}
+    input{
+      width:100%;padding:13px 16px;
+      background:rgba(109,40,217,0.1);border:1px solid var(--border);
+      border-radius:10px;color:var(--text-white);font-family:'Raleway',sans-serif;font-size:1rem;
+      outline:none;transition:border-color .2s,box-shadow .2s;
+    }
+    input:focus{border-color:var(--purple-bright);box-shadow:0 0 15px rgba(168,85,247,0.3);}
+    input::placeholder{color:rgba(196,181,253,0.4);}
+    .btn{
+      width:100%;padding:14px;margin-top:8px;
+      background:linear-gradient(135deg,var(--purple-deep),var(--purple-mid),var(--purple-bright));
+      background-size:200% auto;
+      border:none;border-radius:10px;color:#fff;
+      font-family:'Cinzel',serif;font-size:1rem;font-weight:700;letter-spacing:0.1em;
+      cursor:pointer;transition:all .3s;
+      box-shadow:0 4px 20px rgba(109,40,217,0.4);
+    }
+    .btn:hover{background-position:right center;box-shadow:0 6px 30px rgba(109,40,217,0.6);}
+    .btn:disabled{opacity:0.6;cursor:not-allowed;}
+    .error-msg{
+      display:none;margin-top:16px;padding:12px 16px;
+      background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.4);
+      border-radius:8px;color:#fca5a5;font-size:0.88rem;text-align:center;
+    }
+    .spinner{
+      display:inline-block;width:16px;height:16px;
+      border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;
+      border-radius:50%;animation:spin .7s linear infinite;
+      vertical-align:middle;margin-right:8px;
+    }
+    @keyframes spin{to{transform:rotate(360deg);}}
+    .footer-txt{text-align:center;margin-top:24px;color:var(--text-muted);font-size:0.78rem;}
+  </style>
+</head>
+<body>
+  <div class="mist m1"></div>
+  <div class="mist m2"></div>
+  <div class="card">
+    <div class="logo">
+      <div class="logo-icon">✦</div>
+      <h1>MESTRE CÓDIGOS</h1>
+      <p class="subtitle">Acesso restrito — faça login para continuar</p>
+    </div>
+    <form id="login-form" onsubmit="doLogin(event)">
+      <div class="form-group">
+        <label for="username">👤 Usuário</label>
+        <input type="text" id="username" placeholder="Digite seu usuário" autocomplete="username" required/>
+      </div>
+      <div class="form-group">
+        <label for="password">🔒 Senha</label>
+        <input type="password" id="password" placeholder="Digite sua senha" autocomplete="current-password" required/>
+      </div>
+      <button type="submit" class="btn" id="btn-login">✦ Entrar</button>
+    </form>
+    <div class="error-msg" id="error-msg"></div>
+    <p class="footer-txt">✦ Plataforma exclusiva ✦</p>
+  </div>
+  <script>
+    async function doLogin(e) {
+      e.preventDefault();
+      const btn = document.getElementById('btn-login');
+      const err = document.getElementById('error-msg');
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      err.style.display = 'none';
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Entrando...';
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({username, password})
+        });
+        const data = await res.json();
+        if (data.success) {
+          window.location.href = data.redirect || '/';
+        } else {
+          err.textContent = data.message || 'Erro ao fazer login.';
+          err.style.display = 'block';
+        }
+      } catch {
+        err.textContent = 'Erro de conexão. Tente novamente.';
+        err.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '✦ Entrar';
+      }
+    }
+  </script>
+</body>
+</html>
