@@ -165,6 +165,20 @@
     .empty-state{text-align:center;padding:40px;color:var(--text-muted);}
     .empty-state .icon{font-size:3rem;margin-bottom:12px;}
     
+    /* ── Search Box ── */
+    .search-wrap{position:relative;flex:1;min-width:180px;max-width:320px;}
+    .search-input{
+      width:100%;padding:9px 14px 9px 38px;
+      background:rgba(109,40,217,0.1);border:1px solid var(--border);
+      border-radius:10px;color:var(--text-white);
+      font-family:'Raleway',sans-serif;font-size:0.88rem;
+      outline:none;transition:border-color .2s,box-shadow .2s;
+    }
+    .search-input:focus{border-color:var(--purple-bright);box-shadow:0 0 12px rgba(168,85,247,0.25);}
+    .search-input::placeholder{color:rgba(196,181,253,0.35);}
+    .search-icon{position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none;opacity:0.6;}
+    .search-count{font-size:0.75rem;color:var(--text-muted);margin-top:8px;}
+
     /* ── Modal ── */
     .modal-overlay{
       display:none;position:fixed;inset:0;z-index:200;
@@ -298,8 +312,17 @@
     <div class="panel">
       <div class="panel-header">
         <div class="panel-title">👥 Usuários Cadastrados</div>
-        <button class="btn-action btn-create" style="padding:8px 18px;font-size:0.82rem;" onclick="loadUsers()">🔄 Atualizar</button>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <div class="search-wrap">
+            <span class="search-icon">🔍</span>
+            <input class="search-input" id="search-users" type="text"
+              placeholder="Pesquisar por usuário ou nome..."
+              oninput="filterUsers(this.value)"/>
+          </div>
+          <button class="btn-action btn-create" style="padding:8px 18px;font-size:0.82rem;" onclick="loadUsers()">🔄 Atualizar</button>
+        </div>
       </div>
+      <div id="search-count" class="search-count" style="display:none;margin-bottom:8px;"></div>
       <div class="table-wrap">
         <table id="users-table">
           <thead>
@@ -379,36 +402,71 @@
     }
 
     // ── Load Users ────────────────────────────────────────────────────────────
+    let _allUsers = [];
+
+    function renderUsersTable(users) {
+      const tbody = document.getElementById('users-tbody');
+      if (!users.length) {
+        tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="icon">👤</div>Nenhum usuário encontrado.</div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = users.map(u => `
+        <tr>
+          <td><strong>${esc(u.username)}</strong></td>
+          <td>${esc(u.name || '—')}</td>
+          <td><span class="badge badge-${u.role}">${u.role === 'admin' ? '⭐ Admin' : '👤 Cliente'}</span></td>
+          <td>
+            <div class="action-btns">
+              <button class="btn-sm btn-change-pw" onclick="openChangePw('${esc(u.username)}')">🔒 Alterar Senha</button>
+              <button class="btn-sm btn-delete"    onclick="openDelete('${esc(u.username)}')">🗑️ Remover</button>
+            </div>
+          </td>
+        </tr>
+      `).join('');
+    }
+
+    function filterUsers(query) {
+      const q = query.trim().toLowerCase();
+      const countEl = document.getElementById('search-count');
+      if (!q) {
+        renderUsersTable(_allUsers);
+        countEl.style.display = 'none';
+        return;
+      }
+      const filtered = _allUsers.filter(u =>
+        u.username.toLowerCase().includes(q) ||
+        (u.name || '').toLowerCase().includes(q)
+      );
+      renderUsersTable(filtered);
+      countEl.style.display = 'block';
+      countEl.innerHTML = filtered.length === 0
+        ? '❌ Nenhum resultado para <strong>"' + esc(query) + '"</strong>'
+        : '🔍 <strong>' + filtered.length + '</strong> de <strong>' + _allUsers.length + '</strong> usuário(s) encontrado(s)';
+    }
+
     async function loadUsers() {
       const tbody = document.getElementById('users-tbody');
       tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><span class="spinner"></span> Carregando...</div></td></tr>';
+      // Limpa busca ao recarregar
+      const searchInput = document.getElementById('search-users');
+      if (searchInput) searchInput.value = '';
+      const countEl = document.getElementById('search-count');
+      if (countEl) countEl.style.display = 'none';
       try {
         const res  = await fetch('/api/admin/users');
         const data = await res.json();
         if (!data.success) { tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state">Erro ao carregar usuários.</div></td></tr>'; return; }
-        const users = data.users;
+        _allUsers = data.users;
         // Stats
-        document.getElementById('stat-total').textContent   = users.length;
-        document.getElementById('stat-clients').textContent = users.filter(u => u.role === 'client').length;
-        document.getElementById('stat-admins').textContent  = users.filter(u => u.role === 'admin').length;
+        document.getElementById('stat-total').textContent   = _allUsers.length;
+        document.getElementById('stat-clients').textContent = _allUsers.filter(u => u.role === 'client').length;
+        document.getElementById('stat-admins').textContent  = _allUsers.filter(u => u.role === 'admin').length;
         // Table
-        if (!users.length) {
+        if (!_allUsers.length) {
           tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="icon">👤</div>Nenhum usuário cadastrado.</div></td></tr>';
           return;
         }
-        tbody.innerHTML = users.map(u => `
-          <tr>
-            <td><strong>${esc(u.username)}</strong></td>
-            <td>${esc(u.name || '—')}</td>
-            <td><span class="badge badge-${u.role}">${u.role === 'admin' ? '⭐ Admin' : '👤 Cliente'}</span></td>
-            <td>
-              <div class="action-btns">
-                <button class="btn-sm btn-change-pw" onclick="openChangePw('${esc(u.username)}')">🔒 Alterar Senha</button>
-                <button class="btn-sm btn-delete"    onclick="openDelete('${esc(u.username)}')">🗑️ Remover</button>
-              </div>
-            </td>
-          </tr>
-        `).join('');
+        renderUsersTable(_allUsers);
       } catch {
         tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state">Erro de conexão.</div></td></tr>';
       }
