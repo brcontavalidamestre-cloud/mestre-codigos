@@ -415,9 +415,16 @@ def api_me():
 @app.route("/api/admin/users", methods=["GET"])
 @admin_required
 def api_list_users():
+    current_admin = session.get("username")
     users = load_users()
     result = []
     for uname, udata in users.items():
+        # Cada admin ve apenas os usuarios que ele mesmo criou
+        created_by = udata.get("created_by", "")
+        if uname == current_admin:
+            continue  # nao lista a si mesmo
+        if created_by != current_admin:
+            continue
         result.append({
             "username": uname,
             "name":     udata.get("name", uname),
@@ -447,9 +454,10 @@ def api_create_user():
     if username in users:
         return jsonify({"success": False, "message": "Usuario ja existe."}), 409
     users[username] = {
-        "password": generate_password_hash(password),
-        "role":     role,
-        "name":     name or username
+        "password":   generate_password_hash(password),
+        "role":       role,
+        "name":       name or username,
+        "created_by": session.get("username")  # registra qual admin criou
     }
     save_users(users)
     return jsonify({"success": True, "message": "Usuario criado com sucesso."})
@@ -458,11 +466,15 @@ def api_create_user():
 @admin_required
 def api_delete_user(username):
     username = username.strip().lower()
-    if username == session.get("username"):
+    current_admin = session.get("username")
+    if username == current_admin:
         return jsonify({"success": False, "message": "Voce nao pode excluir sua propria conta."}), 400
     users = load_users()
     if username not in users:
         return jsonify({"success": False, "message": "Usuario nao encontrado."}), 404
+    # Apenas o admin que criou pode remover
+    if users[username].get("created_by") != current_admin:
+        return jsonify({"success": False, "message": "Sem permissao para remover este usuario."}), 403
     del users[username]
     save_users(users)
     return jsonify({"success": True, "message": "Usuario removido."})
@@ -471,6 +483,7 @@ def api_delete_user(username):
 @admin_required
 def api_change_password(username):
     username = username.strip().lower()
+    current_admin = session.get("username")
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"success": False, "message": "Dados invalidos."}), 400
@@ -480,6 +493,9 @@ def api_change_password(username):
     users = load_users()
     if username not in users:
         return jsonify({"success": False, "message": "Usuario nao encontrado."}), 404
+    # Apenas o admin que criou pode alterar senha, ou o proprio usuario alterando a propria senha
+    if users[username].get("created_by") != current_admin and username != current_admin:
+        return jsonify({"success": False, "message": "Sem permissao para alterar senha deste usuario."}), 403
     users[username]["password"] = generate_password_hash(new_password)
     save_users(users)
     return jsonify({"success": True, "message": "Senha alterada com sucesso."})
