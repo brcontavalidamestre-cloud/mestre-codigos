@@ -1,21 +1,57 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_cors import CORS
+from werkzeug.security import generate_password_hash, check_password_hash
 import imaplib
 import email
 from email.header import decode_header
 import re
 import os
+import json
+import unicodedata
+from datetime import timedelta
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
-# ========== CONFIGURACOES ==========
+# ─── SECRET KEY para sessoes ───────────────────────────────────────────────────
+app.secret_key = os.environ.get("SECRET_KEY", "mestre-codigos-secret-2025")
+app.permanent_session_lifetime = timedelta(hours=8)
+
+# ─── ARQUIVO DE USUARIOS ───────────────────────────────────────────────────────
+USERS_FILE = os.environ.get("USERS_FILE", "/app/users.json")
+
+def load_users():
+    if os.path.exists(USERS_FILE):
+        try:
+            with open(USERS_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    # Cria admin padrao se o arquivo nao existe
+    default = {
+        "admin": {
+            "password": generate_password_hash("admin123"),
+            "role": "admin",
+            "name": "Administrador"
+        }
+    }
+    save_users(default)
+    return default
+
+def save_users(users):
+    try:
+        os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
+        with open(USERS_FILE, "w") as f:
+            json.dump(users, f, indent=2)
+    except Exception as e:
+        print(f"Erro ao salvar usuarios: {e}")
+
+# ─── CONFIGURACOES IMAP ────────────────────────────────────────────────────────
 IMAP_SERVER = os.environ.get("IMAP_SERVER", "imap.hostinger.com")
 IMAP_PORT   = int(os.environ.get("IMAP_PORT", 993))
 EMAIL_USER  = os.environ.get("EMAIL_USER", "mestre@codigo.log.br")
 EMAIL_PASS  = os.environ.get("EMAIL_PASS", "Mcodigo10@")
 
-# subject_keywords aceita lista (qualquer item que bater serve)
 PLATFORM_CONFIG = {
     "netflix": {
         "from_keyword": "netflix.com",
@@ -65,7 +101,7 @@ PLATFORM_CONFIG = {
     }
 }
 
-# ========== UTILITARIOS ==========
+# ─── UTILITARIOS ───────────────────────────────────────────────────────────────
 
 def decode_str(s):
     if not s:
@@ -80,20 +116,15 @@ def decode_str(s):
     return result
 
 def normalize(text):
-    """Remove acentos e converte para minusculo para comparacao robusta."""
-    import unicodedata
     text = text.lower()
     nfkd = unicodedata.normalize("NFKD", text)
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
 def subject_matches(subject, keywords):
-    """Verifica se alguma keyword bate no assunto (com e sem acentos)."""
-    subj_norm = normalize(subject)
+    subj_norm  = normalize(subject)
     subj_lower = subject.lower()
     for kw in keywords:
-        kw_norm = normalize(kw)
-        kw_lower = kw.lower()
-        if kw_norm in subj_norm or kw_lower in subj_lower:
+        if normalize(kw) in subj_norm or kw.lower() in subj_lower:
             return True
     return False
 
@@ -127,23 +158,14 @@ def get_html_body(msg):
     return html or plain
 
 def extract_code_from_html(html_body):
-    m = re.search(
-        r"letter-spacing\s*:\s*[^;>]+[^>]*>\s*([A-Z0-9]{4,8})\s*<",
-        html_body, re.IGNORECASE
-    )
+    m = re.search(r"letter-spacing\s*:\s*[^;>]+[^>]*>\s*([A-Z0-9]{4,8})\s*<", html_body, re.IGNORECASE)
     if m:
         return m.group(1).strip()
-
-    m = re.search(
-        r"font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*([A-Z0-9]{4,8})\s*<",
-        html_body, re.IGNORECASE
-    )
+    m = re.search(r"font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*([A-Z0-9]{4,8})\s*<", html_body, re.IGNORECASE)
     if m:
         return m.group(1).strip()
-
     clean = re.sub(r"<[^>]+>", " ", html_body)
     clean = re.sub(r"\s+", " ", clean)
-
     patterns_text = [
         r"c[o\u00f3]digo\s*(?:de acesso)?\s*[:\-]?\s*([A-Z0-9]{4,8})",
         r"access\s*code\s*[:\-]?\s*([A-Z0-9]{4,8})",
@@ -154,72 +176,34 @@ def extract_code_from_html(html_body):
         m = re.search(pat, clean, re.IGNORECASE)
         if m:
             return m.group(1).strip()
-
-    return None
-
-def extract_netflix_link(html_body, link_type="generic"):
-    """
-    Extrai links da Netflix do corpo HTML.
-    link_type: 'residence' para atualizacao de residencia, 
-               'password' para redefinicao de senha,
-               'generic' para qualquer link da Netflix.
-    """
-    # Padroes especificos por tipo
-    if link_type == "password":
-        specific_patterns = [
-            r'href=["\']([^"\']*netflix\.com[^"\']*(?:password|reset|redefin|senha)[^"\']*)["\']',
-            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
-        ]
-    elif link_type == "residence":
-        specific_patterns = [
-            r'href=["\']([^"\']*netflix\.com[^"\']*(?:update|atualiz|resid|location)[^"\']*)["\']',
-            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
-        ]
-    else:
-        specific_patterns = []
-
-    for pat in specific_patterns:
-        m = re.search(pat, html_body, re.IGNORECASE)
-        if m:
-            link = m.group(1)
-            if len(link) > 30:
-                return link
-
-    # Fallback: qualquer link longo da Netflix
-    all_links = re.findall(r'href=["\']([^"\']+)["\']', html_body, re.IGNORECASE)
-    netflix_links = [l for l in all_links if "netflix.com" in l.lower() and len(l) > 50]
-    if netflix_links:
-        return netflix_links[0]
-
     return None
 
 def extract_link(html_body, platform):
-    """Extrai o link principal do email de acordo com a plataforma."""
     if platform == "netflix-residence":
         patterns = [
-            r'href=["\']([^"\']* netflix\.com[^"\']* (?:update|atualiz|resid|location)[^"\']*)["\']',
-            r'href=["\']([^"\']* netflix\.com[^"\']* account[^"\']*)["\']',
+            r'href=["\']([^"\']*netflix\.com[^"\']*(?:update|atualiz|resid|location)[^"\']*)["\']',
+            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
         ]
         domain = "netflix.com"
     elif platform == "password-reset":
         patterns = [
-            r'href=["\']([^"\']* netflix\.com[^"\']* (?:password|reset|redefin|senha)[^"\']*)["\']',
-            r'href=["\']([^"\']* netflix\.com[^"\']* account[^"\']*)["\']',
+            r'href=["\']([^"\']*netflix\.com[^"\']*(?:password|reset|redefin|senha)[^"\']*)["\']',
+            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
         ]
         domain = "netflix.com"
     elif platform == "disney-residence":
         patterns = [
-            r'href=["\']([^"\']* (?:disneyplus|disney)\.com[^"\']* (?:update|atualiz|resid|home|location)[^"\']*)["\']',
-            r'href=["\']([^"\']* disneyplus\.com[^"\']*)["\']',
+            r'href=["\']([^"\']*(?:disneyplus|disney)\.com[^"\']*(?:update|atualiz|resid|home|location)[^"\']*)["\']',
+            r'href=["\']([^"\']*disneyplus\.com[^"\']*)["\']',
         ]
         domain = "disney"
     else:
         patterns = []
         domain = "netflix.com"
     for pat in patterns:
-        m2 = re.search(pat, html_body, re.IGNORECASE)
-        if m2:
-            link = m2.group(1)
+        m = re.search(pat, html_body, re.IGNORECASE)
+        if m:
+            link = m.group(1)
             if len(link) > 30:
                 return link
     all_links = re.findall(r'href=["\']([^"\']+)["\']', html_body, re.IGNORECASE)
@@ -246,24 +230,19 @@ def search_code(user_email, platform):
     config = PLATFORM_CONFIG.get(platform)
     if not config:
         return None, None, "Plataforma nao suportada."
-
     try:
         mail = connect_imap()
         mail.select("INBOX")
-
-        from_kw    = config["from_keyword"]
-        subj_kws   = config["subject_keywords"]
+        from_kw     = config["from_keyword"]
+        subj_kws    = config["subject_keywords"]
         result_type = config.get("type", "code")
-
         status, msgs = mail.search(None, "FROM", from_kw)
         if status != "OK" or not msgs[0]:
             mail.logout()
             return None, None, "Nenhum email da plataforma encontrado."
-
         all_ids    = msgs[0].split()
         recent_ids = all_ids[-100:]
         recent_ids.reverse()
-
         matched_ids = []
         for eid in recent_ids:
             try:
@@ -276,26 +255,19 @@ def search_code(user_email, platform):
                     matched_ids.append(eid)
             except Exception:
                 continue
-
         if not matched_ids:
             mail.logout()
-            return None, None, (
-                "Nenhum email de " + config["name"] + " encontrado. "
-                "Verifique se o email ja chegou na caixa de entrada."
-            )
-
+            return None, None, ("Nenhum email de " + config["name"] + " encontrado. Verifique se o email ja chegou.")
         for eid in matched_ids:
             try:
                 status, data = mail.fetch(eid, "(RFC822)")
                 if status != "OK":
                     continue
-
                 msg       = email.message_from_bytes(data[0][1])
                 html_body = get_html_body(msg)
-
                 if email_matches_user(msg, html_body, user_email):
                     if result_type == "link":
-                        link  = extract_link(html_body, platform)
+                        link = extract_link(html_body, platform)
                         if link:
                             mail.logout()
                             return None, link, None
@@ -306,44 +278,189 @@ def search_code(user_email, platform):
                             return code, None, None
             except Exception:
                 continue
-
         mail.logout()
-        return None, None, (
-            "Email da conta nao encontrado nos emails recentes de " + config["name"] + ". "
-            "Verifique se digitou o email correto."
-        )
-
+        return None, None, ("Email da conta nao encontrado. Verifique se digitou o email correto.")
     except imaplib.IMAP4.error as e:
         return None, None, "Erro de conexao com servidor de email: " + str(e)
     except Exception as e:
         return None, None, "Erro interno: " + str(e)
 
-# ========== ROTAS ==========
+# ─── MIDDLEWARES / HELPERS ─────────────────────────────────────────────────────
+
+def login_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return jsonify({"success": False, "message": "Nao autenticado.", "redirect": "/login"}), 401
+        return f(*args, **kwargs)
+    return decorated
+
+def admin_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return jsonify({"success": False, "message": "Nao autenticado.", "redirect": "/login"}), 401
+        if session.get("role") != "admin":
+            return jsonify({"success": False, "message": "Acesso restrito ao administrador."}), 403
+        return f(*args, **kwargs)
+    return decorated
+
+# ─── ROTAS DE PAGINAS ──────────────────────────────────────────────────────────
 
 @app.route("/")
 def index():
+    if not session.get("logged_in"):
+        return redirect("/login")
     return send_from_directory("static", "index.html")
 
+@app.route("/login")
+def login_page():
+    if session.get("logged_in"):
+        if session.get("role") == "admin":
+            return redirect("/admin")
+        return redirect("/")
+    return send_from_directory("static", "login.html")
+
+@app.route("/admin")
+def admin_page():
+    if not session.get("logged_in"):
+        return redirect("/login")
+    if session.get("role") != "admin":
+        return redirect("/")
+    return send_from_directory("static", "admin.html")
+
+# ─── ROTAS DE AUTENTICACAO ─────────────────────────────────────────────────────
+
+@app.route("/api/auth/login", methods=["POST"])
+def api_login():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"success": False, "message": "Dados invalidos."}), 400
+    username = data.get("username", "").strip().lower()
+    password = data.get("password", "")
+    if not username or not password:
+        return jsonify({"success": False, "message": "Informe usuario e senha."}), 400
+    users = load_users()
+    user  = users.get(username)
+    if not user or not check_password_hash(user["password"], password):
+        return jsonify({"success": False, "message": "Usuario ou senha incorretos."}), 401
+    session.permanent = True
+    session["logged_in"] = True
+    session["username"]  = username
+    session["role"]      = user.get("role", "client")
+    session["name"]      = user.get("name", username)
+    redirect_to = "/admin" if user.get("role") == "admin" else "/"
+    return jsonify({"success": True, "role": user.get("role", "client"), "redirect": redirect_to})
+
+@app.route("/api/auth/logout", methods=["POST"])
+def api_logout():
+    session.clear()
+    return jsonify({"success": True, "redirect": "/login"})
+
+@app.route("/api/auth/me", methods=["GET"])
+def api_me():
+    if not session.get("logged_in"):
+        return jsonify({"logged_in": False}), 401
+    return jsonify({
+        "logged_in": True,
+        "username": session.get("username"),
+        "name":     session.get("name"),
+        "role":     session.get("role")
+    })
+
+# ─── ROTAS DE ADMIN (gerenciamento de usuarios) ───────────────────────────────
+
+@app.route("/api/admin/users", methods=["GET"])
+@admin_required
+def api_list_users():
+    users = load_users()
+    result = []
+    for uname, udata in users.items():
+        result.append({
+            "username": uname,
+            "name":     udata.get("name", uname),
+            "role":     udata.get("role", "client")
+        })
+    return jsonify({"success": True, "users": result})
+
+@app.route("/api/admin/users", methods=["POST"])
+@admin_required
+def api_create_user():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"success": False, "message": "Dados invalidos."}), 400
+    username = data.get("username", "").strip().lower()
+    password = data.get("password", "").strip()
+    name     = data.get("name", "").strip()
+    role     = data.get("role", "client").strip().lower()
+    if not username or not password:
+        return jsonify({"success": False, "message": "Usuario e senha sao obrigatorios."}), 400
+    if not re.match(r"^[a-z0-9_\.]{3,30}$", username):
+        return jsonify({"success": False, "message": "Usuario invalido. Use letras, numeros, _ ou . (3-30 chars)."}), 400
+    if len(password) < 4:
+        return jsonify({"success": False, "message": "Senha deve ter pelo menos 4 caracteres."}), 400
+    if role not in ("admin", "client"):
+        role = "client"
+    users = load_users()
+    if username in users:
+        return jsonify({"success": False, "message": "Usuario ja existe."}), 409
+    users[username] = {
+        "password": generate_password_hash(password),
+        "role":     role,
+        "name":     name or username
+    }
+    save_users(users)
+    return jsonify({"success": True, "message": "Usuario criado com sucesso."})
+
+@app.route("/api/admin/users/<username>", methods=["DELETE"])
+@admin_required
+def api_delete_user(username):
+    username = username.strip().lower()
+    if username == session.get("username"):
+        return jsonify({"success": False, "message": "Voce nao pode excluir sua propria conta."}), 400
+    users = load_users()
+    if username not in users:
+        return jsonify({"success": False, "message": "Usuario nao encontrado."}), 404
+    del users[username]
+    save_users(users)
+    return jsonify({"success": True, "message": "Usuario removido."})
+
+@app.route("/api/admin/users/<username>/password", methods=["PUT"])
+@admin_required
+def api_change_password(username):
+    username = username.strip().lower()
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"success": False, "message": "Dados invalidos."}), 400
+    new_password = data.get("password", "").strip()
+    if len(new_password) < 4:
+        return jsonify({"success": False, "message": "Senha deve ter pelo menos 4 caracteres."}), 400
+    users = load_users()
+    if username not in users:
+        return jsonify({"success": False, "message": "Usuario nao encontrado."}), 404
+    users[username]["password"] = generate_password_hash(new_password)
+    save_users(users)
+    return jsonify({"success": True, "message": "Senha alterada com sucesso."})
+
+# ─── ROTA PRINCIPAL DA APP ────────────────────────────────────────────────────
+
 @app.route("/api/get-code", methods=["POST"])
+@login_required
 def get_code():
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"success": False, "message": "Dados invalidos."}), 400
-
     user_email = data.get("email", "").strip().lower()
     platform   = data.get("platform", "").strip().lower()
-
     if not user_email:
         return jsonify({"success": False, "message": "Por favor, informe seu email."}), 400
-
     if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", user_email):
-        return jsonify({"success": False, "message": "Email invalido. Verifique e tente novamente."}), 400
-
+        return jsonify({"success": False, "message": "Email invalido."}), 400
     if platform not in PLATFORM_CONFIG:
         return jsonify({"success": False, "message": "Plataforma nao suportada."}), 400
-
     code, link, error = search_code(user_email, platform)
-
     if code:
         return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})
     elif link:
