@@ -232,34 +232,74 @@ def search_code(user_email, platform):
         return None, None, "Plataforma nao suportada."
     try:
         mail = connect_imap()
-        mail.select("INBOX")
         from_kw     = config["from_keyword"]
         subj_kws    = config["subject_keywords"]
         result_type = config.get("type", "code")
-        status, msgs = mail.search(None, "FROM", from_kw)
-        if status != "OK" or not msgs[0]:
-            mail.logout()
-            return None, None, "Nenhum email da plataforma encontrado."
-        all_ids    = msgs[0].split()
-        recent_ids = all_ids[-100:]
-        recent_ids.reverse()
-        matched_ids = []
-        for eid in recent_ids:
-            try:
-                status, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
-                if status != "OK":
+
+        # Lista de caixas para pesquisar: INBOX + pasta de Spam/Lixo
+        MAILBOXES_TO_SEARCH = ["INBOX", "Spam", "Junk", "SPAM", "JUNK",
+                                "[Gmail]/Spam", "[Gmail]/Lixo Eletrônico",
+                                "Junk Email", "Bulk Mail", "Lixo Eletronico"]
+
+        # Descobre quais caixas existem neste servidor
+        status_list, mailbox_list = mail.list()
+        available_boxes = []
+        if status_list == "OK":
+            for mb in mailbox_list:
+                try:
+                    mb_str = mb.decode("utf-8") if isinstance(mb, bytes) else str(mb)
+                    # Extrai o nome da caixa (ultima parte apos o separador)
+                    parts = mb_str.split('"')
+                    if len(parts) >= 3:
+                        box_name = parts[-2].strip()
+                    else:
+                        box_name = mb_str.split()[-1].strip('"')
+                    available_boxes.append(box_name)
+                except Exception:
                     continue
-                hdr  = email.message_from_bytes(data[0][1])
-                subj = decode_str(hdr.get("Subject", ""))
-                if subject_matches(subj, subj_kws):
-                    matched_ids.append(eid)
+
+        # Filtra as caixas para pesquisar (INBOX sempre + spam se existir)
+        boxes_to_try = ["INBOX"]
+        for candidate in MAILBOXES_TO_SEARCH[1:]:  # skip INBOX, ja incluido
+            for avail in available_boxes:
+                if candidate.lower() == avail.lower():
+                    boxes_to_try.append(avail)
+                    break
+
+        all_matched = []  # (mailbox, eid) tuples
+
+        for mailbox in boxes_to_try:
+            try:
+                sel_status, _ = mail.select(mailbox, readonly=True)
+                if sel_status != "OK":
+                    continue
+                status, msgs = mail.search(None, "FROM", from_kw)
+                if status != "OK" or not msgs[0]:
+                    continue
+                all_ids    = msgs[0].split()
+                recent_ids = all_ids[-100:]
+                recent_ids.reverse()
+                for eid in recent_ids:
+                    try:
+                        status, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
+                        if status != "OK":
+                            continue
+                        hdr  = email.message_from_bytes(data[0][1])
+                        subj = decode_str(hdr.get("Subject", ""))
+                        if subject_matches(subj, subj_kws):
+                            all_matched.append((mailbox, eid))
+                    except Exception:
+                        continue
             except Exception:
                 continue
-        if not matched_ids:
+
+        if not all_matched:
             mail.logout()
             return None, None, ("Nenhum email de " + config["name"] + " encontrado. Verifique se o email ja chegou.")
-        for eid in matched_ids:
+
+        for mailbox, eid in all_matched:
             try:
+                mail.select(mailbox, readonly=True)
                 status, data = mail.fetch(eid, "(RFC822)")
                 if status != "OK":
                     continue
