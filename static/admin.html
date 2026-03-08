@@ -170,8 +170,9 @@
       display:none;position:fixed;inset:0;z-index:200;
       background:rgba(6,0,15,0.85);backdrop-filter:blur(6px);
       align-items:center;justify-content:center;
+      pointer-events:none;visibility:hidden;
     }
-    .modal-overlay.show{display:flex;}
+    .modal-overlay.show{display:flex;pointer-events:all;visibility:visible;}
     .modal{
       background:linear-gradient(135deg,rgba(19,0,41,0.97),rgba(26,0,53,0.95));
       border:1px solid var(--border-gold);border-radius:18px;
