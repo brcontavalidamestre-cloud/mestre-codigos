@@ -1,849 +1,360 @@
-<!DOCTYPE html>
-<html lang="pt-BR">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Mestre Códigos ✦</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
-  <style>
-    :root {
-      --bg-deep:     #06000f;
-      --bg-dark:     #0d0020;
-      --bg-card:     #130029;
-      --bg-card2:    #1a0035;
-      --purple-deep: #3b0764;
-      --purple-mid:  #6d28d9;
-      --purple-bright:#a855f7;
-      --gold:        #f59e0b;
-      --gold-light:  #fcd34d;
-      --gold-pale:   #fef3c7;
-      --text-white:  #f5f0ff;
-      --text-muted:  #c4b5fd;
-      --border:      rgba(168,85,247,0.25);
-      --border-gold: rgba(245,158,11,0.35);
-      --glow-purple: 0 0 30px rgba(109,40,217,0.4);
-      --glow-gold:   0 0 20px rgba(245,158,11,0.3);
+from flask import Flask, request, jsonify, send_from_directory
+from flask_cors import CORS
+import imaplib
+import email
+from email.header import decode_header
+import re
+import os
+
+app = Flask(__name__, static_folder='static')
+CORS(app)
+
+# ========== CONFIGURACOES ==========
+IMAP_SERVER = os.environ.get("IMAP_SERVER", "imap.hostinger.com")
+IMAP_PORT   = int(os.environ.get("IMAP_PORT", 993))
+EMAIL_USER  = os.environ.get("EMAIL_USER", "mestre@codigo.log.br")
+EMAIL_PASS  = os.environ.get("EMAIL_PASS", "Mcodigo10@")
+
+# subject_keywords aceita lista (qualquer item que bater serve)
+PLATFORM_CONFIG = {
+    "netflix": {
+        "from_keyword": "netflix.com",
+        "subject_keywords": ["digo de acesso"],
+        "name": "Netflix",
+        "type": "code"
+    },
+    "disney": {
+        "from_keyword": "disneyplus.com",
+        "subject_keywords": ["digo de acesso"],
+        "name": "Disney+",
+        "type": "code"
+    },
+    "netflix-residence": {
+        "from_keyword": "netflix.com",
+        "subject_keywords": ["atualizar"],
+        "name": "Residencia Netflix",
+        "type": "link"
+    },
+    "password-reset": {
+        "from_keyword": "netflix.com",
+        "subject_keywords": [
+            "Complete a solicitacao de redefinicao de senha",
+            "redefinicao de senha",
+            "Completa tu solicitud de restablecimiento de contrasena",
+            "restablecimiento de contrasena",
+            "Tapusin ang request mong i-reset ang password",
+            "reset ang password",
+            "reset password",
+            "password reset",
+            "redefini"
+        ],
+        "name": "Redefinicao de Senha Netflix",
+        "type": "link"
+    },
+    "disney-residence": {
+        "from_keyword": "disneyplus.com",
+        "subject_keywords": [
+            "Quer atualizar sua Residencia do Disney+",
+            "atualizar sua Residencia do Disney",
+            "Residencia do Disney",
+            "update your Disney+ Home",
+            "Disney+ Home"
+        ],
+        "name": "Residencia Disney+",
+        "type": "link"
     }
-
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      background: var(--bg-deep);
-      color: var(--text-white);
-      font-family: 'Raleway', sans-serif;
-      min-height: 100vh;
-      overflow-x: hidden;
-      position: relative;
-    }
-
-    /* ── FUNDO ESTRELADO ── */
-    #stars-canvas {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 0;
-      pointer-events: none;
-    }
-
-    /* ── NÉVOA MÁGICA ── */
-    .mist {
-      position: fixed;
-      border-radius: 50%;
-      filter: blur(120px);
-      opacity: 0.12;
-      z-index: 0;
-      pointer-events: none;
-      animation: mistFloat 12s ease-in-out infinite alternate;
-    }
-    .mist-1 { width: 600px; height: 600px; background: var(--purple-mid); top: -150px; left: -150px; }
-    .mist-2 { width: 500px; height: 500px; background: var(--gold); bottom: -100px; right: -100px; animation-delay: 4s; }
-    .mist-3 { width: 400px; height: 400px; background: #1d4ed8; top: 40%; left: 50%; animation-delay: 8s; }
-    @keyframes mistFloat { from { transform: scale(1) translateY(0); } to { transform: scale(1.15) translateY(-30px); } }
-
-    /* ── WRAPPER ── */
-    .wrapper {
-      position: relative;
-      z-index: 1;
-      max-width: 820px;
-      margin: 0 auto;
-      padding: 0 20px 60px;
-    }
-
-    /* ── HEADER ── */
-    header {
-      text-align: center;
-      padding: 50px 20px 30px;
-    }
-    .logo-icon {
-      width: 90px; height: 90px;
-      margin: 0 auto 16px;
-      background: linear-gradient(135deg, var(--purple-deep), var(--purple-mid));
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 42px;
-      box-shadow: var(--glow-purple), inset 0 0 20px rgba(168,85,247,0.3);
-      border: 2px solid var(--border-gold);
-      animation: iconPulse 3s ease-in-out infinite;
-    }
-    @keyframes iconPulse {
-      0%,100% { box-shadow: var(--glow-purple), inset 0 0 20px rgba(168,85,247,0.3); }
-      50%      { box-shadow: 0 0 50px rgba(109,40,217,0.7), inset 0 0 30px rgba(168,85,247,0.5), var(--glow-gold); }
-    }
-
-    h1 {
-      font-family: 'Cinzel', serif;
-      font-size: clamp(2rem, 6vw, 3.2rem);
-      font-weight: 900;
-      background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 40%, var(--purple-bright) 80%, var(--gold-light) 100%);
-      background-size: 200% auto;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      animation: shimmer 4s linear infinite;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-    }
-    @keyframes shimmer { to { background-position: 200% center; } }
-
-    .subtitle {
-      margin-top: 8px;
-      font-size: 1rem;
-      color: var(--text-muted);
-      font-weight: 300;
-      letter-spacing: 1px;
-    }
-
-    .gold-divider {
-      width: 200px;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--gold), var(--purple-bright), var(--gold), transparent);
-      margin: 20px auto;
-      border-radius: 2px;
-    }
-
-    /* ── CARDS DE PLATAFORMA ── */
-    .platforms-section {
-      background: linear-gradient(135deg, rgba(19,0,41,0.9), rgba(26,0,53,0.9));
-      border: 1px solid var(--border-gold);
-      border-radius: 20px;
-      padding: 32px 28px;
-      margin-bottom: 28px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(245,158,11,0.15);
-    }
-
-    .section-title {
-      font-family: 'Cinzel', serif;
-      font-size: 1rem;
-      color: var(--gold);
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 6px;
-    }
-    .section-title::before,
-    .section-title::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--border-gold));
-    }
-    .section-title::before { background: linear-gradient(90deg, var(--border-gold), transparent); }
-
-    .section-subtitle {
-      text-align: center;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-bottom: 24px;
-      font-weight: 300;
-    }
-
-    .platform-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
-    }
-
-    .platform-card {
-      background: rgba(59,7,100,0.3);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 20px 16px;
-      text-align: center;
-      transition: all 0.3s ease;
-      cursor: pointer;
-      position: relative;
-      overflow: hidden;
-    }
-    .platform-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--purple-bright), transparent);
-      transform: scaleX(0);
-      transition: transform 0.3s ease;
-    }
-    .platform-card:hover::before, .platform-card.active::before { transform: scaleX(1); }
-    .platform-card:hover {
-      border-color: var(--purple-bright);
-      box-shadow: 0 0 20px rgba(168,85,247,0.3);
-      transform: translateY(-3px);
-    }
-    .platform-card.active {
-      border-color: var(--gold);
-      background: rgba(245,158,11,0.08);
-      box-shadow: 0 0 25px rgba(245,158,11,0.2);
-    }
-
-    .platform-logo {
-      font-size: 2.5rem;
-      margin-bottom: 8px;
-      display: block;
-    }
-    .platform-name {
-      font-family: 'Cinzel', serif;
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text-white);
-      margin-bottom: 4px;
-    }
-    .platform-desc {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-
-    /* ── FORMULÁRIO ── */
-    .form-section {
-      background: linear-gradient(135deg, rgba(13,0,32,0.95), rgba(19,0,41,0.95));
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 32px 28px;
-      margin-bottom: 28px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-    }
-
-    .form-section .section-title { margin-bottom: 24px; }
-
-    .selected-platform-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(109,40,217,0.2);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 6px 16px;
-      font-size: 0.82rem;
-      color: var(--purple-bright);
-      margin-bottom: 20px;
-      font-weight: 500;
-      transition: all 0.3s ease;
-    }
-    .selected-platform-badge.netflix  { border-color: rgba(229,9,20,0.5); color: #ff6b6b; background: rgba(229,9,20,0.1); }
-    .selected-platform-badge.disney   { border-color: rgba(17,117,183,0.5); color: #60a5fa; background: rgba(17,117,183,0.1); }
-    .selected-platform-badge.netflix-residence { border-color: rgba(220,38,38,0.5); color: #fca5a5; background: rgba(220,38,38,0.1); }
-    .selected-platform-badge.password-reset { border-color: rgba(16,185,129,0.5); color: #6ee7b7; background: rgba(16,185,129,0.1); }
-    .selected-platform-badge.disney-residence { border-color: rgba(29,78,216,0.5); color: #93c5fd; background: rgba(29,78,216,0.1); }
-
-    .tabs {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 24px;
-      background: rgba(0,0,0,0.3);
-      border-radius: 12px;
-      padding: 4px;
-    }
-
-    .tab-btn {
-      flex: 1;
-      padding: 10px 8px;
-      border: none;
-      border-radius: 10px;
-      background: transparent;
-      color: var(--text-muted);
-      font-family: 'Raleway', sans-serif;
-      font-size: 0.82rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      letter-spacing: 0.5px;
-    }
-    .tab-btn:hover { color: var(--text-white); background: rgba(109,40,217,0.2); }
-    .tab-btn.active {
-      background: linear-gradient(135deg, var(--purple-mid), var(--purple-deep));
-      color: var(--text-white);
-      box-shadow: 0 0 15px rgba(109,40,217,0.4);
-    }
-    .tab-btn.netflix.active  { background: linear-gradient(135deg, #b91c1c, #7f1d1d); box-shadow: 0 0 15px rgba(229,9,20,0.4); }
-    .tab-btn.disney.active   { background: linear-gradient(135deg, #1d4ed8, #1e3a5f); box-shadow: 0 0 15px rgba(17,117,183,0.4); }
-    .tab-btn.residence.active { background: linear-gradient(135deg, #7f1d1d, #991b1b); box-shadow: 0 0 15px rgba(220,38,38,0.4); }
-    .tab-btn.password.active  { background: linear-gradient(135deg, #065f46, #047857); box-shadow: 0 0 15px rgba(16,185,129,0.4); }
-    .tab-btn.disney-res.active { background: linear-gradient(135deg, #1e3a8a, #1d4ed8); box-shadow: 0 0 15px rgba(29,78,216,0.5); }
-
-    .form-group { margin-bottom: 16px; }
-    .form-label {
-      display: block;
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-      font-weight: 500;
-      letter-spacing: 0.5px;
-    }
-
-    .form-input {
-      width: 100%;
-      background: rgba(59,7,100,0.2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 16px;
-      color: var(--text-white);
-      font-family: 'Raleway', sans-serif;
-      font-size: 0.95rem;
-      outline: none;
-      transition: all 0.3s ease;
-    }
-    .form-input::placeholder { color: rgba(196,181,253,0.4); }
-    .form-input:focus {
-      border-color: var(--purple-bright);
-      box-shadow: 0 0 0 3px rgba(168,85,247,0.15), 0 0 20px rgba(109,40,217,0.2);
-      background: rgba(59,7,100,0.35);
-    }
-
-    .btn-primary {
-      width: 100%;
-      padding: 16px;
-      border: none;
-      border-radius: 12px;
-      background: linear-gradient(135deg, var(--purple-mid) 0%, var(--purple-deep) 50%, #1d1b60 100%);
-      background-size: 200% auto;
-      color: var(--text-white);
-      font-family: 'Cinzel', serif;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 4px 20px rgba(109,40,217,0.4);
-      border: 1px solid rgba(168,85,247,0.3);
-    }
-    .btn-primary::before {
-      content: '';
-      position: absolute;
-      top: 0; left: -100%;
-      width: 100%; height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(245,158,11,0.2), transparent);
-      transition: left 0.5s ease;
-    }
-    .btn-primary:hover { background-position: right center; box-shadow: 0 6px 30px rgba(109,40,217,0.6); transform: translateY(-1px); }
-    .btn-primary:hover::before { left: 100%; }
-    .btn-primary:active { transform: translateY(0); }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-    /* Resultado */
-    .result-box {
-      margin-top: 20px;
-      border-radius: 14px;
-      padding: 24px;
-      text-align: center;
-      display: none;
-      animation: fadeInUp 0.4s ease;
-    }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-
-    .result-box.success {
-      background: linear-gradient(135deg, rgba(15,60,15,0.5), rgba(10,40,10,0.4));
-      border: 1px solid rgba(74,222,128,0.4);
-      box-shadow: 0 0 30px rgba(74,222,128,0.1);
-    }
-    .result-box.error {
-      background: linear-gradient(135deg, rgba(80,10,10,0.5), rgba(60,5,5,0.4));
-      border: 1px solid rgba(252,165,165,0.3);
-    }
-
-    .result-emoji { font-size: 2.5rem; margin-bottom: 10px; display: block; }
-
-    .code-display {
-      font-family: 'Cinzel', serif;
-      font-size: 2.5rem;
-      font-weight: 900;
-      letter-spacing: 8px;
-      color: var(--gold-light);
-      text-shadow: 0 0 20px rgba(245,158,11,0.6);
-      margin: 10px 0;
-      display: block;
-    }
-
-    .result-label {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-    .result-platform {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin-top: 10px;
-      font-style: italic;
-    }
-    .copy-btn {
-      margin-top: 14px;
-      padding: 10px 28px;
-      border-radius: 8px;
-      border: 1px solid var(--border-gold);
-      background: rgba(245,158,11,0.1);
-      color: var(--gold);
-      font-family: 'Raleway', sans-serif;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      letter-spacing: 1px;
-    }
-    .copy-btn:hover { background: rgba(245,158,11,0.2); box-shadow: var(--glow-gold); }
-
-    .error-msg { color: #fca5a5; font-size: 0.9rem; line-height: 1.5; }
-    .error-title { color: #f87171; font-weight: 700; font-size: 1rem; margin-bottom: 8px; font-family: 'Cinzel', serif; }
-
-    /* Loading */
-    .spinner {
-      width: 22px; height: 22px;
-      border: 3px solid rgba(255,255,255,0.2);
-      border-top-color: var(--gold);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      display: inline-block;
-      vertical-align: middle;
-      margin-right: 8px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── STEPS ── */
-    .steps-section {
-      background: linear-gradient(135deg, rgba(19,0,41,0.85), rgba(26,0,53,0.85));
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 28px;
-      margin-bottom: 28px;
-      backdrop-filter: blur(10px);
-    }
-    .steps-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 16px;
-      margin-top: 20px;
-    }
-    .step-item {
-      text-align: center;
-      padding: 16px 10px;
-    }
-    .step-num {
-      width: 44px; height: 44px;
-      background: linear-gradient(135deg, var(--purple-mid), var(--purple-deep));
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 12px;
-      font-family: 'Cinzel', serif;
-      font-weight: 700;
-      font-size: 1.1rem;
-      color: var(--gold-light);
-      box-shadow: 0 0 15px rgba(109,40,217,0.4);
-      border: 1px solid var(--border-gold);
-    }
-    .step-text { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
-
-    /* ── FOOTER ── */
-    footer {
-      text-align: center;
-      padding: 20px;
-      color: rgba(196,181,253,0.4);
-      font-size: 0.78rem;
-      font-weight: 300;
-      letter-spacing: 1px;
-    }
-    footer span { color: var(--gold); }
-
-    /* ── TOAST ── */
-    .toast {
-      position: fixed;
-      bottom: 30px; right: 30px;
-      background: rgba(19,0,41,0.95);
-      border: 1px solid var(--border-gold);
-      border-radius: 12px;
-      padding: 14px 20px;
-      color: var(--gold-light);
-      font-size: 0.88rem;
-      font-weight: 600;
-      box-shadow: var(--glow-gold);
-      z-index: 999;
-      transform: translateX(200px);
-      opacity: 0;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .toast.show { transform: translateX(0); opacity: 1; }
-
-    @media (max-width: 600px) {
-      .tabs { flex-direction: column; }
-      .platform-grid { grid-template-columns: 1fr 1fr; }
-      .steps-grid { grid-template-columns: 1fr 1fr; }
-      h1 { font-size: 1.8rem; }
-      .code-display { font-size: 2rem; letter-spacing: 5px; }
-    }
-  </style>
-</head>
-<body>
-
-  <!-- Fundo -->
-  <canvas id="stars-canvas"></canvas>
-  <div class="mist mist-1"></div>
-  <div class="mist mist-2"></div>
-  <div class="mist mist-3"></div>
-
-  <div class="wrapper">
-
-    <!-- HEADER -->
-    <header>
-      <div class="logo-icon">🧙‍♂️</div>
-      <h1>Mestre Códigos</h1>
-      <p class="subtitle">✦ Solicite e receba seus códigos de verificação ✦</p>
-      <div class="gold-divider"></div>
-    </header>
-
-    <!-- PLATAFORMAS -->
-    <section class="platforms-section">
-      <div class="section-title">✦ Plataformas Disponíveis ✦</div>
-      <p class="section-subtitle">Esta plataforma aceita códigos das seguintes plataformas:</p>
-      <div class="platform-grid">
-        <div class="platform-card" onclick="selectPlatform('netflix')" id="card-netflix">
-          <span class="platform-logo">🎬</span>
-          <div class="platform-name">Netflix</div>
-          <div class="platform-desc">Código de acesso temporário</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('disney')" id="card-disney">
-          <span class="platform-logo">✨</span>
-          <div class="platform-name">Disney+</div>
-          <div class="platform-desc">Código de acesso único</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('netflix-residence')" id="card-netflix-residence">
-          <span class="platform-logo">🏠</span>
-          <div class="platform-name">Residência Netflix</div>
-          <div class="platform-desc">Link de atualização de local</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('password-reset')" id="card-password-reset">
-          <span class="platform-logo">🔑</span>
-          <div class="platform-name">Redefinição de Senha</div>
-          <div class="platform-desc">Link de redefinição Netflix</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('disney-residence')" id="card-disney-residence">
-          <span class="platform-logo">🏡</span>
-          <div class="platform-name">Residência Disney+</div>
-          <div class="platform-desc">Link de atualização Disney+</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- COMO SOLICITAR -->
-    <section class="steps-section">
-      <div class="section-title">✦ Como Solicitar ✦</div>
-      <div class="steps-grid">
-        <div class="step-item">
-          <div class="step-num">1</div>
-          <div class="step-text">Selecione a plataforma desejada acima</div>
-        </div>
-        <div class="step-item">
-          <div class="step-num">2</div>
-          <div class="step-text">Digite seu email da conta</div>
-        </div>
-        <div class="step-item">
-          <div class="step-num">3</div>
-          <div class="step-text">Solicite o código no app ou site</div>
-        </div>
-        <div class="step-item">
-          <div class="step-num">4</div>
-          <div class="step-text">Clique em Buscar Código e aguarde</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- FORMULÁRIO -->
-    <section class="form-section">
-      <div class="section-title">✦ Acessar Código ✦</div>
-
-      <!-- Tabs -->
-      <div class="tabs">
-        <button class="tab-btn netflix active" id="tab-netflix" onclick="switchTab('netflix')">
-          🎬 Código Netflix
-        </button>
-        <button class="tab-btn disney" id="tab-disney" onclick="switchTab('disney')">
-          ✨ Código Disney+
-        </button>
-        <button class="tab-btn residence" id="tab-netflix-residence" onclick="switchTab('netflix-residence')">
-          🏠 Residência Netflix
-        </button>
-        <button class="tab-btn password" id="tab-password-reset" onclick="switchTab('password-reset')">
-          🔑 Redefinição de Senha
-        </button>
-        <button class="tab-btn disney-res" id="tab-disney-residence" onclick="switchTab('disney-residence')">
-          🏡 Residência Disney+
-        </button>
-      </div>
-
-      <div id="selected-badge" class="selected-platform-badge netflix">
-        🎬 Netflix — Código de acesso temporário
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="email-input">✉ Seu Email da Conta</label>
-        <input
-          type="email"
-          id="email-input"
-          class="form-input"
-          placeholder="Digite seu email..."
-          onkeydown="if(event.key==='Enter') buscarCodigo()"
-        />
-      </div>
-
-      <button class="btn-primary" id="btn-buscar" onclick="buscarCodigo()">
-        ✦ Buscar Código
-      </button>
-
-      <!-- Resultado -->
-      <div class="result-box" id="result-box">
-        <!-- preenchido via JS -->
-      </div>
-    </section>
-
-  </div>
-
-  <!-- Footer -->
-  <footer>
-    <p>✦ Feito por: <span>Mestre Streaming</span> ✦</p>
-  </footer>
-
-  <!-- Toast -->
-  <div class="toast" id="toast">✓ Copiado!</div>
-
-  <!-- SCRIPTS -->
-  <script>
-    // ── ESTRELAS ──
-    const canvas = document.getElementById('stars-canvas');
-    const ctx = canvas.getContext('2d');
-    let stars = [];
-
-    function resizeCanvas() {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-
-    function createStars() {
-      stars = [];
-      const count = Math.floor((canvas.width * canvas.height) / 4000);
-      for (let i = 0; i < count; i++) {
-        stars.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          r: Math.random() * 1.5 + 0.3,
-          alpha: Math.random(),
-          speed: Math.random() * 0.005 + 0.002,
-          dir:   Math.random() > 0.5 ? 1 : -1,
-          gold:  Math.random() < 0.15
-        });
-      }
-    }
-
-    function animateStars() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      stars.forEach(s => {
-        s.alpha += s.speed * s.dir;
-        if (s.alpha >= 1 || s.alpha <= 0) s.dir *= -1;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        if (s.gold) {
-          ctx.fillStyle = `rgba(245,158,11,${s.alpha})`;
-        } else {
-          ctx.fillStyle = `rgba(196,181,253,${s.alpha * 0.8})`;
-        }
-        ctx.fill();
-      });
-      requestAnimationFrame(animateStars);
-    }
-
-    window.addEventListener('resize', () => { resizeCanvas(); createStars(); });
-    resizeCanvas();
-    createStars();
-    animateStars();
-
-    // ── ESTADO ──
-    let currentPlatform = 'netflix';
-
-    const platformLabels = {
-      netflix: '🎬 Netflix — Código de acesso temporário',
-      disney:  '✨ Disney+ — Código de acesso único',
-      'netflix-residence': '🏠 Residência Netflix — Link de atualização',
-      'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição',
-      'disney-residence':  '🏡 Residência Disney+ — Link de atualização'
-    };
-
-    function selectPlatform(p) {
-      currentPlatform = p;
-      document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
-      document.getElementById('card-' + p).classList.add('active');
-      switchTab(p);
-    }
-
-    function switchTab(p) {
-      currentPlatform = p;
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('tab-' + p).classList.add('active');
-
-      const badge = document.getElementById('selected-badge');
-      badge.textContent = platformLabels[p];
-      badge.className = 'selected-platform-badge ' + p;
-
-      document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
-      document.getElementById('card-' + p).classList.add('active');
-
-      hideResult();
-    }
-
-    function hideResult() {
-      const box = document.getElementById('result-box');
-      box.style.display = 'none';
-      box.className = 'result-box';
-    }
-
-    async function buscarCodigo() {
-      const emailVal = document.getElementById('email-input').value.trim();
-      const btn = document.getElementById('btn-buscar');
-      const box = document.getElementById('result-box');
-
-      if (!emailVal) {
-        showError('Por favor, informe seu email.');
-        return;
-      }
-      if (!emailVal.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-        showError('Email inválido. Verifique e tente novamente.');
-        return;
-      }
-
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Buscando...';
-      box.style.display = 'none';
-
-      try {
-        const res = await fetch('/api/get-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: emailVal, platform: currentPlatform })
-        });
-        const data = await res.json();
-
-        if (data.success && (data.code || data.link)) {
-          showSuccess(data);
-        } else {
-          showError(data.message || 'Código não encontrado.');
-        }
-      } catch (err) {
-        showError('Erro de conexão com o servidor. Tente novamente em instantes.');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '✦ Buscar Código';
-      }
-    }
-
-    function showSuccess(data) {
-      const box = document.getElementById('result-box');
-      const names = {
-        netflix: 'Netflix',
-        disney: 'Disney+',
-        'netflix-residence': 'Residência Netflix',
-        'password-reset': 'Redefinição de Senha Netflix',
-        'disney-residence': 'Residência Disney+'
-      };
-      box.className = 'result-box success';
-
-      if (data.type === 'link' && data.link && data.platform === 'password-reset') {
-        box.innerHTML = `
-          <span class="result-emoji">🔑</span>
-          <div class="result-label">Link de redefinição encontrado!</div>
-          <div class="result-platform">Redefinição de Senha Netflix</div>
-          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
-             style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#065f46,#047857);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
-            🔗 Abrir Link de Redefinição
-          </a>
-          <br/>
-          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
-        `;
-      } else if (data.type === 'link' && data.link && data.platform === 'disney-residence') {
-        box.innerHTML = `
-          <span class="result-emoji">🏡</span>
-          <div class="result-label">Link de atualização encontrado!</div>
-          <div class="result-platform">Residência Disney+</div>
-          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
-             style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
-            🔗 Abrir Link de Atualização Disney+
-          </a>
-          <br/>
-          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
-        `;
-      } else if (data.type === 'link' && data.link) {
-        box.innerHTML = `
-          <span class="result-emoji">🏠</span>
-          <div class="result-label">Link de atualização encontrado!</div>
-          <div class="result-platform">Residência Netflix</div>
-          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
-             style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
-            🔗 Abrir Link de Atualização
-          </a>
-          <br/>
-          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
-        `;
-      } else {
-        const code = data.code || '';
-        box.innerHTML = `
-          <span class="result-emoji">✨</span>
-          <div class="result-label">Código encontrado!</div>
-          <span class="code-display">${code}</span>
-          <div class="result-platform">Plataforma: ${names[data.platform] || data.platform}</div>
-          <button class="copy-btn" onclick="copyCode('${code}')">📋 Copiar Código</button>
-        `;
-      }
-      box.style.display = 'block';
-    }
-
-    function showError(msg) {
-      const box = document.getElementById('result-box');
-      box.className = 'result-box error';
-      box.innerHTML = `
-        <span class="result-emoji">⚠️</span>
-        <div class="error-title">Código não localizado</div>
-        <div class="error-msg">${msg}</div>
-      `;
-      box.style.display = 'block';
-    }
-
-    function copyCode(code) {
-      navigator.clipboard.writeText(code).then(() => {
-        showToast('✓ Código copiado!');
-      });
-    }
-
-    function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 2500);
-    }
-  </script>
-</body>
-</html>
+}
+
+# ========== UTILITARIOS ==========
+
+def decode_str(s):
+    if not s:
+        return ""
+    parts = decode_header(s)
+    result = ""
+    for part, enc in parts:
+        if isinstance(part, bytes):
+            result += part.decode(enc or "utf-8", errors="ignore")
+        else:
+            result += str(part)
+    return result
+
+def normalize(text):
+    """Remove acentos e converte para minusculo para comparacao robusta."""
+    import unicodedata
+    text = text.lower()
+    nfkd = unicodedata.normalize("NFKD", text)
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+def subject_matches(subject, keywords):
+    """Verifica se alguma keyword bate no assunto (com e sem acentos)."""
+    subj_norm = normalize(subject)
+    subj_lower = subject.lower()
+    for kw in keywords:
+        kw_norm = normalize(kw)
+        kw_lower = kw.lower()
+        if kw_norm in subj_norm or kw_lower in subj_lower:
+            return True
+    return False
+
+def get_html_body(msg):
+    html = ""
+    plain = ""
+    if msg.is_multipart():
+        for part in msg.walk():
+            ct  = part.get_content_type()
+            cd  = str(part.get("Content-Disposition", ""))
+            if "attachment" in cd:
+                continue
+            payload = part.get_payload(decode=True)
+            if not payload:
+                continue
+            charset = part.get_content_charset() or "utf-8"
+            text = payload.decode(charset, errors="ignore")
+            if ct == "text/html":
+                html += text
+            elif ct == "text/plain" and not plain:
+                plain += text
+    else:
+        payload = msg.get_payload(decode=True)
+        if payload:
+            charset = msg.get_content_charset() or "utf-8"
+            text = payload.decode(charset, errors="ignore")
+            if msg.get_content_type() == "text/html":
+                html = text
+            else:
+                plain = text
+    return html or plain
+
+def extract_code_from_html(html_body):
+    m = re.search(
+        r"letter-spacing\s*:\s*[^;>]+[^>]*>\s*([A-Z0-9]{4,8})\s*<",
+        html_body, re.IGNORECASE
+    )
+    if m:
+        return m.group(1).strip()
+
+    m = re.search(
+        r"font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*([A-Z0-9]{4,8})\s*<",
+        html_body, re.IGNORECASE
+    )
+    if m:
+        return m.group(1).strip()
+
+    clean = re.sub(r"<[^>]+>", " ", html_body)
+    clean = re.sub(r"\s+", " ", clean)
+
+    patterns_text = [
+        r"c[o\u00f3]digo\s*(?:de acesso)?\s*[:\-]?\s*([A-Z0-9]{4,8})",
+        r"access\s*code\s*[:\-]?\s*([A-Z0-9]{4,8})",
+        r"\b([0-9]{4,8})\b(?=\s*(?:\u00e9 seu|\u00e9 o seu|para entrar|para acessar))",
+        r"\b([0-9]{6})\b",
+    ]
+    for pat in patterns_text:
+        m = re.search(pat, clean, re.IGNORECASE)
+        if m:
+            return m.group(1).strip()
+
+    return None
+
+def extract_netflix_link(html_body, link_type="generic"):
+    """
+    Extrai links da Netflix do corpo HTML.
+    link_type: 'residence' para atualizacao de residencia, 
+               'password' para redefinicao de senha,
+               'generic' para qualquer link da Netflix.
+    """
+    # Padroes especificos por tipo
+    if link_type == "password":
+        specific_patterns = [
+            r'href=["\']([^"\']*netflix\.com[^"\']*(?:password|reset|redefin|senha)[^"\']*)["\']',
+            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
+        ]
+    elif link_type == "residence":
+        specific_patterns = [
+            r'href=["\']([^"\']*netflix\.com[^"\']*(?:update|atualiz|resid|location)[^"\']*)["\']',
+            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
+        ]
+    else:
+        specific_patterns = []
+
+    for pat in specific_patterns:
+        m = re.search(pat, html_body, re.IGNORECASE)
+        if m:
+            link = m.group(1)
+            if len(link) > 30:
+                return link
+
+    # Fallback: qualquer link longo da Netflix
+    all_links = re.findall(r'href=["\']([^"\']+)["\']', html_body, re.IGNORECASE)
+    netflix_links = [l for l in all_links if "netflix.com" in l.lower() and len(l) > 50]
+    if netflix_links:
+        return netflix_links[0]
+
+    return None
+
+def extract_link(html_body, platform):
+    """Extrai o link principal do email de acordo com a plataforma."""
+    if platform == "netflix-residence":
+        patterns = [
+            r'href=["\']([^"\']* netflix\.com[^"\']* (?:update|atualiz|resid|location)[^"\']*)["\']',
+            r'href=["\']([^"\']* netflix\.com[^"\']* account[^"\']*)["\']',
+        ]
+        domain = "netflix.com"
+    elif platform == "password-reset":
+        patterns = [
+            r'href=["\']([^"\']* netflix\.com[^"\']* (?:password|reset|redefin|senha)[^"\']*)["\']',
+            r'href=["\']([^"\']* netflix\.com[^"\']* account[^"\']*)["\']',
+        ]
+        domain = "netflix.com"
+    elif platform == "disney-residence":
+        patterns = [
+            r'href=["\']([^"\']* (?:disneyplus|disney)\.com[^"\']* (?:update|atualiz|resid|home|location)[^"\']*)["\']',
+            r'href=["\']([^"\']* disneyplus\.com[^"\']*)["\']',
+        ]
+        domain = "disney"
+    else:
+        patterns = []
+        domain = "netflix.com"
+    for pat in patterns:
+        m2 = re.search(pat, html_body, re.IGNORECASE)
+        if m2:
+            link = m2.group(1)
+            if len(link) > 30:
+                return link
+    all_links = re.findall(r'href=["\']([^"\']+)["\']', html_body, re.IGNORECASE)
+    domain_links = [l for l in all_links if domain in l.lower() and len(l) > 50]
+    if domain_links:
+        return domain_links[0]
+    return None
+
+def email_matches_user(msg, html_body, user_email):
+    user_lower = user_email.lower()
+    if user_lower in html_body.lower():
+        return True
+    for header in ["To", "Delivered-To", "X-Original-To"]:
+        if user_lower in decode_str(msg.get(header, "")).lower():
+            return True
+    return False
+
+def connect_imap():
+    mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+    mail.login(EMAIL_USER, EMAIL_PASS)
+    return mail
+
+def search_code(user_email, platform):
+    config = PLATFORM_CONFIG.get(platform)
+    if not config:
+        return None, None, "Plataforma nao suportada."
+
+    try:
+        mail = connect_imap()
+        mail.select("INBOX")
+
+        from_kw    = config["from_keyword"]
+        subj_kws   = config["subject_keywords"]
+        result_type = config.get("type", "code")
+
+        status, msgs = mail.search(None, "FROM", from_kw)
+        if status != "OK" or not msgs[0]:
+            mail.logout()
+            return None, None, "Nenhum email da plataforma encontrado."
+
+        all_ids    = msgs[0].split()
+        recent_ids = all_ids[-100:]
+        recent_ids.reverse()
+
+        matched_ids = []
+        for eid in recent_ids:
+            try:
+                status, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
+                if status != "OK":
+                    continue
+                hdr  = email.message_from_bytes(data[0][1])
+                subj = decode_str(hdr.get("Subject", ""))
+                if subject_matches(subj, subj_kws):
+                    matched_ids.append(eid)
+            except Exception:
+                continue
+
+        if not matched_ids:
+            mail.logout()
+            return None, None, (
+                "Nenhum email de " + config["name"] + " encontrado. "
+                "Verifique se o email ja chegou na caixa de entrada."
+            )
+
+        for eid in matched_ids:
+            try:
+                status, data = mail.fetch(eid, "(RFC822)")
+                if status != "OK":
+                    continue
+
+                msg       = email.message_from_bytes(data[0][1])
+                html_body = get_html_body(msg)
+
+                if email_matches_user(msg, html_body, user_email):
+                    if result_type == "link":
+                        link  = extract_link(html_body, platform)
+                        if link:
+                            mail.logout()
+                            return None, link, None
+                    else:
+                        code = extract_code_from_html(html_body)
+                        if code:
+                            mail.logout()
+                            return code, None, None
+            except Exception:
+                continue
+
+        mail.logout()
+        return None, None, (
+            "Email da conta nao encontrado nos emails recentes de " + config["name"] + ". "
+            "Verifique se digitou o email correto."
+        )
+
+    except imaplib.IMAP4.error as e:
+        return None, None, "Erro de conexao com servidor de email: " + str(e)
+    except Exception as e:
+        return None, None, "Erro interno: " + str(e)
+
+# ========== ROTAS ==========
+
+@app.route("/")
+def index():
+    return send_from_directory("static", "index.html")
+
+@app.route("/api/get-code", methods=["POST"])
+def get_code():
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"success": False, "message": "Dados invalidos."}), 400
+
+    user_email = data.get("email", "").strip().lower()
+    platform   = data.get("platform", "").strip().lower()
+
+    if not user_email:
+        return jsonify({"success": False, "message": "Por favor, informe seu email."}), 400
+
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", user_email):
+        return jsonify({"success": False, "message": "Email invalido. Verifique e tente novamente."}), 400
+
+    if platform not in PLATFORM_CONFIG:
+        return jsonify({"success": False, "message": "Plataforma nao suportada."}), 400
+
+    code, link, error = search_code(user_email, platform)
+
+    if code:
+        return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})
+    elif link:
+        return jsonify({"success": True, "link": link, "platform": platform, "type": "link"})
+    else:
+        return jsonify({"success": False, "message": error or "Nao encontrado."})
+
+@app.route("/api/health", methods=["GET"])
+def health():
+    return jsonify({"status": "ok", "service": "Mestre Codigos"})
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(debug=False, host="0.0.0.0", port=port)
