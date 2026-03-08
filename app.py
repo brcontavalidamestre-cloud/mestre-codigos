@@ -14,7 +14,7 @@ app = Flask(__name__, static_folder='static')
 CORS(app)
 
 # ─── SECRET KEY para sessoes ───────────────────────────────────────────────────
-app.secret_key = os.environ.get("SECRET_KEY", "mestre-codigos-secret-2025")
+app.secret_key = os.environ.get("SECRET_KEY", "central-codigos-secret-2025")
 app.permanent_session_lifetime = timedelta(hours=8)
 
 # ─── ARQUIVO DE USUARIOS ───────────────────────────────────────────────────────
@@ -510,7 +510,7 @@ def get_code():
 
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "Mestre Codigos"})
+    return jsonify({"status": "ok", "service": "Central dos Codigos"})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
