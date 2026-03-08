@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Mestre Códigos ✦ — Painel Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    :root {
+      --bg-deep:#06000f; --bg-dark:#0d0020; --bg-card:#130029;
+      --purple-deep:#3b0764; --purple-mid:#6d28d9; --purple-bright:#a855f7;
+      --gold:#f59e0b; --gold-light:#fcd34d;
+      --green:#10b981; --green-dark:#065f46;
+      --red:#ef4444; --red-dark:#7f1d1d;
+      --text-white:#f5f0ff; --text-muted:#c4b5fd;
+      --border:rgba(168,85,247,0.25); --border-gold:rgba(245,158,11,0.35);
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg-deep);color:var(--text-white);font-family:'Raleway',sans-serif;min-height:100vh;}
+    
+    /* ── Mist background ── */
+    .mist{position:fixed;border-radius:50%;filter:blur(140px);opacity:0.08;z-index:0;pointer-events:none;}
+    .m1{width:700px;height:700px;background:var(--purple-mid);top:-200px;left:-200px;}
+    .m2{width:500px;height:500px;background:var(--gold);bottom:-100px;right:-100px;}
+
+    /* ── Topbar ── */
+    .topbar{
+      position:sticky;top:0;z-index:100;
+      background:rgba(13,0,32,0.95);backdrop-filter:blur(12px);
+      border-bottom:1px solid var(--border-gold);
+      padding:0 24px;height:64px;
+      display:flex;align-items:center;justify-content:space-between;
+    }
+    .topbar-left{display:flex;align-items:center;gap:12px;}
+    .topbar-logo{
+      width:40px;height:40px;border-radius:50%;
+      background:linear-gradient(135deg,var(--purple-deep),var(--purple-mid));
+      display:flex;align-items:center;justify-content:center;
+      font-size:18px;border:1px solid var(--border-gold);
+      box-shadow:0 0 20px rgba(109,40,217,0.4);
+    }
+    .topbar-title{font-family:'Cinzel',serif;font-size:1.1rem;font-weight:900;
+      background:linear-gradient(135deg,var(--gold-light),var(--gold));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .topbar-badge{
+      background:rgba(245,158,11,0.15);border:1px solid var(--border-gold);
+      color:var(--gold);font-size:0.7rem;font-weight:700;letter-spacing:0.12em;
+      text-transform:uppercase;padding:3px 10px;border-radius:20px;
+    }
+    .topbar-right{display:flex;align-items:center;gap:12px;}
+    .user-info{text-align:right;}
+    .user-name{font-size:0.9rem;font-weight:600;color:var(--text-white);}
+    .user-role{font-size:0.72rem;color:var(--gold);letter-spacing:0.1em;text-transform:uppercase;}
+    .btn-logout{
+      padding:8px 16px;background:rgba(220,38,38,0.15);
+      border:1px solid rgba(220,38,38,0.4);border-radius:8px;
+      color:#fca5a5;font-size:0.8rem;font-weight:600;cursor:pointer;
+      transition:all .2s;font-family:'Raleway',sans-serif;
+    }
+    .btn-logout:hover{background:rgba(220,38,38,0.3);}
+
+    /* ── Layout ── */
+    .container{
+      position:relative;z-index:1;
+      max-width:960px;margin:0 auto;padding:32px 24px;
+    }
+    .page-header{margin-bottom:32px;}
+    .page-title{font-family:'Cinzel',serif;font-size:1.6rem;font-weight:900;
+      background:linear-gradient(135deg,var(--gold-light),var(--gold),var(--purple-bright));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+    .page-subtitle{color:var(--text-muted);font-size:0.88rem;margin-top:6px;}
+
+    /* ── Stats Cards ── */
+    .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px;margin-bottom:32px;}
+    .stat-card{
+      background:rgba(19,0,41,0.8);border:1px solid var(--border);
+      border-radius:14px;padding:20px;text-align:center;
+    }
+    .stat-number{font-size:2rem;font-weight:700;color:var(--purple-bright);}
+    .stat-label{font-size:0.78rem;color:var(--text-muted);margin-top:4px;letter-spacing:0.08em;text-transform:uppercase;}
+
+    /* ── Panel Card ── */
+    .panel{
+      background:linear-gradient(135deg,rgba(19,0,41,0.9),rgba(26,0,53,0.85));
+      border:1px solid var(--border-gold);border-radius:18px;
+      padding:28px;margin-bottom:28px;
+      box-shadow:0 0 40px rgba(109,40,217,0.15);
+    }
+    .panel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+    .panel-title{font-family:'Cinzel',serif;font-size:1rem;font-weight:700;
+      color:var(--gold);letter-spacing:0.08em;display:flex;align-items:center;gap:8px;}
+
+    /* ── Form ── */
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+    .form-group{display:flex;flex-direction:column;gap:7px;}
+    .form-label{font-size:0.78rem;font-weight:600;color:var(--text-muted);
+      letter-spacing:0.1em;text-transform:uppercase;}
+    .form-input{
+      padding:11px 14px;background:rgba(109,40,217,0.1);
+      border:1px solid var(--border);border-radius:10px;
+      color:var(--text-white);font-family:'Raleway',sans-serif;font-size:0.95rem;
+      outline:none;transition:border-color .2s,box-shadow .2s;
+    }
+    .form-input:focus{border-color:var(--purple-bright);box-shadow:0 0 12px rgba(168,85,247,0.3);}
+    .form-input::placeholder{color:rgba(196,181,253,0.35);}
+    .form-select{
+      padding:11px 14px;background:rgba(109,40,217,0.15);
+      border:1px solid var(--border);border-radius:10px;
+      color:var(--text-white);font-family:'Raleway',sans-serif;font-size:0.95rem;
+      outline:none;cursor:pointer;appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath fill='%23a855f7' d='M6 8L0 0h12z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 12px center;
+      padding-right:36px;
+    }
+    .form-select option{background:#130029;}
+    .btn-action{
+      padding:11px 24px;border:none;border-radius:10px;
+      font-family:'Raleway',sans-serif;font-size:0.9rem;font-weight:700;
+      cursor:pointer;transition:all .2s;letter-spacing:0.05em;
+    }
+    .btn-create{
+      background:linear-gradient(135deg,var(--purple-deep),var(--purple-mid));
+      color:#fff;box-shadow:0 4px 16px rgba(109,40,217,0.4);
+      border:1px solid rgba(168,85,247,0.4);
+    }
+    .btn-create:hover{box-shadow:0 6px 24px rgba(109,40,217,0.6);transform:translateY(-1px);}
+    .btn-create:disabled{opacity:0.6;cursor:not-allowed;transform:none;}
+
+    /* ── Alert ── */
+    .alert{
+      display:none;padding:12px 16px;border-radius:10px;
+      font-size:0.88rem;margin-top:16px;
+    }
+    .alert-success{background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7;}
+    .alert-error{background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.4);color:#fca5a5;}
+    .alert.show{display:flex;align-items:center;gap:10px;}
+
+    /* ── User Table ── */
+    .table-wrap{overflow-x:auto;border-radius:12px;}
+    table{width:100%;border-collapse:collapse;}
+    thead tr{background:rgba(109,40,217,0.15);}
+    th{
+      padding:12px 16px;font-size:0.75rem;font-weight:700;
+      color:var(--text-muted);letter-spacing:0.1em;text-transform:uppercase;
+      text-align:left;border-bottom:1px solid var(--border);
+    }
+    td{padding:14px 16px;font-size:0.9rem;border-bottom:1px solid rgba(168,85,247,0.08);vertical-align:middle;}
+    tr:last-child td{border-bottom:none;}
+    tr:hover td{background:rgba(109,40,217,0.06);}
+    .badge{
+      display:inline-flex;align-items:center;gap:4px;
+      padding:3px 10px;border-radius:20px;font-size:0.72rem;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;
+    }
+    .badge-admin{background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.4);color:var(--gold);}
+    .badge-client{background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.4);color:var(--purple-bright);}
+    .action-btns{display:flex;gap:8px;flex-wrap:wrap;}
+    .btn-sm{
+      padding:6px 12px;font-size:0.76rem;font-weight:600;border-radius:7px;
+      cursor:pointer;border:none;font-family:'Raleway',sans-serif;transition:all .2s;
+    }
+    .btn-change-pw{background:rgba(109,40,217,0.2);border:1px solid rgba(109,40,217,0.4);color:var(--purple-bright);}
+    .btn-change-pw:hover{background:rgba(109,40,217,0.4);}
+    .btn-delete{background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.35);color:#fca5a5;}
+    .btn-delete:hover{background:rgba(220,38,38,0.3);}
+    .empty-state{text-align:center;padding:40px;color:var(--text-muted);}
+    .empty-state .icon{font-size:3rem;margin-bottom:12px;}
+    
+    /* ── Modal ── */
+    .modal-overlay{
+      display:none;position:fixed;inset:0;z-index:200;
+      background:rgba(6,0,15,0.85);backdrop-filter:blur(6px);
+      align-items:center;justify-content:center;
+    }
+    .modal-overlay.show{display:flex;}
+    .modal{
+      background:linear-gradient(135deg,rgba(19,0,41,0.97),rgba(26,0,53,0.95));
+      border:1px solid var(--border-gold);border-radius:18px;
+      padding:32px;width:100%;max-width:420px;margin:16px;
+      box-shadow:0 0 60px rgba(109,40,217,0.4);
+    }
+    .modal-title{font-family:'Cinzel',serif;font-size:1.1rem;font-weight:700;
+      color:var(--gold);margin-bottom:20px;text-align:center;}
+    .modal-actions{display:flex;gap:12px;margin-top:20px;}
+    .btn-cancel{
+      flex:1;padding:11px;background:rgba(255,255,255,0.05);
+      border:1px solid var(--border);border-radius:10px;
+      color:var(--text-muted);font-family:'Raleway',sans-serif;
+      font-size:0.9rem;cursor:pointer;transition:all .2s;
+    }
+    .btn-cancel:hover{background:rgba(255,255,255,0.1);}
+    .btn-confirm{
+      flex:1;padding:11px;
+      background:linear-gradient(135deg,var(--purple-deep),var(--purple-mid));
+      border:none;border-radius:10px;color:#fff;
+      font-family:'Raleway',sans-serif;font-size:0.9rem;font-weight:700;cursor:pointer;
+      transition:all .2s;
+    }
+    .btn-confirm:hover{box-shadow:0 4px 20px rgba(109,40,217,0.5);}
+    .btn-confirm:disabled{opacity:0.6;cursor:not-allowed;}
+    
+    /* ── Spinner ── */
+    .spinner{display:inline-block;width:14px;height:14px;
+      border:2px solid rgba(255,255,255,0.3);border-top-color:#fff;
+      border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
+    @keyframes spin{to{transform:rotate(360deg);}}
+
+    /* ── Responsive ── */
+    @media(max-width:600px){
+      .topbar{padding:0 16px;}
+      .container{padding:20px 16px;}
+      .form-grid{grid-template-columns:1fr;}
+      .topbar-right .user-info{display:none;}
+    }
+  </style>
+</head>
+<body>
+  <div class="mist m1"></div>
+  <div class="mist m2"></div>
+
+  <!-- ── Topbar ── -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-logo">✦</div>
+      <div>
+        <div class="topbar-title">MESTRE CÓDIGOS</div>
+      </div>
+      <span class="topbar-badge">⚙️ Admin</span>
+    </div>
+    <div class="topbar-right">
+      <div class="user-info">
+        <div class="user-name" id="topbar-name">—</div>
+        <div class="user-role">Administrador</div>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">🚪 Sair</button>
+    </div>
+  </div>
+
+  <!-- ── Main ── -->
+  <div class="container">
+    <div class="page-header">
+      <div class="page-title">⚙️ Central de Usuários</div>
+      <div class="page-subtitle">Gerencie os acessos dos clientes à plataforma</div>
+    </div>
+
+    <!-- Stats -->
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-number" id="stat-total">—</div>
+        <div class="stat-label">Total Usuários</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="stat-clients">—</div>
+        <div class="stat-label">Clientes</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-number" id="stat-admins">—</div>
+        <div class="stat-label">Admins</div>
+      </div>
+    </div>
+
+    <!-- ── Criar Novo Usuário ── -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">➕ Criar Novo Acesso</div>
+      </div>
+      <form id="create-form" onsubmit="createUser(event)">
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">👤 Nome Completo</label>
+            <input class="form-input" id="new-name" placeholder="Ex: João Silva" autocomplete="off"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">🔑 Usuário (login)</label>
+            <input class="form-input" id="new-username" placeholder="Ex: joaosilva" required autocomplete="off"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">🔒 Senha</label>
+            <input class="form-input" type="password" id="new-password" placeholder="Mínimo 4 caracteres" required autocomplete="new-password"/>
+          </div>
+          <div class="form-group">
+            <label class="form-label">🎭 Perfil</label>
+            <select class="form-select" id="new-role">
+              <option value="client">👤 Cliente</option>
+              <option value="admin">⭐ Administrador</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <button type="submit" class="btn-action btn-create" id="btn-create">✦ Criar Acesso</button>
+        </div>
+      </form>
+      <div class="alert alert-success" id="alert-create-ok"><span>✅</span><span id="alert-create-ok-msg"></span></div>
+      <div class="alert alert-error" id="alert-create-err"><span>❌</span><span id="alert-create-err-msg"></span></div>
+    </div>
+
+    <!-- ── Lista de Usuários ── -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">👥 Usuários Cadastrados</div>
+        <button class="btn-action btn-create" style="padding:8px 18px;font-size:0.82rem;" onclick="loadUsers()">🔄 Atualizar</button>
+      </div>
+      <div class="table-wrap">
+        <table id="users-table">
+          <thead>
+            <tr>
+              <th>Usuário</th>
+              <th>Nome</th>
+              <th>Perfil</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <tr><td colspan="4"><div class="empty-state"><div class="spinner"></div> Carregando...</div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal Alterar Senha ── -->
+  <div class="modal-overlay" id="modal-pw">
+    <div class="modal">
+      <div class="modal-title">🔒 Alterar Senha</div>
+      <div class="form-group" style="margin-bottom:8px;">
+        <label class="form-label">Usuário</label>
+        <input class="form-input" id="modal-pw-user" disabled/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Nova Senha</label>
+        <input class="form-input" type="password" id="modal-pw-new" placeholder="Mínimo 4 caracteres"/>
+      </div>
+      <div class="alert alert-error" id="modal-pw-err"><span>❌</span><span id="modal-pw-err-msg"></span></div>
+      <div class="modal-actions">
+        <button class="btn-cancel" onclick="closeModal('modal-pw')">Cancelar</button>
+        <button class="btn-confirm" id="btn-pw-confirm" onclick="confirmChangePw()">Salvar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal Confirmar Exclusão ── -->
+  <div class="modal-overlay" id="modal-del">
+    <div class="modal">
+      <div class="modal-title">🗑️ Remover Usuário</div>
+      <p style="text-align:center;color:var(--text-muted);margin-bottom:8px;">
+        Tem certeza que deseja remover o usuário<br>
+        <strong style="color:var(--text-white)" id="modal-del-username">—</strong>?
+      </p>
+      <p style="text-align:center;font-size:0.82rem;color:#fca5a5;">Esta ação não pode ser desfeita.</p>
+      <div class="modal-actions" style="margin-top:24px;">
+        <button class="btn-cancel" onclick="closeModal('modal-del')">Cancelar</button>
+        <button class="btn-confirm" id="btn-del-confirm"
+          style="background:linear-gradient(135deg,#7f1d1d,#ef4444);"
+          onclick="confirmDelete()">Sim, Remover</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentPwUser = null;
+    let currentDelUser = null;
+
+    // ── Init ──────────────────────────────────────────────────────────────────
+    (async function init() {
+      try {
+        const res  = await fetch('/api/auth/me');
+        const data = await res.json();
+        if (!data.logged_in) { location.href = '/login'; return; }
+        if (data.role !== 'admin') { location.href = '/'; return; }
+        document.getElementById('topbar-name').textContent = data.name || data.username;
+      } catch { location.href = '/login'; return; }
+      loadUsers();
+    })();
+
+    // ── Logout ────────────────────────────────────────────────────────────────
+    async function doLogout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      location.href = '/login';
+    }
+
+    // ── Load Users ────────────────────────────────────────────────────────────
+    async function loadUsers() {
+      const tbody = document.getElementById('users-tbody');
+      tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><span class="spinner"></span> Carregando...</div></td></tr>';
+      try {
+        const res  = await fetch('/api/admin/users');
+        const data = await res.json();
+        if (!data.success) { tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state">Erro ao carregar usuários.</div></td></tr>'; return; }
+        const users = data.users;
+        // Stats
+        document.getElementById('stat-total').textContent   = users.length;
+        document.getElementById('stat-clients').textContent = users.filter(u => u.role === 'client').length;
+        document.getElementById('stat-admins').textContent  = users.filter(u => u.role === 'admin').length;
+        // Table
+        if (!users.length) {
+          tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state"><div class="icon">👤</div>Nenhum usuário cadastrado.</div></td></tr>';
+          return;
+        }
+        tbody.innerHTML = users.map(u => `
+          <tr>
+            <td><strong>${esc(u.username)}</strong></td>
+            <td>${esc(u.name || '—')}</td>
+            <td><span class="badge badge-${u.role}">${u.role === 'admin' ? '⭐ Admin' : '👤 Cliente'}</span></td>
+            <td>
+              <div class="action-btns">
+                <button class="btn-sm btn-change-pw" onclick="openChangePw('${esc(u.username)}')">🔒 Alterar Senha</button>
+                <button class="btn-sm btn-delete"    onclick="openDelete('${esc(u.username)}')">🗑️ Remover</button>
+              </div>
+            </td>
+          </tr>
+        `).join('');
+      } catch {
+        tbody.innerHTML = '<tr><td colspan="4"><div class="empty-state">Erro de conexão.</div></td></tr>';
+      }
+    }
+
+    // ── Create User ───────────────────────────────────────────────────────────
+    async function createUser(e) {
+      e.preventDefault();
+      const btn  = document.getElementById('btn-create');
+      const okEl = document.getElementById('alert-create-ok');
+      const erEl = document.getElementById('alert-create-err');
+      hideAlerts();
+      const username = document.getElementById('new-username').value.trim();
+      const password = document.getElementById('new-password').value;
+      const name     = document.getElementById('new-name').value.trim();
+      const role     = document.getElementById('new-role').value;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Criando...';
+      try {
+        const res  = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ username, password, name, role })
+        });
+        const data = await res.json();
+        if (data.success) {
+          document.getElementById('alert-create-ok-msg').textContent = data.message || 'Usuário criado!';
+          okEl.classList.add('show');
+          document.getElementById('create-form').reset();
+          loadUsers();
+        } else {
+          document.getElementById('alert-create-err-msg').textContent = data.message || 'Erro ao criar.';
+          erEl.classList.add('show');
+        }
+      } catch {
+        document.getElementById('alert-create-err-msg').textContent = 'Erro de conexão.';
+        erEl.classList.add('show');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '✦ Criar Acesso';
+        setTimeout(hideAlerts, 5000);
+      }
+    }
+
+    // ── Change Password ───────────────────────────────────────────────────────
+    function openChangePw(username) {
+      currentPwUser = username;
+      document.getElementById('modal-pw-user').value = username;
+      document.getElementById('modal-pw-new').value  = '';
+      document.getElementById('modal-pw-err').classList.remove('show');
+      document.getElementById('modal-pw').classList.add('show');
+    }
+    async function confirmChangePw() {
+      const pw  = document.getElementById('modal-pw-new').value;
+      const btn = document.getElementById('btn-pw-confirm');
+      const err = document.getElementById('modal-pw-err');
+      const errMsg = document.getElementById('modal-pw-err-msg');
+      err.classList.remove('show');
+      if (!pw || pw.length < 4) {
+        errMsg.textContent = 'Senha deve ter pelo menos 4 caracteres.';
+        err.classList.add('show'); return;
+      }
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> Salvando...';
+      try {
+        const res  = await fetch(`/api/admin/users/${encodeURIComponent(currentPwUser)}/password`, {
+          method: 'PUT',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ password: pw })
+        });
+        const data = await res.json();
+        if (data.success) {
+          closeModal('modal-pw');
+          showToast('✅ Senha alterada com sucesso!', 'success');
+        } else {
+          errMsg.textContent = data.message || 'Erro ao alterar.';
+          err.classList.add('show');
+        }
+      } catch {
+        errMsg.textContent = 'Erro de conexão.'; err.classList.add('show');
+      } finally {
+        btn.disabled = false; btn.innerHTML = 'Salvar';
+      }
+    }
+
+    // ── Delete ────────────────────────────────────────────────────────────────
+    function openDelete(username) {
+      currentDelUser = username;
+      document.getElementById('modal-del-username').textContent = username;
+      document.getElementById('modal-del').classList.add('show');
+    }
+    async function confirmDelete() {
+      const btn = document.getElementById('btn-del-confirm');
+      btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Removendo...';
+      try {
+        const res  = await fetch(`/api/admin/users/${encodeURIComponent(currentDelUser)}`, { method: 'DELETE' });
+        const data = await res.json();
+        closeModal('modal-del');
+        if (data.success) {
+          showToast('🗑️ Usuário removido!', 'success');
+          loadUsers();
+        } else {
+          showToast('❌ ' + (data.message || 'Erro ao remover.'), 'error');
+        }
+      } catch {
+        closeModal('modal-del');
+        showToast('❌ Erro de conexão.', 'error');
+      } finally {
+        btn.disabled = false; btn.innerHTML = 'Sim, Remover';
+      }
+    }
+
+    // ── Helpers ───────────────────────────────────────────────────────────────
+    function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+    function hideAlerts() {
+      document.getElementById('alert-create-ok').classList.remove('show');
+      document.getElementById('alert-create-err').classList.remove('show');
+    }
+    function esc(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    // ── Toast ─────────────────────────────────────────────────────────────────
+    function showToast(msg, type) {
+      let t = document.getElementById('_toast');
+      if (!t) {
+        t = document.createElement('div');
+        t.id = '_toast';
+        t.style.cssText = `
+          position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+          padding:12px 24px;border-radius:12px;font-size:0.9rem;font-weight:600;
+          z-index:9999;transition:opacity .3s;pointer-events:none;
+          box-shadow:0 4px 20px rgba(0,0,0,0.5);
+        `;
+        document.body.appendChild(t);
+      }
+      t.textContent = msg;
+      t.style.background   = type === 'success' ? 'rgba(16,185,129,0.9)' : 'rgba(220,38,38,0.9)';
+      t.style.border       = type === 'success' ? '1px solid #6ee7b7' : '1px solid #fca5a5';
+      t.style.color        = '#fff';
+      t.style.opacity      = '1';
+      clearTimeout(t._timer);
+      t._timer = setTimeout(() => { t.style.opacity = '0'; }, 3000);
+    }
+
+    // ── Close modal on backdrop click ─────────────────────────────────────────
+    document.querySelectorAll('.modal-overlay').forEach(overlay => {
+      overlay.addEventListener('click', function(e) {
+        if (e.target === this) this.classList.remove('show');
+      });
+    });
+  </script>
+</body>
+</html>
