@@ -288,6 +288,8 @@
     .tab-btn.password.active  { background: linear-gradient(135deg, #065f46, #047857); box-shadow: 0 0 15px rgba(16,185,129,0.4); }
     .tab-btn.disney-res.active { background: linear-gradient(135deg, #1e3a8a, #1d4ed8); box-shadow: 0 0 15px rgba(29,78,216,0.5); }
     .tab-btn.netflix-login.active { background: linear-gradient(135deg, #b91c1c, #dc2626); box-shadow: 0 0 15px rgba(229,9,20,0.5); }
+    .tab-btn.netflix-temp.active { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 0 15px rgba(217,119,6,0.5); }
+    .selected-platform-badge.netflix-temp { border-color: rgba(217,119,6,0.5); color: #fcd34d; background: rgba(217,119,6,0.1); }
     .selected-platform-badge.netflix-login { border-color: rgba(229,9,20,0.5); color: #fca5a5; background: rgba(229,9,20,0.1); }
 
     .form-group { margin-bottom: 16px; }
@@ -556,6 +558,11 @@
           <div class="platform-name">Login Netflix</div>
           <div class="platform-desc">Código de início de sessão</div>
         </div>
+        <div class="platform-card" onclick="selectPlatform('netflix-temp')" id="card-netflix-temp">
+          <span class="platform-logo">⏱️</span>
+          <div class="platform-name">Acesso Temporário</div>
+          <div class="platform-desc">Código de acesso temporário Netflix</div>
+        </div>
       </div>
     </section>
 
@@ -605,6 +612,9 @@
         </button>
         <button class="tab-btn netflix-login" id="tab-netflix-login" onclick="switchTab('netflix-login')">
           📱 Login Netflix
+        </button>
+        <button class="tab-btn netflix-temp" id="tab-netflix-temp" onclick="switchTab('netflix-temp')">
+          ⏱️ Acesso Temporário
         </button>
       </div>
 
@@ -702,7 +712,8 @@
       'netflix-residence': '🏠 Residência Netflix — Link de atualização',
       'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição',
       'disney-residence':  '🏡 Residência Disney+ — Link de atualização',
-      'netflix-login':     '📱 Login Netflix — Código de início de sessão'
+      'netflix-login':     '📱 Login Netflix — Código de início de sessão',
+      'netflix-temp':      '⏱️ Acesso Temporário Netflix — Link para receber código'
     };
 
     function selectPlatform(p) {
@@ -780,7 +791,8 @@
         'netflix-residence': 'Residência Netflix',
         'password-reset': 'Redefinição de Senha Netflix',
         'disney-residence': 'Residência Disney+',
-        'netflix-login': 'Login Netflix'
+        'netflix-login': 'Login Netflix',
+        'netflix-temp': 'Acesso Temporário Netflix'
       };
       box.className = 'result-box success';
 
@@ -804,6 +816,35 @@
           <a href="${data.link}" target="_blank" rel="noopener noreferrer"
              style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
             🔗 Abrir Link de Atualização Disney+
+          </a>
+          <br/>
+          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
+        `;
+      } else if (data.type === 'link' && data.link && data.platform === 'netflix-temp') {
+        box.innerHTML = `
+          <span class="result-emoji">⏱️</span>
+          <div class="result-label">Link encontrado!</div>
+          <div class="result-platform">Acesso Temporário Netflix</div>
+
+          <div style="
+            background: rgba(217,119,6,0.08);
+            border: 1px solid rgba(217,119,6,0.35);
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin: 14px 0 10px;
+            text-align: left;
+          ">
+            <p style="margin:0 0 6px;font-size:0.8rem;font-weight:700;color:#fcd34d;letter-spacing:0.05em;">
+              📌 Como receber seu código:
+            </p>
+            <p style="margin:0;font-size:0.78rem;color:#fde68a;line-height:1.5;">
+              Clique no botão abaixo e, na página da Netflix que abrir, clique em <strong style='color:#fff;'>"Receber código"</strong> para receber seu código de acesso temporário.
+            </p>
+          </div>
+
+          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
+             style="display:inline-block;margin:8px 0 8px;padding:14px 28px;background:linear-gradient(135deg,#92400e,#d97706);color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem;letter-spacing:0.05em;box-shadow:0 4px 16px rgba(217,119,6,0.4);">
+            📩 Receber Código
           </a>
           <br/>
           <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>

@@ -80,6 +80,19 @@ PLATFORM_CONFIG = {
         "name": "Netflix Login",
         "type": "code"
     },
+    "netflix-temp": {
+        "from_keyword": "netflix.com",
+        "subject_keywords": [
+            "acesso tempor",
+            "acesso temporário",
+            "acesso temporario",
+            "código de acesso temporário",
+            "temporary access",
+            "temp access"
+        ],
+        "name": "Codigo Temporario Netflix",
+        "type": "link"
+    },
     "disney": {
         "from_keyword": "disneyplus.com",
         "subject_keywords": ["digo de acesso"],
@@ -218,6 +231,14 @@ def extract_link(html_body, platform):
             r'href=["\'](https://www\.netflix\.com/account/[^"\' ]*(?:update|atualiz|resid|location|travel|verify)[^"\' ]*)["\']',
             r'href=["\'](https://www\.netflix\.com/[^"\' ]*(?:confirm|yes|sim|approve|atualiz|resid)[^"\' ]*)["\']',
             r'href=["\'](https://www\.netflix\.com/account/[^"\' ]+)["\']',
+        ]
+        domain = "netflix.com"
+    elif platform == "netflix-temp":
+        # Botão "Receber código" no email de acesso temporário
+        patterns = [
+            r'href=["\'](https://www\.netflix\.com/[^"\' ]*(?:temporary|tempor|receive|receber|acesso)[^"\' ]*)["\']',
+            r'href=["\'](https://[^"\' ]*netflix\.com[^"\' ]*(?:code|codigo|auth|verify|token)[^"\' ]*)["\']',
+            r'href=["\'](https://www\.netflix\.com/[^"\' ]{40,})["\']',
         ]
         domain = "netflix.com"
     elif platform == "password-reset":
