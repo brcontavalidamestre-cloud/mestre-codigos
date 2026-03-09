@@ -73,7 +73,14 @@ PLATFORM_CONFIG = {
     },
     "netflix-residence": {
         "from_keyword": "netflix.com",
-        "subject_keywords": ["atualizar"],
+        "subject_keywords": [
+            "pediu para atualizar",
+            "atualizar sua resid",
+            "update your Netflix",
+            "Netflix Home",
+            "atualizar resid",
+            "atualizar"
+        ],
         "name": "Residencia Netflix",
         "type": "link"
     },
@@ -185,22 +192,29 @@ def extract_code_from_html(html_body):
     return None
 
 def extract_link(html_body, platform):
+    """
+    Extrai o link relevante do corpo HTML do email.
+    Para netflix-residence, prioriza o botão "Sim, fui eu".
+    """
     if platform == "netflix-residence":
+        # Prioridade 1: botão "Sim, fui eu" (link de confirmação de residência)
         patterns = [
-            r'href=["\']([^"\']*netflix\.com[^"\']*(?:update|atualiz|resid|location)[^"\']*)["\']',
-            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
+            r'href=["\'](https://www\.netflix\.com/account/travel/[^"\' ]+)["\']',
+            r'href=["\'](https://www\.netflix\.com/account/[^"\' ]*(?:update|atualiz|resid|location|travel|verify)[^"\' ]*)["\']',
+            r'href=["\'](https://www\.netflix\.com/[^"\' ]*(?:confirm|yes|sim|approve|atualiz|resid)[^"\' ]*)["\']',
+            r'href=["\'](https://www\.netflix\.com/account/[^"\' ]+)["\']',
         ]
         domain = "netflix.com"
     elif platform == "password-reset":
         patterns = [
-            r'href=["\']([^"\']*netflix\.com[^"\']*(?:password|reset|redefin|senha)[^"\']*)["\']',
-            r'href=["\']([^"\']*netflix\.com[^"\']*account[^"\']*)["\']',
+            r'href=["\'](https://www\.netflix\.com/[^"\' ]*(?:password|reset|redefin|senha)[^"\' ]*)["\']',
+            r'href=["\'](https://www\.netflix\.com/account/[^"\' ]+)["\']',
         ]
         domain = "netflix.com"
     elif platform == "disney-residence":
         patterns = [
-            r'href=["\']([^"\']*(?:disneyplus|disney)\.com[^"\']*(?:update|atualiz|resid|home|location)[^"\']*)["\']',
-            r'href=["\']([^"\']*disneyplus\.com[^"\']*)["\']',
+            r'href=["\'](https://[^"\' ]*(?:disneyplus|disney)\.com[^"\' ]*(?:update|atualiz|resid|home|location)[^"\' ]*)["\']',
+            r'href=["\'](https://[^"\' ]*disneyplus\.com[^"\' ]+)["\']',
         ]
         domain = "disney"
     else:
@@ -212,12 +226,12 @@ def extract_link(html_body, platform):
             link = m.group(1)
             if len(link) > 30:
                 return link
-    all_links = re.findall(r'href=["\']([^"\']+)["\']', html_body, re.IGNORECASE)
+    # Fallback: any link from the domain
+    all_links = re.findall(r'href=["\'"]([^"\'"]+)["\'"]', html_body, re.IGNORECASE)
     domain_links = [l for l in all_links if domain in l.lower() and len(l) > 50]
     if domain_links:
         return domain_links[0]
     return None
-
 def email_matches_user(msg, html_body, user_email):
     user_lower = user_email.lower()
     if user_lower in html_body.lower():
