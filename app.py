@@ -62,6 +62,7 @@ PLATFORM_CONFIG = {
     "netflix": {
         "from_keyword": "netflix.com",
         "subject_keywords": ["digo de acesso"],
+        "negative_keywords": ["temporario", "temporário", "temporal", "temporary"],
         "name": "Netflix",
         "type": "code"
     },
@@ -165,9 +166,14 @@ def normalize(text):
     nfkd = unicodedata.normalize("NFKD", text)
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
-def subject_matches(subject, keywords):
+def subject_matches(subject, keywords, negative_keywords=None):
     subj_norm  = normalize(subject)
     subj_lower = subject.lower()
+    # Rejeita se o assunto contiver alguma palavra negativa
+    if negative_keywords:
+        for nkw in negative_keywords:
+            if normalize(nkw) in subj_norm or nkw.lower() in subj_lower:
+                return False
     for kw in keywords:
         if normalize(kw) in subj_norm or kw.lower() in subj_lower:
             return True
@@ -203,19 +209,43 @@ def get_html_body(msg):
     return html or plain
 
 def extract_code_from_html(html_body):
-    m = re.search(r"letter-spacing\s*:\s*[^;>]+[^>]*>\s*([A-Z0-9]{4,8})\s*<", html_body, re.IGNORECASE)
+    # 1. Dígitos separados por espaço/nbsp dentro de span/td estilizado (ex: "0 4 6 4")
+    m = re.search(
+        r"letter-spacing[^>]{0,200}>\s*((?:[0-9]\s*){4,8})<",
+        html_body, re.IGNORECASE | re.DOTALL
+    )
     if m:
-        return m.group(1).strip()
-    m = re.search(r"font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*([A-Z0-9]{4,8})\s*<", html_body, re.IGNORECASE)
+        code = re.sub(r"\s+", "", m.group(1)).strip()
+        if code.isdigit() and 4 <= len(code) <= 8:
+            return code
+
+    # 2. Dígitos em fonte grande (só numérico)
+    m = re.search(
+        r"font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*((?:[0-9]\s*){4,8})\s*<",
+        html_body, re.IGNORECASE
+    )
     if m:
-        return m.group(1).strip()
+        code = re.sub(r"\s+", "", m.group(1)).strip()
+        if code.isdigit():
+            return code
+
+    # 3. Qualquer elemento com letter-spacing que contenha SOMENTE dígitos
+    for m in re.finditer(
+        r"letter-spacing[^>]{0,300}>\s*((?:[0-9][\s\u00a0]*){4,8})\s*<",
+        html_body, re.IGNORECASE | re.DOTALL
+    ):
+        candidate = re.sub(r"[\s\u00a0]+", "", m.group(1)).strip()
+        if candidate.isdigit() and 4 <= len(candidate) <= 8:
+            return candidate
+
+    # 4. Texto limpo — padrões semânticos
     clean = re.sub(r"<[^>]+>", " ", html_body)
     clean = re.sub(r"\s+", " ", clean)
     patterns_text = [
-        r"c[o\u00f3]digo\s*(?:de acesso)?\s*[:\-]?\s*([A-Z0-9]{4,8})",
-        r"access\s*code\s*[:\-]?\s*([A-Z0-9]{4,8})",
-        r"\b([0-9]{4,8})\b(?=\s*(?:\u00e9 seu|\u00e9 o seu|para entrar|para acessar))",
-        r"\b([0-9]{6})\b",
+        r"c[o\u00f3]digo\s*(?:de acesso)?\s*[:\-]?\s*([0-9]{4,8})",
+        r"access\s*code\s*[:\-]?\s*([0-9]{4,8})",
+        r"\b([0-9]{4,8})\b(?=\s*(?:é seu|é o seu|para entrar|para acessar|es tu|es el))",
+        r"\b([0-9]{4})\b",
     ]
     for pat in patterns_text:
         m = re.search(pat, clean, re.IGNORECASE)
@@ -346,7 +376,7 @@ def search_code(user_email, platform):
                             continue
                         hdr  = email.message_from_bytes(data[0][1])
                         subj = decode_str(hdr.get("Subject", ""))
-                        if subject_matches(subj, subj_kws):
+                        if subject_matches(subj, subj_kws, config.get("negative_keywords")):
                             all_matched.append((mailbox, eid))
                     except Exception:
                         continue
