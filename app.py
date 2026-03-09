@@ -419,12 +419,8 @@ def api_list_users():
     users = load_users()
     result = []
     for uname, udata in users.items():
-        # Cada admin ve apenas os usuarios que ele mesmo criou
-        created_by = udata.get("created_by", "")
         if uname == current_admin:
             continue  # nao lista a si mesmo
-        if created_by != current_admin:
-            continue
         result.append({
             "username": uname,
             "name":     udata.get("name", uname),
