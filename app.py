@@ -18,7 +18,10 @@ app.secret_key = os.environ.get("SECRET_KEY", "central-codigos-secret-2025")
 app.permanent_session_lifetime = timedelta(hours=8)
 
 # ─── ARQUIVO DE USUARIOS ───────────────────────────────────────────────────────
-USERS_FILE = os.environ.get("USERS_FILE", "/tmp/users.json")
+# /data é o Volume persistente do Railway (não apaga no redeploy)
+# Fallback para /tmp se /data não existir ainda
+_data_dir = "/data" if os.path.isdir("/data") else "/tmp"
+USERS_FILE = os.environ.get("USERS_FILE", os.path.join(_data_dir, "users.json"))
 
 def load_users():
     if os.path.exists(USERS_FILE):
@@ -40,11 +43,14 @@ def load_users():
 
 def save_users(users):
     try:
-        os.makedirs(os.path.dirname(USERS_FILE), exist_ok=True)
+        parent = os.path.dirname(USERS_FILE)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
         with open(USERS_FILE, "w") as f:
             json.dump(users, f, indent=2)
+        print(f"[users] salvo em {USERS_FILE} ({len(users)} usuarios)")
     except Exception as e:
-        print(f"Erro ao salvar usuarios: {e}")
+        print(f"[users] ERRO ao salvar: {e}")
 
 # ─── CONFIGURACOES IMAP ────────────────────────────────────────────────────────
 IMAP_SERVER = os.environ.get("IMAP_SERVER", "imap.hostinger.com")
