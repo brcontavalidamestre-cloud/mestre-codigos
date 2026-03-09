@@ -287,6 +287,8 @@
     .tab-btn.residence.active { background: linear-gradient(135deg, #7f1d1d, #991b1b); box-shadow: 0 0 15px rgba(220,38,38,0.4); }
     .tab-btn.password.active  { background: linear-gradient(135deg, #065f46, #047857); box-shadow: 0 0 15px rgba(16,185,129,0.4); }
     .tab-btn.disney-res.active { background: linear-gradient(135deg, #1e3a8a, #1d4ed8); box-shadow: 0 0 15px rgba(29,78,216,0.5); }
+    .tab-btn.netflix-login.active { background: linear-gradient(135deg, #b91c1c, #dc2626); box-shadow: 0 0 15px rgba(229,9,20,0.5); }
+    .selected-platform-badge.netflix-login { border-color: rgba(229,9,20,0.5); color: #fca5a5; background: rgba(229,9,20,0.1); }
 
     .form-group { margin-bottom: 16px; }
     .form-label {
@@ -549,6 +551,11 @@
           <div class="platform-name">Residência Disney+</div>
           <div class="platform-desc">Link de atualização Disney+</div>
         </div>
+        <div class="platform-card" onclick="selectPlatform('netflix-login')" id="card-netflix-login">
+          <span class="platform-logo">📱</span>
+          <div class="platform-name">Login Netflix</div>
+          <div class="platform-desc">Código de início de sessão</div>
+        </div>
       </div>
     </section>
 
@@ -595,6 +602,9 @@
         </button>
         <button class="tab-btn disney-res" id="tab-disney-residence" onclick="switchTab('disney-residence')">
           🏡 Residência Disney+
+        </button>
+        <button class="tab-btn netflix-login" id="tab-netflix-login" onclick="switchTab('netflix-login')">
+          📱 Login Netflix
         </button>
       </div>
 
@@ -691,7 +701,8 @@
       disney:  '✨ Disney+ — Código de acesso',
       'netflix-residence': '🏠 Residência Netflix — Link de atualização',
       'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição',
-      'disney-residence':  '🏡 Residência Disney+ — Link de atualização'
+      'disney-residence':  '🏡 Residência Disney+ — Link de atualização',
+      'netflix-login':     '📱 Login Netflix — Código de início de sessão'
     };
 
     function selectPlatform(p) {
@@ -768,7 +779,8 @@
         disney: 'Disney+',
         'netflix-residence': 'Residência Netflix',
         'password-reset': 'Redefinição de Senha Netflix',
-        'disney-residence': 'Residência Disney+'
+        'disney-residence': 'Residência Disney+',
+        'netflix-login': 'Login Netflix'
       };
       box.className = 'result-box success';
 

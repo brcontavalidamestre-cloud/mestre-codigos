@@ -65,6 +65,21 @@ PLATFORM_CONFIG = {
         "name": "Netflix",
         "type": "code"
     },
+    "netflix-login": {
+        "from_keyword": "netflix.com",
+        "subject_keywords": [
+            "digo de in",
+            "icio de sess",
+            "inicio de sess",
+            "código de início",
+            "code to sign in",
+            "sign in code",
+            "sign-in code",
+            "login code"
+        ],
+        "name": "Netflix Login",
+        "type": "code"
+    },
     "disney": {
         "from_keyword": "disneyplus.com",
         "subject_keywords": ["digo de acesso"],
