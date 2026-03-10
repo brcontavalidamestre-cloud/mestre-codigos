@@ -278,7 +278,12 @@ PLATFORM_CONFIG = {
             "actualizar tu residencia",
             "residencia netflix",
             "confirmar tu ubicacion netflix",
-            "confirma tu residencia"
+            "confirma tu residencia",
+            # Espanhol extra
+            "Importante: Cómo actualizar tu Hogar con Netflix",
+            "Importante: Como actualizar tu Hogar con Netflix",
+            "actualizar tu Hogar con Netflix",
+            "tu Hogar con Netflix"
         ],
         "name": "Residencia Netflix",
         "type": "link"
