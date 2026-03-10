@@ -59,100 +59,181 @@ EMAIL_USER  = os.environ.get("EMAIL_USER", "mestre@codigo.log.br")
 EMAIL_PASS  = os.environ.get("EMAIL_PASS", "Mcodigo10@")
 
 PLATFORM_CONFIG = {
+    # ── NETFLIX: código de acesso (PT/EN/ES) ──────────────────────────────────
     "netflix": {
         "from_keyword": "netflix.com",
-        "subject_keywords": ["digo de acesso"],
-        "negative_keywords": ["temporario", "temporário", "temporal", "temporary"],
+        "subject_keywords": [
+            # Português
+            "digo de acesso",
+            "código de acesso netflix",
+            # Inglês
+            "your netflix access code",
+            "netflix access code",
+            "netflix verification code",
+            "your netflix verification code",
+            "your one-time passcode for netflix",
+            "netflix one-time passcode",
+            # Espanhol
+            "tu código de acceso netflix",
+            "código de acceso netflix",
+            "codigo de acceso netflix",
+            "tu código de verificación netflix",
+            "codigo de verificacion netflix"
+        ],
+        "negative_keywords": ["temporario", "temporário", "temporal", "temporary", "acceso temporal"],
         "name": "Netflix",
         "type": "code"
     },
+    # ── NETFLIX LOGIN: código de início de sessão (PT/EN/ES) ──────────────────
     "netflix-login": {
         "from_keyword": "netflix.com",
         "subject_keywords": [
+            # Português
             "digo de in",
             "icio de sess",
             "inicio de sess",
             "código de início",
+            # Inglês
             "code to sign in",
             "sign in code",
             "sign-in code",
-            "login code"
+            "login code",
+            "your netflix sign in code",
+            "netflix sign-in code",
+            # Espanhol
+            "código de inicio de sesión",
+            "codigo de inicio de sesion",
+            "tu código para iniciar sesión",
+            "codigo para iniciar sesion",
+            "inicia sesión en netflix",
+            "código de acceso para iniciar"
         ],
         "name": "Netflix Login",
         "type": "code"
     },
+    # ── NETFLIX TEMPORÁRIO: acesso temporário (PT/EN/ES) ──────────────────────
     "netflix-temp": {
         "from_keyword": "netflix.com",
         "subject_keywords": [
+            # Português
             "acesso tempor",
             "acesso temporário",
             "acesso temporario",
             "código de acesso temporário",
+            # Inglês
             "temporary access",
             "temp access",
+            "your temporary access",
+            "netflix temporary code",
+            # Espanhol
             "acceso temporal",
             "código de acceso temporal",
             "tu código de acceso temporal",
-            "codigo de acceso temporal"
+            "codigo de acceso temporal",
+            "acceso temporal de netflix"
         ],
         "name": "Codigo Temporario Netflix",
         "type": "link"
     },
+    # ── DISNEY+: código de acesso (PT/EN/ES) ──────────────────────────────────
     "disney": {
         "from_keyword": "disneyplus.com",
         "subject_keywords": [
+            # Português
             "digo de acesso",
+            "código de acesso disney",
+            # Inglês
             "your one-time passcode for disney+",
             "your disney+ verification code",
             "disney+ verification code",
             "your disney+ access code",
+            "disney+ access code",
+            "disney+ one-time passcode",
+            # Espanhol
             "tu código de acceso disney+",
             "tu codigo de acceso disney+",
             "tu código de verificación de disney+",
             "tu codigo de verificacion de disney+",
             "código de acceso disney+",
-            "codigo de acceso disney+"
+            "codigo de acceso disney+",
+            "tu código de acceso de disney+"
         ],
         "name": "Disney+",
         "type": "code"
     },
+    # ── NETFLIX RESIDÊNCIA: link de atualização (PT/EN/ES) ────────────────────
     "netflix-residence": {
         "from_keyword": "netflix.com",
         "subject_keywords": [
+            # Português
             "pediu para atualizar",
             "atualizar sua resid",
+            "atualizar resid",
+            "atualizar",
+            # Inglês
             "update your Netflix",
             "Netflix Home",
-            "atualizar resid",
-            "atualizar"
+            "update your netflix household",
+            "netflix household",
+            "confirm your netflix location",
+            "confirm your location",
+            # Espanhol
+            "actualiza tu residencia netflix",
+            "actualizar tu residencia",
+            "residencia netflix",
+            "confirmar tu ubicacion netflix",
+            "confirma tu residencia"
         ],
         "name": "Residencia Netflix",
         "type": "link"
     },
+    # ── NETFLIX SENHA: redefinição de senha (PT/EN/ES) ────────────────────────
     "password-reset": {
         "from_keyword": "netflix.com",
         "subject_keywords": [
+            # Português
             "Complete a solicitacao de redefinicao de senha",
             "redefinicao de senha",
+            "redefini",
+            "redefinir senha",
+            "alterar senha netflix",
+            # Inglês
+            "reset password",
+            "password reset",
+            "reset ang password",
+            "complete your password reset",
+            "netflix password reset",
+            "change your netflix password",
+            # Espanhol / Filipino
             "Completa tu solicitud de restablecimiento de contrasena",
             "restablecimiento de contrasena",
             "Tapusin ang request mong i-reset ang password",
-            "reset ang password",
-            "reset password",
-            "password reset",
-            "redefini"
+            "restablecer contraseña netflix",
+            "cambiar contraseña netflix"
         ],
         "name": "Redefinicao de Senha Netflix",
         "type": "link"
     },
+    # ── DISNEY+ RESIDÊNCIA: link de atualização (PT/EN/ES) ────────────────────
     "disney-residence": {
         "from_keyword": "disneyplus.com",
         "subject_keywords": [
+            # Português
             "Quer atualizar sua Residencia do Disney+",
             "atualizar sua Residencia do Disney",
             "Residencia do Disney",
+            # Inglês
             "update your Disney+ Home",
-            "Disney+ Home"
+            "Disney+ Home",
+            "update your disney+ household",
+            "confirm your disney+ location",
+            "disney+ household",
+            # Espanhol
+            "actualiza tu Residencia de Disney+",
+            "actualizar Residencia Disney+",
+            "tu Residencia de Disney+",
+            "Residencia Disney+",
+            "confirmar ubicacion disney+"
         ],
         "name": "Residencia Disney+",
         "type": "link"
