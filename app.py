@@ -165,8 +165,18 @@ PLATFORM_CONFIG = {
     "max": {
         "from_keyword": "max.com",
         "subject_keywords": [
+            # Português
             "seu código único",
-            "seu codigo unico"
+            "seu codigo unico",
+            # Inglês
+            "your unique code",
+            "your max unique code",
+            "your verification code",
+            # Espanhol
+            "tu código único",
+            "tu codigo unico",
+            "tu código único de max",
+            "tu codigo unico de max"
         ],
         "name": "Max",
         "type": "code"
@@ -175,8 +185,16 @@ PLATFORM_CONFIG = {
     "prime-video": {
         "from_keyword": "amazon.com",
         "subject_keywords": [
+            # Inglês
             "sign-in attempt",
-            "sign in attempt"
+            "sign in attempt",
+            "prime video sign-in attempt",
+            "amazon sign-in attempt",
+            # Espanhol
+            "intento de inicio de sesión",
+            "intento de inicio de sesion",
+            "intento de inicio de sesión en prime video",
+            "intento de inicio de sesion en prime video"
         ],
         "name": "Prime Video",
         "type": "code"
@@ -185,8 +203,15 @@ PLATFORM_CONFIG = {
     "bug-globo": {
         "from_keyword": "globo.com",
         "subject_keywords": [
+            # Português
             "etapa de segurança",
-            "etapa de seguranca"
+            "etapa de seguranca",
+            # Inglês
+            "security step",
+            "security verification step",
+            # Espanhol
+            "etapa de seguridad",
+            "paso de seguridad"
         ],
         "name": "Bug Globo",
         "type": "code"
@@ -195,8 +220,18 @@ PLATFORM_CONFIG = {
     "codigo-globo": {
         "from_keyword": "globo.com",
         "subject_keywords": [
+            # Português
             "seu código para acessar a conta globo",
-            "seu codigo para acessar a conta globo"
+            "seu codigo para acessar a conta globo",
+            # Inglês
+            "your code to access conta globo",
+            "your code to access globo account",
+            "your globo account access code",
+            # Espanhol
+            "tu código para acceder a la cuenta globo",
+            "tu codigo para acceder a la cuenta globo",
+            "código para acceder a la cuenta globo",
+            "codigo para acceder a la cuenta globo"
         ],
         "name": "Código Globo",
         "type": "code"
@@ -205,7 +240,15 @@ PLATFORM_CONFIG = {
     "senha-globo": {
         "from_keyword": "globo.com",
         "subject_keywords": [
-            "recuperar sua senha da conta globo"
+            # Português
+            "recuperar sua senha da conta globo",
+            # Inglês
+            "recover your globo account password",
+            "reset your globo account password",
+            # Espanhol
+            "recuperar tu contraseña de la cuenta globo",
+            "recuperar tu contrasena de la cuenta globo",
+            "restablecer la contraseña de la cuenta globo"
         ],
         "name": "Senha Globo",
         "type": "link"
