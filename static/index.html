@@ -290,8 +290,10 @@
     .tab-btn.netflix-login.active { background: linear-gradient(135deg, #b91c1c, #dc2626); box-shadow: 0 0 15px rgba(229,9,20,0.5); }
     .tab-btn.netflix-temp.active { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 0 15px rgba(217,119,6,0.5); }
     .tab-btn.max.active { background: linear-gradient(135deg, #0f172a, #2563eb); box-shadow: 0 0 15px rgba(37,99,235,0.45); }
+    .tab-btn.prime-video.active { background: linear-gradient(135deg, #0f172a, #10b981); box-shadow: 0 0 15px rgba(16,185,129,0.45); }
     .selected-platform-badge.netflix-temp { border-color: rgba(217,119,6,0.5); color: #fcd34d; background: rgba(217,119,6,0.1); }
     .selected-platform-badge.max { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
+    .selected-platform-badge.prime-video { border-color: rgba(16,185,129,0.5); color: #86efac; background: rgba(16,185,129,0.1); }
     .selected-platform-badge.netflix-login { border-color: rgba(229,9,20,0.5); color: #fca5a5; background: rgba(229,9,20,0.1); }
 
     .form-group { margin-bottom: 16px; }
@@ -570,6 +572,11 @@
           <div class="platform-name">Max</div>
           <div class="platform-desc">Código único</div>
         </div>
+        <div class="platform-card" onclick="selectPlatform('prime-video')" id="card-prime-video">
+          <span class="platform-logo">📺</span>
+          <div class="platform-name">Prime Video</div>
+          <div class="platform-desc">Tentativa de login</div>
+        </div>
       </div>
     </section>
 
@@ -625,6 +632,9 @@
         </button>
         <button class="tab-btn max" id="tab-max" onclick="switchTab('max')">
           🎞️ Código Max
+        </button>
+        <button class="tab-btn prime-video" id="tab-prime-video" onclick="switchTab('prime-video')">
+          📺 Prime Video
         </button>
       </div>
 
@@ -724,7 +734,8 @@
       'disney-residence':  '🏡 Residência Disney+ — Link de atualização',
       'netflix-login':     '📱 Login Netflix — Código de início de sessão',
       'netflix-temp':      '⏱️ Acesso Temporário Netflix — Link para receber código',
-      'max':               '🎞️ Max — Código único'
+      'max':               '🎞️ Max — Código único',
+      'prime-video':       '📺 Prime Video — Sign-in attempt'
     };
 
     function selectPlatform(p) {
@@ -804,7 +815,8 @@
         'disney-residence': 'Residência Disney+',
         'netflix-login': 'Login Netflix',
         'netflix-temp': 'Acesso Temporário Netflix',
-        'max': 'Max'
+        'max': 'Max',
+        'prime-video': 'Prime Video'
       };
       box.className = 'result-box success';
 

@@ -171,6 +171,16 @@ PLATFORM_CONFIG = {
         "name": "Max",
         "type": "code"
     },
+    # ── PRIME VIDEO: tentativa de login ────────────────────────────────────────
+    "prime-video": {
+        "from_keyword": "amazon.com",
+        "subject_keywords": [
+            "sign-in attempt",
+            "sign in attempt"
+        ],
+        "name": "Prime Video",
+        "type": "code"
+    },
     # ── NETFLIX RESIDÊNCIA: link de atualização (PT/EN/ES) ────────────────────
     "netflix-residence": {
         "from_keyword": "netflix.com",
