@@ -303,7 +303,10 @@ PLATFORM_CONFIG = {
             "restablecimiento de contrasena",
             "Tapusin ang request mong i-reset ang password",
             "restablecer contraseña netflix",
-            "cambiar contraseña netflix"
+            "cambiar contraseña netflix",
+            # Português (variação ENC)
+            "enc: complete a solicitação de redefinição de senha",
+            "enc: complete a solicitacao de redefinicao de senha"
         ],
         "name": "Redefinicao de Senha Netflix",
         "type": "link"
