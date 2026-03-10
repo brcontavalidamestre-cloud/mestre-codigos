@@ -100,7 +100,10 @@ PLATFORM_CONFIG = {
     },
     "disney": {
         "from_keyword": "disneyplus.com",
-        "subject_keywords": ["digo de acesso"],
+        "subject_keywords": [
+            "digo de acesso",
+            "your one-time passcode for disney+"
+        ],
         "name": "Disney+",
         "type": "code"
     },
