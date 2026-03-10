@@ -156,7 +156,9 @@ PLATFORM_CONFIG = {
             "tu codigo de verificacion de disney+",
             "código de acceso disney+",
             "codigo de acceso disney+",
-            "tu código de acceso de disney+"
+            "tu código de acceso de disney+",
+            "tu código de acceso único para disney+",
+            "tu codigo de acceso unico para disney+"
         ],
         "name": "Disney+",
         "type": "code"
