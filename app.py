@@ -250,7 +250,9 @@ PLATFORM_CONFIG = {
             # Espanhol
             "recuperar tu contraseña de la cuenta globo",
             "recuperar tu contrasena de la cuenta globo",
-            "restablecer la contraseña de la cuenta globo"
+            "restablecer la contraseña de la cuenta globo",
+            # Português (assunto direto)
+            "clique para recuperar sua senha"
         ],
         "name": "Senha Globo",
         "type": "link"
