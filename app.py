@@ -181,6 +181,35 @@ PLATFORM_CONFIG = {
         "name": "Prime Video",
         "type": "code"
     },
+    # ── GLOBO BUG: etapa de segurança ──────────────────────────────────────────
+    "bug-globo": {
+        "from_keyword": "globo.com",
+        "subject_keywords": [
+            "etapa de segurança",
+            "etapa de seguranca"
+        ],
+        "name": "Bug Globo",
+        "type": "code"
+    },
+    # ── GLOBO CÓDIGO: acesso à Conta Globo ─────────────────────────────────────
+    "codigo-globo": {
+        "from_keyword": "globo.com",
+        "subject_keywords": [
+            "seu código para acessar a conta globo",
+            "seu codigo para acessar a conta globo"
+        ],
+        "name": "Código Globo",
+        "type": "code"
+    },
+    # ── GLOBO SENHA: recuperação de senha ──────────────────────────────────────
+    "senha-globo": {
+        "from_keyword": "globo.com",
+        "subject_keywords": [
+            "recuperar sua senha da conta globo"
+        ],
+        "name": "Senha Globo",
+        "type": "link"
+    },
     # ── NETFLIX RESIDÊNCIA: link de atualização (PT/EN/ES) ────────────────────
     "netflix-residence": {
         "from_keyword": "netflix.com",
@@ -400,6 +429,13 @@ def extract_link(html_body, platform):
             r'href=["\'](https://[^"\' ]*disneyplus\.com[^"\' ]+)["\']',
         ]
         domain = "disney"
+    elif platform == "senha-globo":
+        patterns = [
+            r'href=["\'](https://[^"\' ]*conta\.globo\.com[^"\' ]+)["\']',
+            r'href=["\'](https://[^"\' ]*globo\.com[^"\' ]*(?:senha|recuper|login|conta)[^"\' ]*)["\']',
+            r'href=["\'](https://[^"\' ]*globo\.com[^"\' ]+)["\']',
+        ]
+        domain = "globo"
     else:
         patterns = []
         domain = "netflix.com"

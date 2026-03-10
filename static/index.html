@@ -291,9 +291,15 @@
     .tab-btn.netflix-temp.active { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 0 15px rgba(217,119,6,0.5); }
     .tab-btn.max.active { background: linear-gradient(135deg, #0f172a, #2563eb); box-shadow: 0 0 15px rgba(37,99,235,0.45); }
     .tab-btn.prime-video.active { background: linear-gradient(135deg, #0f172a, #10b981); box-shadow: 0 0 15px rgba(16,185,129,0.45); }
+    .tab-btn.bug-globo.active { background: linear-gradient(135deg, #7c2d12, #ea580c); box-shadow: 0 0 15px rgba(234,88,12,0.45); }
+    .tab-btn.codigo-globo.active { background: linear-gradient(135deg, #1d4ed8, #2563eb); box-shadow: 0 0 15px rgba(37,99,235,0.45); }
+    .tab-btn.senha-globo.active { background: linear-gradient(135deg, #065f46, #0f766e); box-shadow: 0 0 15px rgba(13,148,136,0.45); }
     .selected-platform-badge.netflix-temp { border-color: rgba(217,119,6,0.5); color: #fcd34d; background: rgba(217,119,6,0.1); }
     .selected-platform-badge.max { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
     .selected-platform-badge.prime-video { border-color: rgba(16,185,129,0.5); color: #86efac; background: rgba(16,185,129,0.1); }
+    .selected-platform-badge.bug-globo { border-color: rgba(234,88,12,0.5); color: #fdba74; background: rgba(234,88,12,0.1); }
+    .selected-platform-badge.codigo-globo { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
+    .selected-platform-badge.senha-globo { border-color: rgba(13,148,136,0.5); color: #99f6e4; background: rgba(13,148,136,0.1); }
     .selected-platform-badge.netflix-login { border-color: rgba(229,9,20,0.5); color: #fca5a5; background: rgba(229,9,20,0.1); }
 
     .form-group { margin-bottom: 16px; }
@@ -577,6 +583,21 @@
           <div class="platform-name">Prime Video</div>
           <div class="platform-desc">Tentativa de login</div>
         </div>
+        <div class="platform-card" onclick="selectPlatform('bug-globo')" id="card-bug-globo">
+          <span class="platform-logo">🛡️</span>
+          <div class="platform-name">Bug Globo</div>
+          <div class="platform-desc">Etapa de segurança</div>
+        </div>
+        <div class="platform-card" onclick="selectPlatform('codigo-globo')" id="card-codigo-globo">
+          <span class="platform-logo">🔢</span>
+          <div class="platform-name">Código Globo</div>
+          <div class="platform-desc">Seu código para acessar a Conta Globo</div>
+        </div>
+        <div class="platform-card" onclick="selectPlatform('senha-globo')" id="card-senha-globo">
+          <span class="platform-logo">🔐</span>
+          <div class="platform-name">Senha Globo</div>
+          <div class="platform-desc">Recuperar sua senha da Conta Globo</div>
+        </div>
       </div>
     </section>
 
@@ -635,6 +656,15 @@
         </button>
         <button class="tab-btn prime-video" id="tab-prime-video" onclick="switchTab('prime-video')">
           📺 Prime Video
+        </button>
+        <button class="tab-btn bug-globo" id="tab-bug-globo" onclick="switchTab('bug-globo')">
+          🛡️ Bug Globo
+        </button>
+        <button class="tab-btn codigo-globo" id="tab-codigo-globo" onclick="switchTab('codigo-globo')">
+          🔢 Código Globo
+        </button>
+        <button class="tab-btn senha-globo" id="tab-senha-globo" onclick="switchTab('senha-globo')">
+          🔐 Senha Globo
         </button>
       </div>
 
@@ -735,7 +765,10 @@
       'netflix-login':     '📱 Login Netflix — Código de início de sessão',
       'netflix-temp':      '⏱️ Acesso Temporário Netflix — Link para receber código',
       'max':               '🎞️ Max — Código único',
-      'prime-video':       '📺 Prime Video — Sign-in attempt'
+      'prime-video':       '📺 Prime Video — Sign-in attempt',
+      'bug-globo':         '🛡️ Bug Globo — Etapa de segurança',
+      'codigo-globo':      '🔢 Código Globo — Conta Globo',
+      'senha-globo':       '🔐 Senha Globo — Recuperar senha'
     };
 
     function selectPlatform(p) {
@@ -816,7 +849,10 @@
         'netflix-login': 'Login Netflix',
         'netflix-temp': 'Acesso Temporário Netflix',
         'max': 'Max',
-        'prime-video': 'Prime Video'
+        'prime-video': 'Prime Video',
+        'bug-globo': 'Bug Globo',
+        'codigo-globo': 'Código Globo',
+        'senha-globo': 'Senha Globo'
       };
       box.className = 'result-box success';
 
@@ -869,6 +905,18 @@
           <a href="${data.link}" target="_blank" rel="noopener noreferrer"
              style="display:inline-block;margin:8px 0 8px;padding:14px 28px;background:linear-gradient(135deg,#92400e,#d97706);color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem;letter-spacing:0.05em;box-shadow:0 4px 16px rgba(217,119,6,0.4);">
             📩 Receber Código
+          </a>
+          <br/>
+          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
+        `;
+      } else if (data.type === 'link' && data.link && data.platform === 'senha-globo') {
+        box.innerHTML = `
+          <span class="result-emoji">🔐</span>
+          <div class="result-label">Link de recuperação encontrado!</div>
+          <div class="result-platform">Senha Globo</div>
+          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
+             style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#0f766e,#115e59);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
+            🔗 Abrir Recuperação de Senha
           </a>
           <br/>
           <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
