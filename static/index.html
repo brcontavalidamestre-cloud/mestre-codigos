@@ -289,7 +289,9 @@
     .tab-btn.disney-res.active { background: linear-gradient(135deg, #1e3a8a, #1d4ed8); box-shadow: 0 0 15px rgba(29,78,216,0.5); }
     .tab-btn.netflix-login.active { background: linear-gradient(135deg, #b91c1c, #dc2626); box-shadow: 0 0 15px rgba(229,9,20,0.5); }
     .tab-btn.netflix-temp.active { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 0 15px rgba(217,119,6,0.5); }
+    .tab-btn.max.active { background: linear-gradient(135deg, #0f172a, #2563eb); box-shadow: 0 0 15px rgba(37,99,235,0.45); }
     .selected-platform-badge.netflix-temp { border-color: rgba(217,119,6,0.5); color: #fcd34d; background: rgba(217,119,6,0.1); }
+    .selected-platform-badge.max { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
     .selected-platform-badge.netflix-login { border-color: rgba(229,9,20,0.5); color: #fca5a5; background: rgba(229,9,20,0.1); }
 
     .form-group { margin-bottom: 16px; }
@@ -563,6 +565,11 @@
           <div class="platform-name">Acesso Temporário</div>
           <div class="platform-desc">Código de acesso temporário Netflix</div>
         </div>
+        <div class="platform-card" onclick="selectPlatform('max')" id="card-max">
+          <span class="platform-logo">🎞️</span>
+          <div class="platform-name">Max</div>
+          <div class="platform-desc">Código único</div>
+        </div>
       </div>
     </section>
 
@@ -615,6 +622,9 @@
         </button>
         <button class="tab-btn netflix-temp" id="tab-netflix-temp" onclick="switchTab('netflix-temp')">
           ⏱️ Acesso Temporário
+        </button>
+        <button class="tab-btn max" id="tab-max" onclick="switchTab('max')">
+          🎞️ Código Max
         </button>
       </div>
 
@@ -713,7 +723,8 @@
       'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição',
       'disney-residence':  '🏡 Residência Disney+ — Link de atualização',
       'netflix-login':     '📱 Login Netflix — Código de início de sessão',
-      'netflix-temp':      '⏱️ Acesso Temporário Netflix — Link para receber código'
+      'netflix-temp':      '⏱️ Acesso Temporário Netflix — Link para receber código',
+      'max':               '🎞️ Max — Código único'
     };
 
     function selectPlatform(p) {
@@ -792,7 +803,8 @@
         'password-reset': 'Redefinição de Senha Netflix',
         'disney-residence': 'Residência Disney+',
         'netflix-login': 'Login Netflix',
-        'netflix-temp': 'Acesso Temporário Netflix'
+        'netflix-temp': 'Acesso Temporário Netflix',
+        'max': 'Max'
       };
       box.className = 'result-box success';
 

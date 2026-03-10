@@ -161,6 +161,16 @@ PLATFORM_CONFIG = {
         "name": "Disney+",
         "type": "code"
     },
+    # ── MAX: código único ──────────────────────────────────────────────────────
+    "max": {
+        "from_keyword": "max.com",
+        "subject_keywords": [
+            "seu código único",
+            "seu codigo unico"
+        ],
+        "name": "Max",
+        "type": "code"
+    },
     # ── NETFLIX RESIDÊNCIA: link de atualização (PT/EN/ES) ────────────────────
     "netflix-residence": {
         "from_keyword": "netflix.com",
