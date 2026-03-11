@@ -653,23 +653,24 @@ def search_code(user_email, platform):
                 continue
 
         # ── Passagem 2: busca por SUBJECT para emails encaminhados ────────────
-        #    Quando o usuário encaminha o email (ENC:/FW:/RES:), o FROM muda
-        #    para o email do usuário — não é mais netflix.com/amazon.com etc.
-        #    Por isso buscamos pelos prefixos de encaminhamento + palavras-chave.
-        FWD_PREFIXES = ["ENC:", "Enc:", "enc:", "FW:", "Fw:", "fw:",
-                        "RES:", "Res:", "res:", "Fwd:", "fwd:"]
+        #    IMAP SUBJECT search é case-insensitive na maioria dos servidores,
+        #    então 3 prefixos cobrem todas as variações (ENC/enc/Enc, FW/fw/Fw…).
+        #    Limite reduzido para 15 por prefixo → busca rápida.
+        FWD_PREFIXES_SEARCH = ["ENC:", "FW:", "Fwd:"]  # case-insensitive no IMAP
+        FWD_PREFIXES_STRIP  = ["ENC:", "FW:", "FWD:", "RES:", "ENC: ", "FW: "]
+
         for mailbox in boxes_to_try:
             try:
                 sel_status, _ = mail.select(mailbox, readonly=True)
                 if sel_status != "OK":
                     continue
-                for prefix in FWD_PREFIXES:
+                for prefix in FWD_PREFIXES_SEARCH:
                     try:
                         status2, msgs2 = mail.search(None, "SUBJECT", prefix)
                         if status2 != "OK" or not msgs2[0]:
                             continue
                         fwd_ids = msgs2[0].split()
-                        fwd_ids = fwd_ids[-50:]   # limita para não sobrecarregar
+                        fwd_ids = fwd_ids[-15:]   # apenas os 15 mais recentes
                         fwd_ids.reverse()
                         for eid in fwd_ids:
                             if (mailbox, eid) in seen_ids:
@@ -682,7 +683,7 @@ def search_code(user_email, platform):
                                 subj3 = decode_str(hdr3.get("Subject", ""))
                                 # Remove o prefixo de encaminhamento antes de checar
                                 subj_clean = subj3
-                                for pfx in FWD_PREFIXES:
+                                for pfx in FWD_PREFIXES_STRIP:
                                     if subj_clean.upper().startswith(pfx.upper()):
                                         subj_clean = subj_clean[len(pfx):].strip()
                                         break
