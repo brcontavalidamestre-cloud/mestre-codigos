@@ -621,7 +621,9 @@ def search_code(user_email, platform):
                     break
 
         all_matched = []  # (mailbox, eid) tuples
+        seen_ids    = set()   # evita duplicatas entre passagem 1 e 2
 
+        # ── Passagem 1: busca normal por FROM (remetente original) ────────────
         for mailbox in boxes_to_try:
             try:
                 sel_status, _ = mail.select(mailbox, readonly=True)
@@ -634,6 +636,8 @@ def search_code(user_email, platform):
                 recent_ids = all_ids[-100:]
                 recent_ids.reverse()
                 for eid in recent_ids:
+                    if (mailbox, eid) in seen_ids:
+                        continue
                     try:
                         status, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
                         if status != "OK":
@@ -642,6 +646,51 @@ def search_code(user_email, platform):
                         subj = decode_str(hdr.get("Subject", ""))
                         if subject_matches(subj, subj_kws, config.get("negative_keywords")):
                             all_matched.append((mailbox, eid))
+                            seen_ids.add((mailbox, eid))
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+
+        # ── Passagem 2: busca por SUBJECT para emails encaminhados ────────────
+        #    Quando o usuário encaminha o email (ENC:/FW:/RES:), o FROM muda
+        #    para o email do usuário — não é mais netflix.com/amazon.com etc.
+        #    Por isso buscamos pelos prefixos de encaminhamento + palavras-chave.
+        FWD_PREFIXES = ["ENC:", "Enc:", "enc:", "FW:", "Fw:", "fw:",
+                        "RES:", "Res:", "res:", "Fwd:", "fwd:"]
+        for mailbox in boxes_to_try:
+            try:
+                sel_status, _ = mail.select(mailbox, readonly=True)
+                if sel_status != "OK":
+                    continue
+                for prefix in FWD_PREFIXES:
+                    try:
+                        status2, msgs2 = mail.search(None, "SUBJECT", prefix)
+                        if status2 != "OK" or not msgs2[0]:
+                            continue
+                        fwd_ids = msgs2[0].split()
+                        fwd_ids = fwd_ids[-50:]   # limita para não sobrecarregar
+                        fwd_ids.reverse()
+                        for eid in fwd_ids:
+                            if (mailbox, eid) in seen_ids:
+                                continue
+                            try:
+                                status3, data3 = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
+                                if status3 != "OK":
+                                    continue
+                                hdr3  = email.message_from_bytes(data3[0][1])
+                                subj3 = decode_str(hdr3.get("Subject", ""))
+                                # Remove o prefixo de encaminhamento antes de checar
+                                subj_clean = subj3
+                                for pfx in FWD_PREFIXES:
+                                    if subj_clean.upper().startswith(pfx.upper()):
+                                        subj_clean = subj_clean[len(pfx):].strip()
+                                        break
+                                if subject_matches(subj_clean, subj_kws, config.get("negative_keywords")):
+                                    all_matched.append((mailbox, eid))
+                                    seen_ids.add((mailbox, eid))
+                            except Exception:
+                                continue
                     except Exception:
                         continue
             except Exception:
