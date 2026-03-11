@@ -257,6 +257,28 @@ PLATFORM_CONFIG = {
         "name": "Senha Globo",
         "type": "link"
     },
+    # ── MERCADO LIVRE: código de segurança ───────────────────────────────────
+    "ml": {
+        "from_keyword": "mercadolivre.com",
+        "subject_keywords": [
+            # Português
+            "te enviamos o código de segurança",
+            "te enviamos o codigo de seguranca",
+            "código de segurança",
+            "codigo de seguranca",
+            # Inglês
+            "we sent you a security code",
+            "your security code",
+            "security code",
+            # Espanhol
+            "te enviamos el código de seguridad",
+            "te enviamos el codigo de seguridad",
+            "código de seguridad",
+            "codigo de seguridad"
+        ],
+        "name": "Mercado Livre",
+        "type": "code"
+    },
     # ── NETFLIX RESIDÊNCIA: link de atualização (PT/EN/ES) ────────────────────
     "netflix-residence": {
         "from_keyword": "netflix.com",
