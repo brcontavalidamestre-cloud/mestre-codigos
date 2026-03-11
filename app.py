@@ -508,11 +508,45 @@ def extract_link(html_body, platform):
     return None
 def email_matches_user(msg, html_body, user_email):
     user_lower = user_email.lower()
+
+    # 1. Verifica no corpo HTML já extraído
     if user_lower in html_body.lower():
         return True
-    for header in ["To", "Delivered-To", "X-Original-To"]:
+
+    # 2. Verifica nos headers principais
+    for header in ["To", "Delivered-To", "X-Original-To", "X-Forwarded-To"]:
         if user_lower in decode_str(msg.get(header, "")).lower():
             return True
+
+    # 3. Verifica em TODAS as partes de texto (HTML + plain) do email
+    #    Essencial para emails encaminhados (ENC:/FW:) onde o destinatário
+    #    original aparece apenas no texto plano da mensagem encaminhada
+    try:
+        if msg.is_multipart():
+            for part in msg.walk():
+                ct = part.get_content_type()
+                if ct in ("text/plain", "text/html"):
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        charset = part.get_content_charset() or "utf-8"
+                        try:
+                            text = payload.decode(charset, errors="ignore")
+                            if user_lower in text.lower():
+                                return True
+                        except Exception:
+                            pass
+    except Exception:
+        pass
+
+    # 4. Último recurso: varre os bytes brutos do email (captura qualquer
+    #    ocorrência do endereço, inclusive em partes codificadas)
+    try:
+        raw = msg.as_bytes()
+        if user_lower.encode("utf-8") in raw.lower():
+            return True
+    except Exception:
+        pass
+
     return False
 
 def connect_imap():
