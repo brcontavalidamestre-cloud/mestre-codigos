@@ -538,12 +538,38 @@ def email_matches_user(msg, html_body, user_email):
     except Exception:
         pass
 
-    # 4. Último recurso: varre os bytes brutos do email (captura qualquer
-    #    ocorrência do endereço, inclusive em partes codificadas)
+    # 4. Varre os bytes brutos do email (corrigido: decode antes de lower())
     try:
-        raw = msg.as_bytes()
-        if user_lower.encode("utf-8") in raw.lower():
+        raw_str = msg.as_bytes().decode("utf-8", errors="ignore").lower()
+        if user_lower in raw_str:
             return True
+    except Exception:
+        pass
+
+    # 5. Matching relaxado: parte do usuário antes do "@"
+    #    Netflix password-reset não inclui o email no corpo, só o primeiro nome.
+    #    Mas o username (ex: "ivo89cg") costuma aparecer em links ou cabeçalhos.
+    try:
+        username = user_lower.split("@")[0]
+        domain   = user_lower.split("@")[1] if "@" in user_lower else ""
+        if len(username) >= 5:                     # evita falsos positivos
+            combined = html_body.lower()
+            if username in combined:
+                return True
+            # Tenta também nas partes de texto
+            if msg.is_multipart():
+                for part in msg.walk():
+                    ct = part.get_content_type()
+                    if ct in ("text/plain", "text/html"):
+                        payload = part.get_payload(decode=True)
+                        if payload:
+                            charset = part.get_content_charset() or "utf-8"
+                            try:
+                                text = payload.decode(charset, errors="ignore").lower()
+                                if username in text:
+                                    return True
+                            except Exception:
+                                pass
     except Exception:
         pass
 
