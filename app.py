@@ -258,8 +258,8 @@ PLATFORM_CONFIG = {
         "type": "link"
     },
     # ── MERCADO LIVRE: código de segurança ───────────────────────────────────
-    "ml": {
-        "from_keyword": "mercadolivre.com",
+    "apple-tv": {
+        "from_keyword": "apple.com",
         "subject_keywords": [
             # Português
             "te enviamos o código de segurança",
@@ -276,7 +276,7 @@ PLATFORM_CONFIG = {
             "código de seguridad",
             "codigo de seguridad"
         ],
-        "name": "Mercado Livre",
+        "name": "Apple TV",
         "type": "code"
     },
     # ── NETFLIX RESIDÊNCIA: link de atualização (PT/EN/ES) ────────────────────
