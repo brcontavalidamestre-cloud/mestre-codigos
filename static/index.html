@@ -540,30 +540,11 @@
       <div class="section-title">✦ Plataformas Disponíveis ✦</div>
       <p class="section-subtitle">Esta plataforma aceita códigos das seguintes plataformas:</p>
       <div class="platform-grid">
+        <!-- ── NETFLIX ──────────────────────────────────── -->
         <div class="platform-card" onclick="selectPlatform('netflix')" id="card-netflix">
           <span class="platform-logo">🎬</span>
           <div class="platform-name">Netflix</div>
           <div class="platform-desc">Código de acesso</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('disney')" id="card-disney">
-          <span class="platform-logo">✨</span>
-          <div class="platform-name">Disney+</div>
-          <div class="platform-desc">Código de acesso</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('netflix-residence')" id="card-netflix-residence">
-          <span class="platform-logo">🏠</span>
-          <div class="platform-name">Residência Netflix</div>
-          <div class="platform-desc">Link de atualização de local</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('password-reset')" id="card-password-reset">
-          <span class="platform-logo">🔑</span>
-          <div class="platform-name">Redefinição de Senha</div>
-          <div class="platform-desc">Link de redefinição Netflix</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('disney-residence')" id="card-disney-residence">
-          <span class="platform-logo">🏡</span>
-          <div class="platform-name">Residência Disney+</div>
-          <div class="platform-desc">Link de atualização Disney+</div>
         </div>
         <div class="platform-card" onclick="selectPlatform('netflix-login')" id="card-netflix-login">
           <span class="platform-logo">📱</span>
@@ -575,15 +556,37 @@
           <div class="platform-name">Acesso Temporário</div>
           <div class="platform-desc">Código de acesso temporário Netflix</div>
         </div>
+        <div class="platform-card" onclick="selectPlatform('netflix-residence')" id="card-netflix-residence">
+          <span class="platform-logo">🏠</span>
+          <div class="platform-name">Residência Netflix</div>
+          <div class="platform-desc">Link de atualização de local</div>
+        </div>
+        <div class="platform-card" onclick="selectPlatform('password-reset')" id="card-password-reset">
+          <span class="platform-logo">🔑</span>
+          <div class="platform-name">Redefinição de Senha</div>
+          <div class="platform-desc">Link de redefinição Netflix</div>
+        </div>
+        <!-- ── DISNEY+ ─────────────────────────────────── -->
+        <div class="platform-card" onclick="selectPlatform('disney')" id="card-disney">
+          <span class="platform-logo">✨</span>
+          <div class="platform-name">Disney+</div>
+          <div class="platform-desc">Código de acesso</div>
+        </div>
+        <div class="platform-card" onclick="selectPlatform('disney-residence')" id="card-disney-residence">
+          <span class="platform-logo">🏡</span>
+          <div class="platform-name">Residência Disney+</div>
+          <div class="platform-desc">Link de atualização Disney+</div>
+        </div>
+        <!-- ── OUTROS ──────────────────────────────────── -->
         <div class="platform-card" onclick="selectPlatform('max')" id="card-max">
           <span class="platform-logo">🎞️</span>
           <div class="platform-name">Max</div>
           <div class="platform-desc">Código único</div>
         </div>
         <div class="platform-card" onclick="selectPlatform('apple-tv')" id="card-apple-tv">
-            <div class="platform-icon">🛒</div>
-            <div class="platform-name">ML</div>
-            <div class="platform-desc">Código de Segurança</div>
+          <span class="platform-logo">🍎</span>
+          <div class="platform-name">Apple TV</div>
+          <div class="platform-desc">Código de Segurança</div>
         </div>
         <div class="platform-card" onclick="selectPlatform('prime-video')" id="card-prime-video">
           <span class="platform-logo">📺</span>
@@ -637,20 +640,9 @@
 
       <!-- Tabs -->
       <div class="tabs">
+        <!-- ── NETFLIX ──────────────────────────── -->
         <button class="tab-btn netflix active" id="tab-netflix" onclick="switchTab('netflix')">
           🎬 Código Netflix
-        </button>
-        <button class="tab-btn disney" id="tab-disney" onclick="switchTab('disney')">
-          ✨ Código Disney+
-        </button>
-        <button class="tab-btn residence" id="tab-netflix-residence" onclick="switchTab('netflix-residence')">
-          🏠 Residência Netflix
-        </button>
-        <button class="tab-btn password" id="tab-password-reset" onclick="switchTab('password-reset')">
-          🔑 Redefinição de Senha
-        </button>
-        <button class="tab-btn disney-res" id="tab-disney-residence" onclick="switchTab('disney-residence')">
-          🏡 Residência Disney+
         </button>
         <button class="tab-btn netflix-login" id="tab-netflix-login" onclick="switchTab('netflix-login')">
           📱 Login Netflix
@@ -658,11 +650,25 @@
         <button class="tab-btn netflix-temp" id="tab-netflix-temp" onclick="switchTab('netflix-temp')">
           ⏱️ Acesso Temporário
         </button>
+        <button class="tab-btn residence" id="tab-netflix-residence" onclick="switchTab('netflix-residence')">
+          🏠 Residência Netflix
+        </button>
+        <button class="tab-btn password" id="tab-password-reset" onclick="switchTab('password-reset')">
+          🔑 Redefinição de Senha
+        </button>
+        <!-- ── DISNEY+ ───────────────────────────── -->
+        <button class="tab-btn disney" id="tab-disney" onclick="switchTab('disney')">
+          ✨ Código Disney+
+        </button>
+        <button class="tab-btn disney-res" id="tab-disney-residence" onclick="switchTab('disney-residence')">
+          🏡 Residência Disney+
+        </button>
+        <!-- ── OUTROS ────────────────────────────── -->
         <button class="tab-btn max" id="tab-max" onclick="switchTab('max')">
           🎞️ Código Max
         </button>
         <button class="tab-btn apple-tv" id="tab-apple-tv" onclick="switchTab('apple-tv')">
-            🍎 Código Apple TV
+          🍎 Código Apple TV
         </button>
         <button class="tab-btn prime-video" id="tab-prime-video" onclick="switchTab('prime-video')">
           📺 Prime Video
