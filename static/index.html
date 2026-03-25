@@ -380,14 +380,12 @@
     .tab-btn.netflix-temp.active { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 0 15px rgba(217,119,6,0.5); }
     .tab-btn.max.active { background: linear-gradient(135deg, #0f172a, #2563eb); box-shadow: 0 0 15px rgba(37,99,235,0.45); }
     .tab-btn.prime-video.active { background: linear-gradient(135deg, #0f172a, #10b981); box-shadow: 0 0 15px rgba(16,185,129,0.45); }
-    .tab-btn.apple-tv.active { background: linear-gradient(135deg, #78350f, #f59e0b); box-shadow: 0 0 15px rgba(245,158,11,0.45); }
     .tab-btn.bug-globo.active { background: linear-gradient(135deg, #7c2d12, #ea580c); box-shadow: 0 0 15px rgba(234,88,12,0.45); }
     .tab-btn.codigo-globo.active { background: linear-gradient(135deg, #1d4ed8, #2563eb); box-shadow: 0 0 15px rgba(37,99,235,0.45); }
     .tab-btn.senha-globo.active { background: linear-gradient(135deg, #065f46, #0f766e); box-shadow: 0 0 15px rgba(13,148,136,0.45); }
     .selected-platform-badge.netflix-temp { border-color: rgba(217,119,6,0.5); color: #fcd34d; background: rgba(217,119,6,0.1); }
     .selected-platform-badge.max { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
     .selected-platform-badge.prime-video { border-color: rgba(16,185,129,0.5); color: #86efac; background: rgba(16,185,129,0.1); }
-    .selected-platform-badge.apple-tv { border-color: rgba(245,158,11,0.5); color: #fcd34d; background: rgba(245,158,11,0.1); }
     .selected-platform-badge.bug-globo { border-color: rgba(234,88,12,0.5); color: #fdba74; background: rgba(234,88,12,0.1); }
     .selected-platform-badge.codigo-globo { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
     .selected-platform-badge.senha-globo { border-color: rgba(13,148,136,0.5); color: #99f6e4; background: rgba(13,148,136,0.1); }
@@ -688,11 +686,7 @@
               <div class="platform-name">Max</div>
               <div class="platform-desc">Código único</div>
             </div>
-            <div class="platform-card" onclick="selectPlatform('apple-tv')" id="card-apple-tv">
-              <span class="platform-logo">🍎</span>
-              <div class="platform-name">Apple TV</div>
-              <div class="platform-desc">Código de Segurança</div>
-            </div>
+
             <div class="platform-card" onclick="selectPlatform('prime-video')" id="card-prime-video">
               <span class="platform-logo">📺</span>
               <div class="platform-name">Prime Video</div>
@@ -791,9 +785,7 @@
             <button class="tab-btn max" id="tab-max" onclick="switchTab('max')">
               🎞️ Código Max
             </button>
-            <button class="tab-btn apple-tv" id="tab-apple-tv" onclick="switchTab('apple-tv')">
-              🍎 Código Apple TV
-            </button>
+
             <button class="tab-btn prime-video" id="tab-prime-video" onclick="switchTab('prime-video')">
               📺 Prime Video
             </button>
@@ -909,7 +901,6 @@
       'netflix-temp':      '⏱️ Acesso Temporário Netflix — Link para receber código',
       'max':               '🎞️ Max — Código único',
       'prime-video':       '📺 Prime Video — Sign-in attempt',
-      'apple-tv':        '🍎 Apple TV — Código de Segurança',
       'bug-globo':         '🛡️ Bug Globo — Etapa de segurança',
       'codigo-globo':      '🔢 Código Globo — Conta Globo',
       'senha-globo':       '🔐 Senha Globo — Recuperar senha'
@@ -994,7 +985,6 @@
         'netflix-temp': 'Acesso Temporário Netflix',
         'max': 'Max',
         'prime-video': 'Prime Video',
-        'apple-tv': 'Apple TV',
         'bug-globo': 'Bug Globo',
         'codigo-globo': 'Código Globo',
         'senha-globo': 'Senha Globo'
