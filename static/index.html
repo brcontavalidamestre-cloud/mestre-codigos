@@ -167,6 +167,43 @@
       gap: 16px;
     }
 
+    /* ── Grupos de plataforma ───────────────────────────────── */
+    .platform-group {
+        width: 100%;
+        margin-bottom: 18px;
+    }
+    .platform-group-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 0.72rem;
+        font-weight: 700;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        padding: 5px 12px;
+        border-radius: 8px 8px 0 0;
+        margin-bottom: 8px;
+    }
+    .platform-group-label.netflix-group {
+        background: linear-gradient(90deg, rgba(185,28,28,0.35), rgba(127,29,29,0.15));
+        color: #fca5a5;
+        border-left: 3px solid #ef4444;
+    }
+    .platform-group-label.disney-group {
+        background: linear-gradient(90deg, rgba(29,78,216,0.35), rgba(30,58,95,0.15));
+        color: #93c5fd;
+        border-left: 3px solid #3b82f6;
+    }
+    .platform-group-label.outros-group {
+        background: linear-gradient(90deg, rgba(109,40,217,0.25), rgba(76,29,149,0.10));
+        color: #c4b5fd;
+        border-left: 3px solid #7c3aed;
+    }
+    .platform-group-cards {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
     .platform-card {
       background: rgba(59,7,100,0.3);
       border: 1px solid var(--border);
@@ -540,74 +577,93 @@
       <div class="section-title">✦ Plataformas Disponíveis ✦</div>
       <p class="section-subtitle">Esta plataforma aceita códigos das seguintes plataformas:</p>
       <div class="platform-grid">
-        <!-- ── NETFLIX ──────────────────────────────────── -->
-        <div class="platform-card" onclick="selectPlatform('netflix')" id="card-netflix">
-          <span class="platform-logo">🎬</span>
-          <div class="platform-name">Netflix</div>
-          <div class="platform-desc">Código de acesso</div>
+
+        <!-- ══════════════ GRUPO NETFLIX ══════════════ -->
+        <div class="platform-group">
+          <div class="platform-group-label netflix-group">🎬 Netflix</div>
+          <div class="platform-group-cards">
+            <div class="platform-card" onclick="selectPlatform('netflix')" id="card-netflix">
+              <span class="platform-logo">🎬</span>
+              <div class="platform-name">Netflix</div>
+              <div class="platform-desc">Código de acesso</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('netflix-login')" id="card-netflix-login">
+              <span class="platform-logo">📱</span>
+              <div class="platform-name">Login Netflix</div>
+              <div class="platform-desc">Código de início de sessão</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('netflix-temp')" id="card-netflix-temp">
+              <span class="platform-logo">⏱️</span>
+              <div class="platform-name">Acesso Temporário</div>
+              <div class="platform-desc">Código temporário Netflix</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('netflix-residence')" id="card-netflix-residence">
+              <span class="platform-logo">🏠</span>
+              <div class="platform-name">Residência Netflix</div>
+              <div class="platform-desc">Link de atualização</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('password-reset')" id="card-password-reset">
+              <span class="platform-logo">🔑</span>
+              <div class="platform-name">Redefinição de Senha</div>
+              <div class="platform-desc">Link de redefinição Netflix</div>
+            </div>
+          </div>
         </div>
-        <div class="platform-card" onclick="selectPlatform('netflix-login')" id="card-netflix-login">
-          <span class="platform-logo">📱</span>
-          <div class="platform-name">Login Netflix</div>
-          <div class="platform-desc">Código de início de sessão</div>
+
+        <!-- ══════════════ GRUPO DISNEY+ ══════════════ -->
+        <div class="platform-group">
+          <div class="platform-group-label disney-group">✨ Disney+</div>
+          <div class="platform-group-cards">
+            <div class="platform-card" onclick="selectPlatform('disney')" id="card-disney">
+              <span class="platform-logo">✨</span>
+              <div class="platform-name">Disney+</div>
+              <div class="platform-desc">Código de acesso</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('disney-residence')" id="card-disney-residence">
+              <span class="platform-logo">🏡</span>
+              <div class="platform-name">Residência Disney+</div>
+              <div class="platform-desc">Link de atualização Disney+</div>
+            </div>
+          </div>
         </div>
-        <div class="platform-card" onclick="selectPlatform('netflix-temp')" id="card-netflix-temp">
-          <span class="platform-logo">⏱️</span>
-          <div class="platform-name">Acesso Temporário</div>
-          <div class="platform-desc">Código de acesso temporário Netflix</div>
+
+        <!-- ══════════════ OUTROS ══════════════ -->
+        <div class="platform-group">
+          <div class="platform-group-label outros-group">📦 Outras Plataformas</div>
+          <div class="platform-group-cards">
+            <div class="platform-card" onclick="selectPlatform('max')" id="card-max">
+              <span class="platform-logo">🎞️</span>
+              <div class="platform-name">Max</div>
+              <div class="platform-desc">Código único</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('apple-tv')" id="card-apple-tv">
+              <span class="platform-logo">🍎</span>
+              <div class="platform-name">Apple TV</div>
+              <div class="platform-desc">Código de Segurança</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('prime-video')" id="card-prime-video">
+              <span class="platform-logo">📺</span>
+              <div class="platform-name">Prime Video</div>
+              <div class="platform-desc">Tentativa de login</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('bug-globo')" id="card-bug-globo">
+              <span class="platform-logo">🛡️</span>
+              <div class="platform-name">Bug Globo</div>
+              <div class="platform-desc">Etapa de segurança</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('codigo-globo')" id="card-codigo-globo">
+              <span class="platform-logo">🔢</span>
+              <div class="platform-name">Código Globo</div>
+              <div class="platform-desc">Acesso à Conta Globo</div>
+            </div>
+            <div class="platform-card" onclick="selectPlatform('senha-globo')" id="card-senha-globo">
+              <span class="platform-logo">🔐</span>
+              <div class="platform-name">Senha Globo</div>
+              <div class="platform-desc">Recuperar senha Globo</div>
+            </div>
+          </div>
         </div>
-        <div class="platform-card" onclick="selectPlatform('netflix-residence')" id="card-netflix-residence">
-          <span class="platform-logo">🏠</span>
-          <div class="platform-name">Residência Netflix</div>
-          <div class="platform-desc">Link de atualização de local</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('password-reset')" id="card-password-reset">
-          <span class="platform-logo">🔑</span>
-          <div class="platform-name">Redefinição de Senha</div>
-          <div class="platform-desc">Link de redefinição Netflix</div>
-        </div>
-        <!-- ── DISNEY+ ─────────────────────────────────── -->
-        <div class="platform-card" onclick="selectPlatform('disney')" id="card-disney">
-          <span class="platform-logo">✨</span>
-          <div class="platform-name">Disney+</div>
-          <div class="platform-desc">Código de acesso</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('disney-residence')" id="card-disney-residence">
-          <span class="platform-logo">🏡</span>
-          <div class="platform-name">Residência Disney+</div>
-          <div class="platform-desc">Link de atualização Disney+</div>
-        </div>
-        <!-- ── OUTROS ──────────────────────────────────── -->
-        <div class="platform-card" onclick="selectPlatform('max')" id="card-max">
-          <span class="platform-logo">🎞️</span>
-          <div class="platform-name">Max</div>
-          <div class="platform-desc">Código único</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('apple-tv')" id="card-apple-tv">
-          <span class="platform-logo">🍎</span>
-          <div class="platform-name">Apple TV</div>
-          <div class="platform-desc">Código de Segurança</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('prime-video')" id="card-prime-video">
-          <span class="platform-logo">📺</span>
-          <div class="platform-name">Prime Video</div>
-          <div class="platform-desc">Tentativa de login</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('bug-globo')" id="card-bug-globo">
-          <span class="platform-logo">🛡️</span>
-          <div class="platform-name">Bug Globo</div>
-          <div class="platform-desc">Etapa de segurança</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('codigo-globo')" id="card-codigo-globo">
-          <span class="platform-logo">🔢</span>
-          <div class="platform-name">Código Globo</div>
-          <div class="platform-desc">Seu código para acessar a Conta Globo</div>
-        </div>
-        <div class="platform-card" onclick="selectPlatform('senha-globo')" id="card-senha-globo">
-          <span class="platform-logo">🔐</span>
-          <div class="platform-name">Senha Globo</div>
-          <div class="platform-desc">Recuperar sua senha da Conta Globo</div>
-        </div>
+
       </div>
     </section>
 
