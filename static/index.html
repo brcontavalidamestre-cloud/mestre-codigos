@@ -202,6 +202,11 @@
         color: #c4b5fd;
         border-bottom: 1px solid rgba(124,58,237,0.35);
     }
+    .platform-group-label.globo-group {
+        background: linear-gradient(90deg, rgba(220,38,38,0.35), rgba(239,68,68,0.15));
+        color: #fda4af;
+        border-bottom: 1px solid rgba(220,38,38,0.35);
+    }
     .platform-group-cards {
         display: flex;
         flex-wrap: wrap;
@@ -336,6 +341,11 @@
       background: linear-gradient(90deg, rgba(109,40,217,0.45), rgba(76,29,149,0.20));
       color: #c4b5fd;
       border-bottom: 1px solid rgba(124,58,237,0.30);
+    }
+    .tab-group-label.tg-globo {
+      background: linear-gradient(90deg, rgba(220,38,38,0.35), rgba(239,68,68,0.15));
+      color: #fda4af;
+      border-bottom: 1px solid rgba(220,38,38,0.30);
     }
     .tab-group-buttons {
       display: flex;
@@ -686,12 +696,18 @@
               <div class="platform-name">Max</div>
               <div class="platform-desc">Código único</div>
             </div>
-
             <div class="platform-card" onclick="selectPlatform('prime-video')" id="card-prime-video">
               <span class="platform-logo">📺</span>
               <div class="platform-name">Prime Video</div>
               <div class="platform-desc">Tentativa de login</div>
             </div>
+          </div>
+        </div>
+
+        <!-- ══════════════ GRUPO GLOBO ══════════════ -->
+        <div class="platform-group">
+          <div class="platform-group-label globo-group">📡 Globo</div>
+          <div class="platform-group-cards">
             <div class="platform-card" onclick="selectPlatform('bug-globo')" id="card-bug-globo">
               <span class="platform-logo">🛡️</span>
               <div class="platform-name">Bug Globo</div>
@@ -785,10 +801,16 @@
             <button class="tab-btn max" id="tab-max" onclick="switchTab('max')">
               🎞️ Código Max
             </button>
-
             <button class="tab-btn prime-video" id="tab-prime-video" onclick="switchTab('prime-video')">
               📺 Prime Video
             </button>
+          </div>
+        </div>
+
+        <!-- ══ GRUPO GLOBO ══ -->
+        <div class="tab-group">
+          <div class="tab-group-label tg-globo">📡 Globo</div>
+          <div class="tab-group-buttons">
             <button class="tab-btn bug-globo" id="tab-bug-globo" onclick="switchTab('bug-globo')">
               🛡️ Bug Globo
             </button>
