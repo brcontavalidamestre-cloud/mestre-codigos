@@ -161,48 +161,61 @@
       font-weight: 300;
     }
 
+    /* ── Grid principal vira coluna empilhada ── */
     .platform-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-      gap: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
     }
 
-    /* ── Grupos de plataforma ───────────────────────────────── */
+    /* ── Grupos de plataforma – caixas visuais ── */
     .platform-group {
         width: 100%;
-        margin-bottom: 18px;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid rgba(255,255,255,0.08);
     }
     .platform-group-label {
         display: flex;
         align-items: center;
         gap: 8px;
-        font-size: 0.72rem;
-        font-weight: 700;
-        letter-spacing: 0.12em;
+        font-size: 0.75rem;
+        font-weight: 800;
+        letter-spacing: 0.14em;
         text-transform: uppercase;
-        padding: 5px 12px;
-        border-radius: 8px 8px 0 0;
-        margin-bottom: 8px;
+        padding: 10px 18px;
+        margin-bottom: 0;
+        border-radius: 0;
     }
     .platform-group-label.netflix-group {
-        background: linear-gradient(90deg, rgba(185,28,28,0.35), rgba(127,29,29,0.15));
+        background: linear-gradient(90deg, rgba(185,28,28,0.55), rgba(127,29,29,0.30));
         color: #fca5a5;
-        border-left: 3px solid #ef4444;
+        border-bottom: 1px solid rgba(239,68,68,0.35);
     }
     .platform-group-label.disney-group {
-        background: linear-gradient(90deg, rgba(29,78,216,0.35), rgba(30,58,95,0.15));
+        background: linear-gradient(90deg, rgba(29,78,216,0.55), rgba(30,58,95,0.30));
         color: #93c5fd;
-        border-left: 3px solid #3b82f6;
+        border-bottom: 1px solid rgba(59,130,246,0.35);
     }
     .platform-group-label.outros-group {
-        background: linear-gradient(90deg, rgba(109,40,217,0.25), rgba(76,29,149,0.10));
+        background: linear-gradient(90deg, rgba(109,40,217,0.45), rgba(76,29,149,0.20));
         color: #c4b5fd;
-        border-left: 3px solid #7c3aed;
+        border-bottom: 1px solid rgba(124,58,237,0.35);
     }
     .platform-group-cards {
         display: flex;
         flex-wrap: wrap;
         gap: 10px;
+        padding: 14px;
+        background: rgba(30,0,60,0.25);
+    }
+    /* Netflix group – fundo vermelho escuro sutil */
+    .platform-group:has(.netflix-group) .platform-group-cards {
+        background: rgba(60,0,0,0.18);
+    }
+    /* Disney group – fundo azul escuro sutil */
+    .platform-group:has(.disney-group) .platform-group-cards {
+        background: rgba(0,20,60,0.18);
     }
     .platform-card {
       background: rgba(59,7,100,0.3);
@@ -547,7 +560,7 @@
 
     @media (max-width: 600px) {
       .tabs { flex-direction: column; }
-      .platform-grid { grid-template-columns: 1fr 1fr; }
+      .platform-grid { gap: 14px; }
       .steps-grid { grid-template-columns: 1fr 1fr; }
       h1 { font-size: 1.8rem; }
       .code-display { font-size: 2rem; letter-spacing: 5px; }
