@@ -299,24 +299,62 @@
     .selected-platform-badge.password-reset { border-color: rgba(16,185,129,0.5); color: #6ee7b7; background: rgba(16,185,129,0.1); }
     .selected-platform-badge.disney-residence { border-color: rgba(29,78,216,0.5); color: #93c5fd; background: rgba(29,78,216,0.1); }
 
+    /* ── TABS: agrupadas em caixas ── */
     .tabs {
       display: flex;
+      flex-direction: column;
       gap: 10px;
       margin-bottom: 24px;
-      background: rgba(0,0,0,0.3);
-      border-radius: 12px;
-      padding: 4px;
     }
+    .tab-group {
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.07);
+    }
+    .tab-group-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.68rem;
+      font-weight: 800;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      padding: 8px 16px;
+      cursor: default;
+    }
+    .tab-group-label.tg-netflix {
+      background: linear-gradient(90deg, rgba(185,28,28,0.55), rgba(127,29,29,0.30));
+      color: #fca5a5;
+      border-bottom: 1px solid rgba(239,68,68,0.30);
+    }
+    .tab-group-label.tg-disney {
+      background: linear-gradient(90deg, rgba(29,78,216,0.55), rgba(30,58,95,0.30));
+      color: #93c5fd;
+      border-bottom: 1px solid rgba(59,130,246,0.30);
+    }
+    .tab-group-label.tg-outros {
+      background: linear-gradient(90deg, rgba(109,40,217,0.45), rgba(76,29,149,0.20));
+      color: #c4b5fd;
+      border-bottom: 1px solid rgba(124,58,237,0.30);
+    }
+    .tab-group-buttons {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      padding: 10px;
+      background: rgba(20,0,45,0.30);
+    }
+    .tab-group:has(.tg-netflix) .tab-group-buttons { background: rgba(50,0,0,0.20); }
+    .tab-group:has(.tg-disney)  .tab-group-buttons { background: rgba(0,15,50,0.20); }
 
     .tab-btn {
-      flex: 1;
-      padding: 10px 8px;
-      border: none;
+      padding: 9px 14px;
+      border: 1px solid rgba(255,255,255,0.08);
       border-radius: 10px;
-      background: transparent;
+      background: rgba(0,0,0,0.20);
       color: var(--text-muted);
       font-family: 'Raleway', sans-serif;
-      font-size: 0.82rem;
+      font-size: 0.80rem;
       font-weight: 600;
       cursor: pointer;
       transition: all 0.3s ease;
@@ -324,7 +362,8 @@
       align-items: center;
       justify-content: center;
       gap: 6px;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.4px;
+      white-space: nowrap;
     }
     .tab-btn:hover { color: var(--text-white); background: rgba(109,40,217,0.2); }
     .tab-btn.active {
@@ -707,50 +746,69 @@
     <section class="form-section">
       <div class="section-title">✦ Acessar Código ✦</div>
 
-      <!-- Tabs -->
+      <!-- Tabs agrupadas -->
       <div class="tabs">
-        <!-- ── NETFLIX ──────────────────────────── -->
-        <button class="tab-btn netflix active" id="tab-netflix" onclick="switchTab('netflix')">
-          🎬 Código Netflix
-        </button>
-        <button class="tab-btn netflix-login" id="tab-netflix-login" onclick="switchTab('netflix-login')">
-          📱 Login Netflix
-        </button>
-        <button class="tab-btn netflix-temp" id="tab-netflix-temp" onclick="switchTab('netflix-temp')">
-          ⏱️ Acesso Temporário
-        </button>
-        <button class="tab-btn residence" id="tab-netflix-residence" onclick="switchTab('netflix-residence')">
-          🏠 Residência Netflix
-        </button>
-        <button class="tab-btn password" id="tab-password-reset" onclick="switchTab('password-reset')">
-          🔑 Redefinição de Senha
-        </button>
-        <!-- ── DISNEY+ ───────────────────────────── -->
-        <button class="tab-btn disney" id="tab-disney" onclick="switchTab('disney')">
-          ✨ Código Disney+
-        </button>
-        <button class="tab-btn disney-res" id="tab-disney-residence" onclick="switchTab('disney-residence')">
-          🏡 Residência Disney+
-        </button>
-        <!-- ── OUTROS ────────────────────────────── -->
-        <button class="tab-btn max" id="tab-max" onclick="switchTab('max')">
-          🎞️ Código Max
-        </button>
-        <button class="tab-btn apple-tv" id="tab-apple-tv" onclick="switchTab('apple-tv')">
-          🍎 Código Apple TV
-        </button>
-        <button class="tab-btn prime-video" id="tab-prime-video" onclick="switchTab('prime-video')">
-          📺 Prime Video
-        </button>
-        <button class="tab-btn bug-globo" id="tab-bug-globo" onclick="switchTab('bug-globo')">
-          🛡️ Bug Globo
-        </button>
-        <button class="tab-btn codigo-globo" id="tab-codigo-globo" onclick="switchTab('codigo-globo')">
-          🔢 Código Globo
-        </button>
-        <button class="tab-btn senha-globo" id="tab-senha-globo" onclick="switchTab('senha-globo')">
-          🔐 Senha Globo
-        </button>
+
+        <!-- ══ GRUPO NETFLIX ══ -->
+        <div class="tab-group">
+          <div class="tab-group-label tg-netflix">🎬 Netflix</div>
+          <div class="tab-group-buttons">
+            <button class="tab-btn netflix active" id="tab-netflix" onclick="switchTab('netflix')">
+              🎬 Código Netflix
+            </button>
+            <button class="tab-btn netflix-login" id="tab-netflix-login" onclick="switchTab('netflix-login')">
+              📱 Login Netflix
+            </button>
+            <button class="tab-btn netflix-temp" id="tab-netflix-temp" onclick="switchTab('netflix-temp')">
+              ⏱️ Acesso Temporário
+            </button>
+            <button class="tab-btn residence" id="tab-netflix-residence" onclick="switchTab('netflix-residence')">
+              🏠 Residência Netflix
+            </button>
+            <button class="tab-btn password" id="tab-password-reset" onclick="switchTab('password-reset')">
+              🔑 Redefinição de Senha
+            </button>
+          </div>
+        </div>
+
+        <!-- ══ GRUPO DISNEY+ ══ -->
+        <div class="tab-group">
+          <div class="tab-group-label tg-disney">✨ Disney+</div>
+          <div class="tab-group-buttons">
+            <button class="tab-btn disney" id="tab-disney" onclick="switchTab('disney')">
+              ✨ Código Disney+
+            </button>
+            <button class="tab-btn disney-res" id="tab-disney-residence" onclick="switchTab('disney-residence')">
+              🏡 Residência Disney+
+            </button>
+          </div>
+        </div>
+
+        <!-- ══ GRUPO OUTROS ══ -->
+        <div class="tab-group">
+          <div class="tab-group-label tg-outros">📦 Outras Plataformas</div>
+          <div class="tab-group-buttons">
+            <button class="tab-btn max" id="tab-max" onclick="switchTab('max')">
+              🎞️ Código Max
+            </button>
+            <button class="tab-btn apple-tv" id="tab-apple-tv" onclick="switchTab('apple-tv')">
+              🍎 Código Apple TV
+            </button>
+            <button class="tab-btn prime-video" id="tab-prime-video" onclick="switchTab('prime-video')">
+              📺 Prime Video
+            </button>
+            <button class="tab-btn bug-globo" id="tab-bug-globo" onclick="switchTab('bug-globo')">
+              🛡️ Bug Globo
+            </button>
+            <button class="tab-btn codigo-globo" id="tab-codigo-globo" onclick="switchTab('codigo-globo')">
+              🔢 Código Globo
+            </button>
+            <button class="tab-btn senha-globo" id="tab-senha-globo" onclick="switchTab('senha-globo')">
+              🔐 Senha Globo
+            </button>
+          </div>
+        </div>
+
       </div>
 
       <div id="selected-badge" class="selected-platform-badge netflix">
