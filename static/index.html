@@ -933,6 +933,12 @@
       document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
       document.getElementById('card-' + p).classList.add('active');
       switchTab(p);
+
+      // Rolar suavemente até a seção "Acessar Código"
+      const formSection = document.querySelector('.form-section');
+      if (formSection) {
+        formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
     }
 
     function switchTab(p) {
