@@ -386,6 +386,7 @@
     .tab-btn.residence.active { background: linear-gradient(135deg, #7f1d1d, #991b1b); box-shadow: 0 0 15px rgba(220,38,38,0.4); }
     .tab-btn.password.active  { background: linear-gradient(135deg, #065f46, #047857); box-shadow: 0 0 15px rgba(16,185,129,0.4); }
     .tab-btn.disney-res.active { background: linear-gradient(135deg, #1e3a8a, #1d4ed8); box-shadow: 0 0 15px rgba(29,78,216,0.5); }
+    .tab-btn.netflix-login.active { background: linear-gradient(135deg, #b91c1c, #dc2626); box-shadow: 0 0 15px rgba(229,9,20,0.5); }
     .tab-btn.netflix-temp.active { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 0 15px rgba(217,119,6,0.5); }
     .tab-btn.max.active { background: linear-gradient(135deg, #0f172a, #2563eb); box-shadow: 0 0 15px rgba(37,99,235,0.45); }
     .tab-btn.prime-video.active { background: linear-gradient(135deg, #0f172a, #10b981); box-shadow: 0 0 15px rgba(16,185,129,0.45); }
@@ -398,6 +399,7 @@
     .selected-platform-badge.bug-globo { border-color: rgba(234,88,12,0.5); color: #fdba74; background: rgba(234,88,12,0.1); }
     .selected-platform-badge.codigo-globo { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
     .selected-platform-badge.senha-globo { border-color: rgba(13,148,136,0.5); color: #99f6e4; background: rgba(13,148,136,0.1); }
+    .selected-platform-badge.netflix-login { border-color: rgba(229,9,20,0.5); color: #fca5a5; background: rgba(229,9,20,0.1); }
 
     .form-group { margin-bottom: 16px; }
     .form-label {
@@ -645,7 +647,11 @@
               <div class="platform-name">Netflix</div>
               <div class="platform-desc">Código de acesso</div>
             </div>
-
+            <div class="platform-card" onclick="selectPlatform('netflix-login')" id="card-netflix-login">
+              <span class="platform-logo">📱</span>
+              <div class="platform-name">Login Netflix</div>
+              <div class="platform-desc">Código de início de sessão</div>
+            </div>
             <div class="platform-card" onclick="selectPlatform('netflix-temp')" id="card-netflix-temp">
               <span class="platform-logo">⏱️</span>
               <div class="platform-name">Acesso Temporário</div>
@@ -760,7 +766,9 @@
             <button class="tab-btn netflix active" id="tab-netflix" onclick="switchTab('netflix')">
               🎬 Código Netflix
             </button>
-
+            <button class="tab-btn netflix-login" id="tab-netflix-login" onclick="switchTab('netflix-login')">
+              📱 Login Netflix
+            </button>
             <button class="tab-btn netflix-temp" id="tab-netflix-temp" onclick="switchTab('netflix-temp')">
               ⏱️ Acesso Temporário
             </button>
@@ -911,6 +919,7 @@
       'netflix-residence': '🏠 Residência Netflix — Link de atualização',
       'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição',
       'disney-residence':  '🏡 Residência Disney+ — Link de atualização',
+      'netflix-login':     '📱 Login Netflix — Código de início de sessão',
       'netflix-temp':      '⏱️ Acesso Temporário Netflix — Link para receber código',
       'max':               '🎞️ Max — Código único',
       'prime-video':       '📺 Prime Video — Sign-in attempt',
@@ -1000,6 +1009,7 @@
         'netflix-residence': 'Residência Netflix',
         'password-reset': 'Redefinição de Senha Netflix',
         'disney-residence': 'Residência Disney+',
+        'netflix-login': 'Login Netflix',
         'netflix-temp': 'Acesso Temporário Netflix',
         'max': 'Max',
         'prime-video': 'Prime Video',
