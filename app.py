@@ -677,147 +677,203 @@ def _get_spam_boxes(mail):
         _spam_boxes_cache = []
     return _spam_boxes_cache
 
+FWD_PREFIXES_SEARCH = ["ENC:", "FW:", "Fwd:"]
+FWD_PREFIXES_STRIP  = ["ENC:", "FW:", "FWD:", "RES:", "ENC: ", "FW: "]
+
+def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
+                           use_date_filter=True, since_date=None):
+    """
+    Busca emails de uma caixa usando BATCH FETCH de headers.
+    Filtra por múltiplas plataformas de uma vez.
+    Retorna lista de (platform_key, email_id).
+    """
+    matched = []
+    try:
+        sel_status, _ = mail.select(mailbox, readonly=True)
+        if sel_status != "OK":
+            return matched
+
+        # ── Passagem 1: SEARCH FROM + data ──────────────────────────────────
+        if use_date_filter and since_date:
+            search_criteria = ["FROM", from_kw, "SINCE", since_date]
+        else:
+            search_criteria = ["FROM", from_kw]
+
+        status, msgs = mail.search(None, *search_criteria)
+        if status == "OK" and msgs[0]:
+            all_ids = msgs[0].split()
+            # Últimos 30 (mais recentes) de uma vez
+            recent_ids = all_ids[-30:]
+
+            # ── BATCH FETCH de todos os headers em um único round-trip ──────
+            id_str = b",".join(recent_ids)
+            st_b, data_b = mail.fetch(id_str, "(BODY[HEADER.FIELDS (SUBJECT)])")
+            if st_b == "OK":
+                id_idx = 0
+                for item in data_b:
+                    if isinstance(item, tuple):
+                        if id_idx >= len(recent_ids):
+                            break
+                        eid = recent_ids[id_idx]
+                        hdr  = email.message_from_bytes(item[1])
+                        subj = decode_str(hdr.get("Subject", ""))
+                        key  = (mailbox, eid)
+                        if key not in seen_ids:
+                            for plat_key, plat_cfg in platform_configs.items():
+                                if subject_matches(subj,
+                                                   plat_cfg["subject_keywords"],
+                                                   plat_cfg.get("negative_keywords")):
+                                    matched.append((plat_key, eid))
+                                    seen_ids.add(key)
+                                    break
+                        id_idx += 1
+
+        # ── Passagem 2: encaminhados (só se sem resultado) ───────────────────
+        if not matched:
+            for prefix in FWD_PREFIXES_SEARCH:
+                try:
+                    if use_date_filter and since_date:
+                        st2, msgs2 = mail.search(None, "SUBJECT", prefix, "SINCE", since_date)
+                    else:
+                        st2, msgs2 = mail.search(None, "SUBJECT", prefix)
+                    if st2 != "OK" or not msgs2[0]:
+                        continue
+                    fwd_ids = msgs2[0].split()[-10:]
+                    if not fwd_ids:
+                        continue
+                    id_str2 = b",".join(fwd_ids)
+                    st3, data3 = mail.fetch(id_str2, "(BODY[HEADER.FIELDS (SUBJECT)])")
+                    if st3 != "OK":
+                        continue
+                    id_idx2 = 0
+                    for item3 in data3:
+                        if isinstance(item3, tuple):
+                            if id_idx2 >= len(fwd_ids):
+                                break
+                            eid3 = fwd_ids[id_idx2]
+                            hdr3  = email.message_from_bytes(item3[1])
+                            subj3 = decode_str(hdr3.get("Subject", ""))
+                            subj_clean = subj3
+                            for pfx in FWD_PREFIXES_STRIP:
+                                if subj_clean.upper().startswith(pfx.upper()):
+                                    subj_clean = subj_clean[len(pfx):].strip()
+                                    break
+                            key3 = (mailbox, eid3)
+                            if key3 not in seen_ids:
+                                for plat_key, plat_cfg in platform_configs.items():
+                                    if subject_matches(subj_clean,
+                                                       plat_cfg["subject_keywords"],
+                                                       plat_cfg.get("negative_keywords")):
+                                        matched.append((plat_key, eid3))
+                                        seen_ids.add(key3)
+                                        break
+                            id_idx2 += 1
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    return matched
+
+
+def _fetch_and_extract(mail, mailbox, eid, plat_key, user_email):
+    """Faz RFC822 fetch, verifica email do usuário e extrai código/link."""
+    try:
+        mail.select(mailbox, readonly=True)
+        status, data = mail.fetch(eid, "(RFC822)")
+        if status != "OK":
+            return None, None
+        msg       = email.message_from_bytes(data[0][1])
+        html_body = get_html_body(msg)
+        if not email_matches_user(msg, html_body, user_email):
+            return None, None
+        cfg = PLATFORM_CONFIG[plat_key]
+        if cfg.get("type") == "link":
+            link = extract_link(html_body, plat_key)
+            return None, link
+        else:
+            code = extract_code_from_html(html_body)
+            return code, None
+    except Exception:
+        return None, None
+
+
+def search_code_unified(user_email, platform_list):
+    """
+    Busca múltiplas plataformas do mesmo remetente em UMA ÚNICA passagem IMAP.
+    Usa batch-fetch de headers → muito mais rápido que N chamadas sequenciais.
+    Retorna (code, link, matched_platform, error).
+    """
+    # Agrupar plataformas por remetente
+    by_sender = {}
+    for p in platform_list:
+        cfg = PLATFORM_CONFIG.get(p)
+        if not cfg:
+            continue
+        fk = cfg["from_keyword"]
+        if fk not in by_sender:
+            by_sender[fk] = {}
+        by_sender[fk][p] = cfg
+
+    try:
+        mail = connect_imap()
+        today     = _dt.utcnow().strftime("%d-%b-%Y")
+        since_2d  = (_dt.utcnow() - _td(days=2)).strftime("%d-%b-%Y")
+        spam_boxes = _get_spam_boxes(mail)
+        seen_ids   = set()
+
+        for sender, plat_configs in by_sender.items():
+            # 1ª tentativa: INBOX hoje
+            matched = _batch_search_mailbox(
+                mail, "INBOX", sender, plat_configs, seen_ids,
+                use_date_filter=True, since_date=today)
+
+            # 2ª tentativa: INBOX 48h
+            if not matched:
+                matched = _batch_search_mailbox(
+                    mail, "INBOX", sender, plat_configs, seen_ids,
+                    use_date_filter=True, since_date=since_2d)
+
+            # 3ª tentativa: INBOX sem filtro
+            if not matched:
+                matched = _batch_search_mailbox(
+                    mail, "INBOX", sender, plat_configs, seen_ids,
+                    use_date_filter=False)
+
+            # 4ª tentativa: spam
+            if not matched:
+                for mb in spam_boxes:
+                    matched.extend(_batch_search_mailbox(
+                        mail, mb, sender, plat_configs, seen_ids,
+                        use_date_filter=False))
+                    if matched:
+                        break
+
+            for plat_key, eid in matched:
+                code, link = _fetch_and_extract(mail, "INBOX", eid, plat_key, user_email)
+                if code or link:
+                    mail.logout()
+                    return code, link, plat_key, None
+
+        mail.logout()
+        return None, None, None, "Nenhum email encontrado para este endereco."
+    except imaplib.IMAP4.error as e:
+        return None, None, None, "Erro de conexao com servidor de email: " + str(e)
+    except Exception as e:
+        return None, None, None, "Erro interno: " + str(e)
+
+
 def search_code(user_email, platform):
+    """Busca código/link para uma plataforma específica (usa search_code_unified internamente)."""
     config = PLATFORM_CONFIG.get(platform)
     if not config:
         return None, None, "Plataforma nao suportada."
-    try:
-        mail = connect_imap()
-        from_kw     = config["from_keyword"]
-        subj_kws    = config["subject_keywords"]
-        result_type = config.get("type", "code")
-
-        # ── Filtro de data: só emails das últimas 48h (reduz drasticamente) ──
-        since_date = (_dt.utcnow() - _td(days=2)).strftime("%d-%b-%Y")
-
-        # ── Caixas: INBOX primeiro, spam só se INBOX falhar ──────────────────
-        spam_boxes  = _get_spam_boxes(mail)
-        boxes_inbox = ["INBOX"]
-        boxes_spam  = spam_boxes  # tentadas só se INBOX der 0 resultado
-
-        all_matched = []
-        seen_ids    = set()
-
-        FWD_PREFIXES_SEARCH = ["ENC:", "FW:", "Fwd:"]
-        FWD_PREFIXES_STRIP  = ["ENC:", "FW:", "FWD:", "RES:", "ENC: ", "FW: "]
-
-        def _search_mailbox(mailbox, use_date_filter=True):
-            """Busca emails em uma caixa e retorna lista de (mailbox, eid) matched."""
-            matched = []
-            try:
-                sel_status, _ = mail.select(mailbox, readonly=True)
-                if sel_status != "OK":
-                    return matched
-
-                # ── Passagem 1: FROM + data ───────────────────────────────────
-                if use_date_filter:
-                    search_criteria = ["FROM", from_kw, "SINCE", since_date]
-                else:
-                    search_criteria = ["FROM", from_kw]
-
-                status, msgs = mail.search(None, *search_criteria)
-                if status == "OK" and msgs[0]:
-                    all_ids = msgs[0].split()
-                    # Pega só os 20 mais recentes (o código chegou agora)
-                    recent_ids = all_ids[-20:]
-                    recent_ids.reverse()  # mais recente primeiro
-                    for eid in recent_ids:
-                        if (mailbox, eid) in seen_ids:
-                            continue
-                        try:
-                            st, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
-                            if st != "OK":
-                                continue
-                            hdr  = email.message_from_bytes(data[0][1])
-                            subj = decode_str(hdr.get("Subject", ""))
-                            if subject_matches(subj, subj_kws, config.get("negative_keywords")):
-                                matched.append((mailbox, eid))
-                                seen_ids.add((mailbox, eid))
-                        except Exception:
-                            continue
-
-                # ── Passagem 2: emails encaminhados (só se ainda sem resultado) ──
-                if not matched:
-                    for prefix in FWD_PREFIXES_SEARCH:
-                        try:
-                            if use_date_filter:
-                                st2, msgs2 = mail.search(None, "SUBJECT", prefix, "SINCE", since_date)
-                            else:
-                                st2, msgs2 = mail.search(None, "SUBJECT", prefix)
-                            if st2 != "OK" or not msgs2[0]:
-                                continue
-                            fwd_ids = msgs2[0].split()[-10:]  # últimos 10
-                            fwd_ids.reverse()
-                            for eid in fwd_ids:
-                                if (mailbox, eid) in seen_ids:
-                                    continue
-                                try:
-                                    st3, data3 = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
-                                    if st3 != "OK":
-                                        continue
-                                    hdr3  = email.message_from_bytes(data3[0][1])
-                                    subj3 = decode_str(hdr3.get("Subject", ""))
-                                    subj_clean = subj3
-                                    for pfx in FWD_PREFIXES_STRIP:
-                                        if subj_clean.upper().startswith(pfx.upper()):
-                                            subj_clean = subj_clean[len(pfx):].strip()
-                                            break
-                                    if subject_matches(subj_clean, subj_kws, config.get("negative_keywords")):
-                                        matched.append((mailbox, eid))
-                                        seen_ids.add((mailbox, eid))
-                                except Exception:
-                                    continue
-                        except Exception:
-                            continue
-            except Exception:
-                pass
-            return matched
-
-        # 1ª tentativa: INBOX com filtro de 48h
-        for mb in boxes_inbox:
-            all_matched.extend(_search_mailbox(mb, use_date_filter=True))
-
-        # 2ª tentativa: INBOX sem filtro de data (email mais antigo?)
-        if not all_matched:
-            for mb in boxes_inbox:
-                all_matched.extend(_search_mailbox(mb, use_date_filter=False))
-
-        # 3ª tentativa: pastas de spam (só se INBOX deu 0)
-        if not all_matched:
-            for mb in boxes_spam:
-                all_matched.extend(_search_mailbox(mb, use_date_filter=False))
-
-        if not all_matched:
-            mail.logout()
-            return None, None, ("Nenhum email de " + config["name"] + " encontrado. Verifique se o email ja chegou.")
-
-        for mailbox, eid in all_matched:
-            try:
-                mail.select(mailbox, readonly=True)
-                status, data = mail.fetch(eid, "(RFC822)")
-                if status != "OK":
-                    continue
-                msg       = email.message_from_bytes(data[0][1])
-                html_body = get_html_body(msg)
-                if email_matches_user(msg, html_body, user_email):
-                    if result_type == "link":
-                        link = extract_link(html_body, platform)
-                        if link:
-                            mail.logout()
-                            return None, link, None
-                    else:
-                        code = extract_code_from_html(html_body)
-                        if code:
-                            mail.logout()
-                            return code, None, None
-            except Exception:
-                continue
-        mail.logout()
-        return None, None, ("Email da conta nao encontrado. Verifique se digitou o email correto.")
-    except imaplib.IMAP4.error as e:
-        return None, None, "Erro de conexao com servidor de email: " + str(e)
-    except Exception as e:
-        return None, None, "Erro interno: " + str(e)
+    code, link, matched_plat, error = search_code_unified(user_email, [platform])
+    if code:
+        return code, None, None
+    elif link:
+        return None, link, None
+    else:
+        return None, None, error or ("Nenhum email de " + config["name"] + " encontrado.")
 
 # ─── MIDDLEWARES / HELPERS ─────────────────────────────────────────────────────
 
@@ -1079,61 +1135,27 @@ def get_code():
     if platform not in PLATFORM_CONFIG:
         return jsonify({"success": False, "message": "Plataforma nao suportada."}), 400
 
-    # ── Busca unificada Netflix: tenta as 5 sub-plataformas em sequência ──
-    if platform == "netflix-all":
-        NETFLIX_SUBS = ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"]
-        for sub in NETFLIX_SUBS:
-            try:
-                code, link, error = search_code(user_email, sub)
-                if code:
-                    return jsonify({"success": True, "code": code, "platform": sub, "type": "code"})
-                elif link:
-                    return jsonify({"success": True, "link": link, "platform": sub, "type": "link"})
-            except Exception:
-                continue
-        return jsonify({"success": False, "message": "Nenhum email Netflix encontrado para este endereço."})
-
-    # ── Busca unificada Disney+: tenta as 2 sub-plataformas em sequência ──
-    if platform == "disney-all":
-        DISNEY_SUBS = ["disney", "disney-residence"]
-        for sub in DISNEY_SUBS:
-            try:
-                code, link, error = search_code(user_email, sub)
-                if code:
-                    return jsonify({"success": True, "code": code, "platform": sub, "type": "code"})
-                elif link:
-                    return jsonify({"success": True, "link": link, "platform": sub, "type": "link"})
-            except Exception:
-                continue
-        return jsonify({"success": False, "message": "Nenhum email Disney+ encontrado para este endereço."})
-
-    # ── Busca unificada Globo: tenta as 3 sub-plataformas em sequência ──
-    if platform == "globo-all":
-        GLOBO_SUBS = ["bug-globo", "codigo-globo", "senha-globo"]
-        for sub in GLOBO_SUBS:
-            try:
-                code, link, error = search_code(user_email, sub)
-                if code:
-                    return jsonify({"success": True, "code": code, "platform": sub, "type": "code"})
-                elif link:
-                    return jsonify({"success": True, "link": link, "platform": sub, "type": "link"})
-            except Exception:
-                continue
-        return jsonify({"success": False, "message": "Nenhum email Globo encontrado para este endereço."})
-
-    # ── Busca unificada Streaming: Max + Prime Video em sequência ──
-    if platform == "streaming-all":
-        STREAMING_SUBS = ["max", "prime-video"]
-        for sub in STREAMING_SUBS:
-            try:
-                code, link, error = search_code(user_email, sub)
-                if code:
-                    return jsonify({"success": True, "code": code, "platform": sub, "type": "code"})
-                elif link:
-                    return jsonify({"success": True, "link": link, "platform": sub, "type": "link"})
-            except Exception:
-                continue
-        return jsonify({"success": False, "message": "Nenhum email Max ou Prime Video encontrado para este endereço."})
+    # ── Busca unificada: UMA conexão IMAP, batch-fetch de headers ──────────
+    UNIFIED_MAP = {
+        "netflix-all":   (["netflix", "netflix-login", "netflix-temp",
+                           "netflix-residence", "password-reset"],
+                          "Nenhum email Netflix encontrado para este endereço."),
+        "disney-all":    (["disney", "disney-residence"],
+                          "Nenhum email Disney+ encontrado para este endereço."),
+        "globo-all":     (["bug-globo", "codigo-globo", "senha-globo"],
+                          "Nenhum email Globo encontrado para este endereço."),
+        "streaming-all": (["max", "prime-video"],
+                          "Nenhum email Max ou Prime Video encontrado para este endereço."),
+    }
+    if platform in UNIFIED_MAP:
+        subs, err_msg = UNIFIED_MAP[platform]
+        code, link, matched_plat, error = search_code_unified(user_email, subs)
+        if code:
+            return jsonify({"success": True, "code": code, "platform": matched_plat, "type": "code"})
+        elif link:
+            return jsonify({"success": True, "link": link, "platform": matched_plat, "type": "link"})
+        else:
+            return jsonify({"success": False, "message": err_msg})
 
     code, link, error = search_code(user_email, platform)
     if code:
