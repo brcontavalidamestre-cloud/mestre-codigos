@@ -848,6 +848,7 @@
     let currentPlatform = 'netflix';
 
     const platformLabels = {
+      'netflix-all':   '🎬 Netflix — Todos os Códigos',
       netflix: '🎬 Netflix — Código de acesso',
       'disney-all':    '✨ Disney+ — Todos os Códigos',
       disney:  '✨ Disney+ — Código de acesso',
@@ -880,15 +881,23 @@
 
     function switchTab(p) {
       currentPlatform = p;
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      document.getElementById('tab-' + p).classList.add('active');
 
+      // Atualiza badge (plataforma selecionada)
       const badge = document.getElementById('selected-badge');
-      badge.textContent = platformLabels[p];
-      badge.className = 'selected-platform-badge ' + p;
+      if (badge) {
+        badge.textContent = platformLabels[p] || p;
+        badge.className = 'selected-platform-badge ' + p;
+      }
 
+      // Atualiza tab-btn se existir (compatibilidade)
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      const tabEl = document.getElementById('tab-' + p);
+      if (tabEl) tabEl.classList.add('active');
+
+      // Re-destaca card ativo
       document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
-      document.getElementById('card-' + p).classList.add('active');
+      const cardEl = document.getElementById('card-' + p);
+      if (cardEl) cardEl.classList.add('active');
 
       hideResult();
     }
