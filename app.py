@@ -279,6 +279,13 @@ PLATFORM_CONFIG = {
         "name": "Apple TV",
         "type": "code"
     },
+    # ── NETFLIX ALL: busca em todas as plataformas Netflix ───────────────────
+    "netflix-all": {
+        "from_keyword": "netflix.com",
+        "subject_keywords": ["netflix"],
+        "name": "Todos os Códigos Netflix",
+        "type": "code"
+    },
     # ── NETFLIX RESIDÊNCIA: link de atualização (PT/EN/ES) ────────────────────
     "netflix-residence": {
         "from_keyword": "netflix.com",
@@ -938,6 +945,21 @@ def get_code():
         return jsonify({"success": False, "message": "Email invalido."}), 400
     if platform not in PLATFORM_CONFIG:
         return jsonify({"success": False, "message": "Plataforma nao suportada."}), 400
+
+    # ── Busca unificada Netflix: tenta as 5 sub-plataformas em sequência ──
+    if platform == "netflix-all":
+        NETFLIX_SUBS = ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"]
+        for sub in NETFLIX_SUBS:
+            try:
+                code, link, error = search_code(user_email, sub)
+                if code:
+                    return jsonify({"success": True, "code": code, "platform": sub, "type": "code"})
+                elif link:
+                    return jsonify({"success": True, "link": link, "platform": sub, "type": "link"})
+            except Exception:
+                continue
+        return jsonify({"success": False, "message": "Nenhum email Netflix encontrado para este endereço."})
+
     code, link, error = search_code(user_email, platform)
     if code:
         return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})

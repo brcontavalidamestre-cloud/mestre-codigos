@@ -218,6 +218,17 @@
     .platform-group:has(.netflix-group) .platform-group-cards {
         background: rgba(60,0,0,0.18);
     }
+    /* Card unificado Netflix – destaque especial */
+    .netflix-all-card {
+        width: 100% !important;
+        flex: 1 !important;
+        border: 1px solid rgba(239,68,68,0.4) !important;
+        background: linear-gradient(135deg, rgba(127,29,29,0.35), rgba(185,28,28,0.20)) !important;
+    }
+    .netflix-all-card:hover {
+        border-color: rgba(239,68,68,0.8) !important;
+        box-shadow: 0 0 20px rgba(239,68,68,0.3) !important;
+    }
     /* Disney group – fundo azul escuro sutil */
     .platform-group:has(.disney-group) .platform-group-cards {
         background: rgba(0,20,60,0.18);
@@ -642,30 +653,10 @@
         <div class="platform-group">
           <div class="platform-group-label netflix-group">🎬 Netflix</div>
           <div class="platform-group-cards">
-            <div class="platform-card" onclick="selectPlatform('netflix')" id="card-netflix">
+            <div class="platform-card netflix-all-card" onclick="selectPlatform('netflix-all')" id="card-netflix-all">
               <span class="platform-logo">🎬</span>
-              <div class="platform-name">Netflix</div>
-              <div class="platform-desc">Código de acesso</div>
-            </div>
-            <div class="platform-card" onclick="selectPlatform('netflix-login')" id="card-netflix-login">
-              <span class="platform-logo">📱</span>
-              <div class="platform-name">Login Netflix</div>
-              <div class="platform-desc">Código de início de sessão</div>
-            </div>
-            <div class="platform-card" onclick="selectPlatform('netflix-temp')" id="card-netflix-temp">
-              <span class="platform-logo">⏱️</span>
-              <div class="platform-name">Acesso Temporário</div>
-              <div class="platform-desc">Código temporário Netflix</div>
-            </div>
-            <div class="platform-card" onclick="selectPlatform('netflix-residence')" id="card-netflix-residence">
-              <span class="platform-logo">🏠</span>
-              <div class="platform-name">Residência Netflix</div>
-              <div class="platform-desc">Link de atualização</div>
-            </div>
-            <div class="platform-card" onclick="selectPlatform('password-reset')" id="card-password-reset">
-              <span class="platform-logo">🔑</span>
-              <div class="platform-name">Redefinição de Senha</div>
-              <div class="platform-desc">Link de redefinição Netflix</div>
+              <div class="platform-name">Todos os Códigos Netflix</div>
+              <div class="platform-desc">Código · Login · Temporário · Residência · Senha</div>
             </div>
           </div>
         </div>
@@ -763,20 +754,8 @@
         <div class="tab-group">
           <div class="tab-group-label tg-netflix">🎬 Netflix</div>
           <div class="tab-group-buttons">
-            <button class="tab-btn netflix active" id="tab-netflix" onclick="switchTab('netflix')">
-              🎬 Código Netflix
-            </button>
-            <button class="tab-btn netflix-login" id="tab-netflix-login" onclick="switchTab('netflix-login')">
-              📱 Login Netflix
-            </button>
-            <button class="tab-btn netflix-temp" id="tab-netflix-temp" onclick="switchTab('netflix-temp')">
-              ⏱️ Acesso Temporário
-            </button>
-            <button class="tab-btn residence" id="tab-netflix-residence" onclick="switchTab('netflix-residence')">
-              🏠 Residência Netflix
-            </button>
-            <button class="tab-btn password" id="tab-password-reset" onclick="switchTab('password-reset')">
-              🔑 Redefinição de Senha
+            <button class="tab-btn netflix active" id="tab-netflix-all" onclick="switchTab('netflix-all')">
+              🎬 Todos os Códigos Netflix
             </button>
           </div>
         </div>
@@ -826,7 +805,7 @@
       </div>
 
       <div id="selected-badge" class="selected-platform-badge netflix">
-        🎬 Netflix — Código de acesso
+        🎬 Netflix — Todos os Códigos
       </div>
 
       <div class="form-group">
