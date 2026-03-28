@@ -120,6 +120,10 @@ PLATFORM_CONFIG = {
             "acesso temporário",
             "acesso temporario",
             "código de acesso temporário",
+            "seu código de acesso temporário da netflix",
+            "seu codigo de acesso temporario da netflix",
+            "código de acesso temporário da netflix",
+            "codigo de acesso temporario da netflix",
             # Inglês
             "temporary access",
             "temp access",
