@@ -625,10 +625,53 @@ def email_matches_user(msg, html_body, user_email):
 
     return False
 
+import socket as _socket
+from datetime import datetime as _dt, timedelta as _td
+
+# ── Cache de caixas de spam disponíveis (descoberto 1x, reutilizado) ──────────
+_spam_boxes_cache = None
+
 def connect_imap():
+    """Conecta ao IMAP com timeout curto para evitar travamento."""
+    sock = _socket.create_connection((IMAP_SERVER, IMAP_PORT), timeout=8)
     mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
+    mail.sock.settimeout(8)
     mail.login(EMAIL_USER, EMAIL_PASS)
     return mail
+
+def _get_spam_boxes(mail):
+    """Descobre caixas de spam uma única vez e armazena em cache."""
+    global _spam_boxes_cache
+    if _spam_boxes_cache is not None:
+        return _spam_boxes_cache
+    SPAM_CANDIDATES = ["Spam", "Junk", "SPAM", "JUNK",
+                       "[Gmail]/Spam", "[Gmail]/Lixo Eletrônico",
+                       "Junk Email", "Bulk Mail", "Lixo Eletronico"]
+    try:
+        status_list, mailbox_list = mail.list()
+        available = []
+        if status_list == "OK":
+            for mb in mailbox_list:
+                try:
+                    mb_str = mb.decode("utf-8") if isinstance(mb, bytes) else str(mb)
+                    parts = mb_str.split('"')
+                    if len(parts) >= 3:
+                        box_name = parts[-2].strip()
+                    else:
+                        box_name = mb_str.split()[-1].strip('"')
+                    available.append(box_name)
+                except Exception:
+                    continue
+        result = []
+        for cand in SPAM_CANDIDATES:
+            for avail in available:
+                if cand.lower() == avail.lower():
+                    result.append(avail)
+                    break
+        _spam_boxes_cache = result
+    except Exception:
+        _spam_boxes_cache = []
+    return _spam_boxes_cache
 
 def search_code(user_email, platform):
     config = PLATFORM_CONFIG.get(platform)
@@ -640,112 +683,105 @@ def search_code(user_email, platform):
         subj_kws    = config["subject_keywords"]
         result_type = config.get("type", "code")
 
-        # Lista de caixas para pesquisar: INBOX + pasta de Spam/Lixo
-        MAILBOXES_TO_SEARCH = ["INBOX", "Spam", "Junk", "SPAM", "JUNK",
-                                "[Gmail]/Spam", "[Gmail]/Lixo Eletrônico",
-                                "Junk Email", "Bulk Mail", "Lixo Eletronico"]
+        # ── Filtro de data: só emails das últimas 48h (reduz drasticamente) ──
+        since_date = (_dt.utcnow() - _td(days=2)).strftime("%d-%b-%Y")
 
-        # Descobre quais caixas existem neste servidor
-        status_list, mailbox_list = mail.list()
-        available_boxes = []
-        if status_list == "OK":
-            for mb in mailbox_list:
-                try:
-                    mb_str = mb.decode("utf-8") if isinstance(mb, bytes) else str(mb)
-                    # Extrai o nome da caixa (ultima parte apos o separador)
-                    parts = mb_str.split('"')
-                    if len(parts) >= 3:
-                        box_name = parts[-2].strip()
-                    else:
-                        box_name = mb_str.split()[-1].strip('"')
-                    available_boxes.append(box_name)
-                except Exception:
-                    continue
+        # ── Caixas: INBOX primeiro, spam só se INBOX falhar ──────────────────
+        spam_boxes  = _get_spam_boxes(mail)
+        boxes_inbox = ["INBOX"]
+        boxes_spam  = spam_boxes  # tentadas só se INBOX der 0 resultado
 
-        # Filtra as caixas para pesquisar (INBOX sempre + spam se existir)
-        boxes_to_try = ["INBOX"]
-        for candidate in MAILBOXES_TO_SEARCH[1:]:  # skip INBOX, ja incluido
-            for avail in available_boxes:
-                if candidate.lower() == avail.lower():
-                    boxes_to_try.append(avail)
-                    break
+        all_matched = []
+        seen_ids    = set()
 
-        all_matched = []  # (mailbox, eid) tuples
-        seen_ids    = set()   # evita duplicatas entre passagem 1 e 2
-
-        # ── Passagem 1: busca normal por FROM (remetente original) ────────────
-        for mailbox in boxes_to_try:
-            try:
-                sel_status, _ = mail.select(mailbox, readonly=True)
-                if sel_status != "OK":
-                    continue
-                status, msgs = mail.search(None, "FROM", from_kw)
-                if status != "OK" or not msgs[0]:
-                    continue
-                all_ids    = msgs[0].split()
-                recent_ids = all_ids[-100:]
-                recent_ids.reverse()
-                for eid in recent_ids:
-                    if (mailbox, eid) in seen_ids:
-                        continue
-                    try:
-                        status, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
-                        if status != "OK":
-                            continue
-                        hdr  = email.message_from_bytes(data[0][1])
-                        subj = decode_str(hdr.get("Subject", ""))
-                        if subject_matches(subj, subj_kws, config.get("negative_keywords")):
-                            all_matched.append((mailbox, eid))
-                            seen_ids.add((mailbox, eid))
-                    except Exception:
-                        continue
-            except Exception:
-                continue
-
-        # ── Passagem 2: busca por SUBJECT para emails encaminhados ────────────
-        #    IMAP SUBJECT search é case-insensitive na maioria dos servidores,
-        #    então 3 prefixos cobrem todas as variações (ENC/enc/Enc, FW/fw/Fw…).
-        #    Limite reduzido para 15 por prefixo → busca rápida.
-        FWD_PREFIXES_SEARCH = ["ENC:", "FW:", "Fwd:"]  # case-insensitive no IMAP
+        FWD_PREFIXES_SEARCH = ["ENC:", "FW:", "Fwd:"]
         FWD_PREFIXES_STRIP  = ["ENC:", "FW:", "FWD:", "RES:", "ENC: ", "FW: "]
 
-        for mailbox in boxes_to_try:
+        def _search_mailbox(mailbox, use_date_filter=True):
+            """Busca emails em uma caixa e retorna lista de (mailbox, eid) matched."""
+            matched = []
             try:
                 sel_status, _ = mail.select(mailbox, readonly=True)
                 if sel_status != "OK":
-                    continue
-                for prefix in FWD_PREFIXES_SEARCH:
-                    try:
-                        status2, msgs2 = mail.search(None, "SUBJECT", prefix)
-                        if status2 != "OK" or not msgs2[0]:
+                    return matched
+
+                # ── Passagem 1: FROM + data ───────────────────────────────────
+                if use_date_filter:
+                    search_criteria = ["FROM", from_kw, "SINCE", since_date]
+                else:
+                    search_criteria = ["FROM", from_kw]
+
+                status, msgs = mail.search(None, *search_criteria)
+                if status == "OK" and msgs[0]:
+                    all_ids = msgs[0].split()
+                    # Pega só os 20 mais recentes (o código chegou agora)
+                    recent_ids = all_ids[-20:]
+                    recent_ids.reverse()  # mais recente primeiro
+                    for eid in recent_ids:
+                        if (mailbox, eid) in seen_ids:
                             continue
-                        fwd_ids = msgs2[0].split()
-                        fwd_ids = fwd_ids[-15:]   # apenas os 15 mais recentes
-                        fwd_ids.reverse()
-                        for eid in fwd_ids:
-                            if (mailbox, eid) in seen_ids:
+                        try:
+                            st, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
+                            if st != "OK":
                                 continue
-                            try:
-                                status3, data3 = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
-                                if status3 != "OK":
+                            hdr  = email.message_from_bytes(data[0][1])
+                            subj = decode_str(hdr.get("Subject", ""))
+                            if subject_matches(subj, subj_kws, config.get("negative_keywords")):
+                                matched.append((mailbox, eid))
+                                seen_ids.add((mailbox, eid))
+                        except Exception:
+                            continue
+
+                # ── Passagem 2: emails encaminhados (só se ainda sem resultado) ──
+                if not matched:
+                    for prefix in FWD_PREFIXES_SEARCH:
+                        try:
+                            if use_date_filter:
+                                st2, msgs2 = mail.search(None, "SUBJECT", prefix, "SINCE", since_date)
+                            else:
+                                st2, msgs2 = mail.search(None, "SUBJECT", prefix)
+                            if st2 != "OK" or not msgs2[0]:
+                                continue
+                            fwd_ids = msgs2[0].split()[-10:]  # últimos 10
+                            fwd_ids.reverse()
+                            for eid in fwd_ids:
+                                if (mailbox, eid) in seen_ids:
                                     continue
-                                hdr3  = email.message_from_bytes(data3[0][1])
-                                subj3 = decode_str(hdr3.get("Subject", ""))
-                                # Remove o prefixo de encaminhamento antes de checar
-                                subj_clean = subj3
-                                for pfx in FWD_PREFIXES_STRIP:
-                                    if subj_clean.upper().startswith(pfx.upper()):
-                                        subj_clean = subj_clean[len(pfx):].strip()
-                                        break
-                                if subject_matches(subj_clean, subj_kws, config.get("negative_keywords")):
-                                    all_matched.append((mailbox, eid))
-                                    seen_ids.add((mailbox, eid))
-                            except Exception:
-                                continue
-                    except Exception:
-                        continue
+                                try:
+                                    st3, data3 = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
+                                    if st3 != "OK":
+                                        continue
+                                    hdr3  = email.message_from_bytes(data3[0][1])
+                                    subj3 = decode_str(hdr3.get("Subject", ""))
+                                    subj_clean = subj3
+                                    for pfx in FWD_PREFIXES_STRIP:
+                                        if subj_clean.upper().startswith(pfx.upper()):
+                                            subj_clean = subj_clean[len(pfx):].strip()
+                                            break
+                                    if subject_matches(subj_clean, subj_kws, config.get("negative_keywords")):
+                                        matched.append((mailbox, eid))
+                                        seen_ids.add((mailbox, eid))
+                                except Exception:
+                                    continue
+                        except Exception:
+                            continue
             except Exception:
-                continue
+                pass
+            return matched
+
+        # 1ª tentativa: INBOX com filtro de 48h
+        for mb in boxes_inbox:
+            all_matched.extend(_search_mailbox(mb, use_date_filter=True))
+
+        # 2ª tentativa: INBOX sem filtro de data (email mais antigo?)
+        if not all_matched:
+            for mb in boxes_inbox:
+                all_matched.extend(_search_mailbox(mb, use_date_filter=False))
+
+        # 3ª tentativa: pastas de spam (só se INBOX deu 0)
+        if not all_matched:
+            for mb in boxes_spam:
+                all_matched.extend(_search_mailbox(mb, use_date_filter=False))
 
         if not all_matched:
             mail.logout()
