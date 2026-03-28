@@ -685,7 +685,7 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
     """
     Busca emails de uma caixa usando BATCH FETCH de headers.
     Filtra por múltiplas plataformas de uma vez.
-    Retorna lista de (platform_key, email_id).
+    Retorna lista de (mailbox, platform_key, email_id) do MAIS RECENTE para o mais antigo.
     """
     matched = []
     try:
@@ -702,8 +702,9 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
         status, msgs = mail.search(None, *search_criteria)
         if status == "OK" and msgs[0]:
             all_ids = msgs[0].split()
-            # Últimos 30 (mais recentes) de uma vez
-            recent_ids = all_ids[-30:]
+            # Últimos 50 — servidor devolve em ordem crescente de ID
+            # Os IDs maiores = emails mais recentes
+            recent_ids = all_ids[-50:]  # os 50 de maior ID (mais recentes)
 
             # ── BATCH FETCH de todos os headers em um único round-trip ──────
             id_str = b",".join(recent_ids)
@@ -723,7 +724,7 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                                 if subject_matches(subj,
                                                    plat_cfg["subject_keywords"],
                                                    plat_cfg.get("negative_keywords")):
-                                    matched.append((plat_key, eid))
+                                    matched.append((mailbox, plat_key, eid))
                                     seen_ids.add(key)
                                     break
                         id_idx += 1
@@ -738,7 +739,7 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                         st2, msgs2 = mail.search(None, "SUBJECT", prefix)
                     if st2 != "OK" or not msgs2[0]:
                         continue
-                    fwd_ids = msgs2[0].split()[-10:]
+                    fwd_ids = msgs2[0].split()[-20:]  # últimos 20 encaminhados
                     if not fwd_ids:
                         continue
                     id_str2 = b",".join(fwd_ids)
@@ -764,7 +765,7 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                                     if subject_matches(subj_clean,
                                                        plat_cfg["subject_keywords"],
                                                        plat_cfg.get("negative_keywords")):
-                                        matched.append((plat_key, eid3))
+                                        matched.append((mailbox, plat_key, eid3))
                                         seen_ids.add(key3)
                                         break
                             id_idx2 += 1
@@ -772,6 +773,8 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                     continue
     except Exception:
         pass
+    # Reverter: IDs crescentes → queremos o MAIOR ID (mais recente) primeiro
+    matched.reverse()
     return matched
 
 
@@ -848,8 +851,9 @@ def search_code_unified(user_email, platform_list):
                     if matched:
                         break
 
-            for plat_key, eid in matched:
-                code, link = _fetch_and_extract(mail, "INBOX", eid, plat_key, user_email)
+            # matched já vem do mais recente para o mais antigo (reversed em _batch_search_mailbox)
+            for mb, plat_key, eid in matched:
+                code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
                 if code or link:
                     mail.logout()
                     return code, link, plat_key, None
