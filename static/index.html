@@ -444,6 +444,10 @@
     .selected-platform-badge.codigo-globo { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
     .selected-platform-badge.senha-globo { border-color: rgba(13,148,136,0.5); color: #99f6e4; background: rgba(13,148,136,0.1); }
     .selected-platform-badge.netflix-login { border-color: rgba(229,9,20,0.5); color: #fca5a5; background: rgba(229,9,20,0.1); }
+    .selected-platform-badge.netflix-all  { border-color: rgba(229,9,20,0.6); color: #ff6b6b; background: rgba(229,9,20,0.12); }
+    .selected-platform-badge.disney-all   { border-color: rgba(17,117,183,0.6); color: #60a5fa; background: rgba(17,117,183,0.12); }
+    .selected-platform-badge.streaming-all { border-color: rgba(37,99,235,0.6); color: #93c5fd; background: rgba(37,99,235,0.12); }
+    .selected-platform-badge.globo-all    { border-color: rgba(234,88,12,0.6); color: #fdba74; background: rgba(234,88,12,0.12); }
 
     .form-group { margin-bottom: 16px; }
     .form-label {
@@ -845,7 +849,7 @@
     animateStars();
 
     // ── ESTADO ──
-    let currentPlatform = 'netflix';
+    let currentPlatform = 'netflix-all';
 
     const platformLabels = {
       'netflix-all':   '🎬 Netflix — Todos os Códigos',
@@ -867,12 +871,25 @@
     };
 
     function selectPlatform(p) {
+      // 1. Atualiza estado
       currentPlatform = p;
-      document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
-      document.getElementById('card-' + p).classList.add('active');
-      switchTab(p);
 
-      // Rolar suavemente até a seção "Acessar Código"
+      // 2. Atualiza badge IMEDIATAMENTE (sem depender de switchTab)
+      const badge = document.getElementById('selected-badge');
+      if (badge) {
+        badge.textContent = platformLabels[p] || p;
+        badge.className = 'selected-platform-badge ' + p;
+      }
+
+      // 3. Destaca card selecionado
+      document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
+      const cardEl = document.getElementById('card-' + p);
+      if (cardEl) cardEl.classList.add('active');
+
+      // 4. Esconde resultado anterior
+      hideResult();
+
+      // 5. Rola suavemente até o formulário
       const formSection = document.querySelector('.form-section');
       if (formSection) {
         formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -880,26 +897,7 @@
     }
 
     function switchTab(p) {
-      currentPlatform = p;
-
-      // Atualiza badge (plataforma selecionada)
-      const badge = document.getElementById('selected-badge');
-      if (badge) {
-        badge.textContent = platformLabels[p] || p;
-        badge.className = 'selected-platform-badge ' + p;
-      }
-
-      // Atualiza tab-btn se existir (compatibilidade)
-      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-      const tabEl = document.getElementById('tab-' + p);
-      if (tabEl) tabEl.classList.add('active');
-
-      // Re-destaca card ativo
-      document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
-      const cardEl = document.getElementById('card-' + p);
-      if (cardEl) cardEl.classList.add('active');
-
-      hideResult();
+      selectPlatform(p);
     }
 
     function hideResult() {
