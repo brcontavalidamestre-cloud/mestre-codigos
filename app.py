@@ -239,6 +239,13 @@ PLATFORM_CONFIG = {
         "type": "code"
     },
     # ── GLOBO SENHA: recuperação de senha ──────────────────────────────────────
+    # ── GLOBO ALL: busca nas 3 sub-plataformas Globo ────────────────────────
+    "globo-all": {
+        "from_keyword": "globo.com",
+        "subject_keywords": ["globo"],
+        "name": "Todos os Códigos Globo",
+        "type": "code"
+    },
     "senha-globo": {
         "from_keyword": "globo.com",
         "subject_keywords": [
@@ -980,6 +987,20 @@ def get_code():
             except Exception:
                 continue
         return jsonify({"success": False, "message": "Nenhum email Disney+ encontrado para este endereço."})
+
+    # ── Busca unificada Globo: tenta as 3 sub-plataformas em sequência ──
+    if platform == "globo-all":
+        GLOBO_SUBS = ["bug-globo", "codigo-globo", "senha-globo"]
+        for sub in GLOBO_SUBS:
+            try:
+                code, link, error = search_code(user_email, sub)
+                if code:
+                    return jsonify({"success": True, "code": code, "platform": sub, "type": "code"})
+                elif link:
+                    return jsonify({"success": True, "link": link, "platform": sub, "type": "link"})
+            except Exception:
+                continue
+        return jsonify({"success": False, "message": "Nenhum email Globo encontrado para este endereço."})
 
     code, link, error = search_code(user_email, platform)
     if code:

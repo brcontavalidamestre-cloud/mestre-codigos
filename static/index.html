@@ -240,6 +240,17 @@
         border-color: rgba(59,130,246,0.8) !important;
         box-shadow: 0 0 20px rgba(59,130,246,0.3) !important;
     }
+    /* Card unificado Globo – destaque especial */
+    .globo-all-card {
+        width: 100% !important;
+        flex: 1 !important;
+        border: 1px solid rgba(220,38,38,0.4) !important;
+        background: linear-gradient(135deg, rgba(185,28,28,0.25), rgba(220,38,38,0.12)) !important;
+    }
+    .globo-all-card:hover {
+        border-color: rgba(220,38,38,0.8) !important;
+        box-shadow: 0 0 20px rgba(220,38,38,0.3) !important;
+    }
     /* Disney group – fundo azul escuro sutil */
     .platform-group:has(.disney-group) .platform-group-cards {
         background: rgba(0,20,60,0.18);
@@ -705,20 +716,10 @@
         <div class="platform-group">
           <div class="platform-group-label globo-group">📡 Globo</div>
           <div class="platform-group-cards">
-            <div class="platform-card" onclick="selectPlatform('bug-globo')" id="card-bug-globo">
-              <span class="platform-logo">🛡️</span>
-              <div class="platform-name">Bug Globo</div>
-              <div class="platform-desc">Etapa de segurança</div>
-            </div>
-            <div class="platform-card" onclick="selectPlatform('codigo-globo')" id="card-codigo-globo">
-              <span class="platform-logo">🔢</span>
-              <div class="platform-name">Código Globo</div>
-              <div class="platform-desc">Acesso à Conta Globo</div>
-            </div>
-            <div class="platform-card" onclick="selectPlatform('senha-globo')" id="card-senha-globo">
-              <span class="platform-logo">🔐</span>
-              <div class="platform-name">Senha Globo</div>
-              <div class="platform-desc">Recuperar senha Globo</div>
+            <div class="platform-card globo-all-card" onclick="selectPlatform('globo-all')" id="card-globo-all">
+              <span class="platform-logo">📡</span>
+              <div class="platform-name">Todos os Códigos Globo</div>
+              <div class="platform-desc">Bug Globo · Código Globo · Senha Globo</div>
             </div>
           </div>
         </div>
@@ -793,14 +794,8 @@
         <div class="tab-group">
           <div class="tab-group-label tg-globo">📡 Globo</div>
           <div class="tab-group-buttons">
-            <button class="tab-btn bug-globo" id="tab-bug-globo" onclick="switchTab('bug-globo')">
-              🛡️ Bug Globo
-            </button>
-            <button class="tab-btn codigo-globo" id="tab-codigo-globo" onclick="switchTab('codigo-globo')">
-              🔢 Código Globo
-            </button>
-            <button class="tab-btn senha-globo" id="tab-senha-globo" onclick="switchTab('senha-globo')">
-              🔐 Senha Globo
+            <button class="tab-btn bug-globo" id="tab-globo-all" onclick="switchTab('globo-all')">
+              📡 Todos os Códigos Globo
             </button>
           </div>
         </div>
@@ -906,6 +901,7 @@
       'netflix-temp':      '⏱️ Acesso Temporário Netflix — Link para receber código',
       'max':               '🎞️ Max — Código único',
       'prime-video':       '📺 Prime Video — Sign-in attempt',
+      'globo-all':         '📡 Globo — Todos os Códigos',
       'bug-globo':         '🛡️ Bug Globo — Etapa de segurança',
       'codigo-globo':      '🔢 Código Globo — Conta Globo',
       'senha-globo':       '🔐 Senha Globo — Recuperar senha'
@@ -997,6 +993,7 @@
         'netflix-temp': 'Acesso Temporário Netflix',
         'max': 'Max',
         'prime-video': 'Prime Video',
+        'globo-all': 'Todos os Códigos Globo',
         'bug-globo': 'Bug Globo',
         'codigo-globo': 'Código Globo',
         'senha-globo': 'Senha Globo'
