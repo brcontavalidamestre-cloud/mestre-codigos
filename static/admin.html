@@ -228,6 +228,17 @@
 
     /* spinner */
     .sp{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:rot .65s linear infinite;vertical-align:middle;}
+    /* PIN bloqueio */
+    .bpin { background: linear-gradient(135deg,#92400e,#d97706); color:#fff; border:none; border-radius:7px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; transition:.2s; }
+    .bpin:hover { opacity:.85; transform:scale(1.04); }
+    .bpin.locked { background: linear-gradient(135deg,#7f1d1d,#dc2626); }
+    .pin-badge { display:inline-block; font-size:0.7rem; padding:2px 7px; border-radius:10px; font-weight:700; margin-left:4px; }
+    .pin-badge.on  { background:rgba(220,38,38,0.18); color:#fca5a5; border:1px solid rgba(220,38,38,0.4); }
+    .pin-badge.off { background:rgba(16,185,129,0.12); color:#6ee7b7; border:1px solid rgba(16,185,129,0.3); }
+    /* PIN modal inputs */
+    .pin-inputs { display:flex; gap:10px; justify-content:center; margin:16px 0 4px; }
+    .pin-inputs input { width:52px; height:58px; text-align:center; font-size:1.6rem; font-weight:700; border:2px solid rgba(109,40,217,0.4); border-radius:10px; background:rgba(255,255,255,0.05); color:#fff; outline:none; transition:.2s; }
+    .pin-inputs input:focus { border-color:#a855f7; background:rgba(168,85,247,0.1); }
     @keyframes rot{to{transform:rotate(360deg);}}
 
     /* toast */
@@ -336,6 +347,7 @@
               <th>Usuário</th>
               <th>Nome</th>
               <th>Perfil</th>
+              <th style="text-align:center;">🔐 Redefinição</th>
               <th>Ações</th>
             </tr>
           </thead>
@@ -382,6 +394,32 @@
     </div>
   </div>
 
+  <!-- modal: definir/remover PIN de redefinição de senha -->
+  <div class="ov" id="ov-pin">
+    <div class="modal">
+      <div class="mtit" id="pin-modal-title">🔐 Bloqueio — Redefinição de Senha</div>
+      <p style="text-align:center;color:var(--tm);font-size:0.85rem;margin-bottom:4px;">
+        Usuário: <strong style="color:var(--tw)" id="pin-user-label">—</strong>
+      </p>
+      <p style="text-align:center;color:#a78bfa;font-size:0.78rem;margin-bottom:2px;" id="pin-sub">
+        Digite um PIN de 4 dígitos para bloquear o acesso à redefinição de senha.
+      </p>
+      <!-- Inputs de 4 dígitos -->
+      <div class="pin-inputs" id="pin-inputs-wrap">
+        <input type="number" min="0" max="9" maxlength="1" id="pin-d1" oninput="pinNext(this,'pin-d2')" onkeydown="pinKey(event,this,'')"/>
+        <input type="number" min="0" max="9" maxlength="1" id="pin-d2" oninput="pinNext(this,'pin-d3')" onkeydown="pinKey(event,this,'pin-d1')"/>
+        <input type="number" min="0" max="9" maxlength="1" id="pin-d3" oninput="pinNext(this,'pin-d4')" onkeydown="pinKey(event,this,'pin-d2')"/>
+        <input type="number" min="0" max="9" maxlength="1" id="pin-d4" oninput="pinNext(this,'')"        onkeydown="pinKey(event,this,'pin-d3')"/>
+      </div>
+      <div class="merr" id="pin-err"></div>
+      <div class="mbts" style="margin-top:16px;">
+        <button class="bcan" onclick="closeOv('ov-pin')">Cancelar</button>
+        <button class="bok" id="pin-rm-btn" onclick="confirmPinRemove()" style="background:linear-gradient(135deg,#7f1d1d,#dc2626);display:none;">🗑️ Remover Bloqueio</button>
+        <button class="bok" id="pin-set-btn" onclick="confirmPinSet()">🔐 Salvar PIN</button>
+      </div>
+    </div>
+  </div>
+
   <!-- toast -->
   <div id="toast"></div>
 
@@ -418,9 +456,15 @@
           <td><strong>${x(u.username)}</strong></td>
           <td>${x(u.name || '—')}</td>
           <td><span class="bdg ${u.role === 'admin' ? 'badm' : 'bcli'}">${u.role === 'admin' ? '⭐ Admin' : '👤 Cliente'}</span></td>
+          <td style="text-align:center;">
+            ${u.reset_pin_set
+              ? `<span class="pin-badge on">🔒 Bloqueado</span>`
+              : `<span class="pin-badge off">🔓 Livre</span>`}
+          </td>
           <td>
             <div class="abts">
-              <button class="bsm bpw" onclick="openPw('${x(u.username)}')">🔒 Alterar Senha</button>
+              <button class="bsm bpw" onclick="openPw('${x(u.username)}')">🔑 Alterar Senha</button>
+              <button class="bsm bpin ${u.reset_pin_set ? 'locked' : ''}" onclick="openPin('${x(u.username)}', ${u.reset_pin_set})">${u.reset_pin_set ? '🔒 PIN Ativo' : '🔓 Definir PIN'}</button>
               <button class="bsm bdel" onclick="openDel('${x(u.username)}')">🗑️ Remover</button>
             </div>
           </td>
@@ -565,6 +609,120 @@
         if (e.target === this) closeOv(this.id);
       });
     });
+
+    /* ── PIN modal ── */
+    let _pinUser = null, _pinHasPin = false;
+
+    function openPin(u, hasPin) {
+      _pinUser   = u;
+      _pinHasPin = hasPin;
+      document.getElementById('pin-user-label').textContent = u;
+      ['pin-d1','pin-d2','pin-d3','pin-d4'].forEach(id => {
+        const el = document.getElementById(id);
+        el.value = '';
+        el.style.display = '';
+      });
+      document.getElementById('pin-inputs-wrap').style.display = '';
+      document.getElementById('pin-err').className = 'merr';
+      document.getElementById('pin-err').textContent = '';
+
+      if (hasPin) {
+        document.getElementById('pin-modal-title').textContent = '🔒 PIN Ativo — Alterar ou Remover';
+        document.getElementById('pin-sub').textContent = 'Digite um novo PIN de 4 dígitos para substituir, ou remova o bloqueio.';
+        document.getElementById('pin-rm-btn').style.display = '';
+        document.getElementById('pin-set-btn').textContent = '🔐 Alterar PIN';
+      } else {
+        document.getElementById('pin-modal-title').textContent = '🔓 Definir PIN de Bloqueio';
+        document.getElementById('pin-sub').textContent = 'Digite um PIN de 4 dígitos. O cliente precisará informá-lo para acessar o link de redefinição de senha.';
+        document.getElementById('pin-rm-btn').style.display = 'none';
+        document.getElementById('pin-set-btn').textContent = '🔐 Salvar PIN';
+      }
+      document.getElementById('ov-pin').classList.add('open');
+      setTimeout(() => document.getElementById('pin-d1').focus(), 100);
+    }
+
+    function pinNext(el, nextId) {
+      const v = el.value.toString().replace(/\D/g,'');
+      el.value = v.slice(-1);
+      if (v && nextId) document.getElementById(nextId).focus();
+    }
+
+    function pinKey(e, el, prevId) {
+      if (e.key === 'Backspace' && !el.value && prevId) {
+        document.getElementById(prevId).focus();
+      }
+    }
+
+    function getPinValue() {
+      return ['pin-d1','pin-d2','pin-d3','pin-d4']
+        .map(id => document.getElementById(id).value.replace(/\D/g,''))
+        .join('');
+    }
+
+    async function confirmPinSet() {
+      const pin = getPinValue();
+      const btn = document.getElementById('pin-set-btn');
+      const err = document.getElementById('pin-err');
+      err.className = 'merr';
+      if (pin.length !== 4) {
+        err.textContent = 'Preencha os 4 dígitos do PIN.';
+        err.className = 'merr show';
+        return;
+      }
+      btn.disabled = true; btn.innerHTML = '<span class="sp"></span>';
+      try {
+        const r = await fetch(`/api/admin/users/${encodeURIComponent(_pinUser)}/reset-pin`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set', pin })
+        });
+        const d = await r.json();
+        if (d.success) {
+          closeOv('ov-pin');
+          toast('🔐 PIN de bloqueio definido!', '#d97706');
+          loadUsers();
+        } else {
+          err.textContent = d.message || 'Erro ao salvar PIN.';
+          err.className = 'merr show';
+        }
+      } catch {
+        err.textContent = 'Erro de conexão.';
+        err.className = 'merr show';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = _pinHasPin ? '🔐 Alterar PIN' : '🔐 Salvar PIN';
+      }
+    }
+
+    async function confirmPinRemove() {
+      const btn = document.getElementById('pin-rm-btn');
+      const err = document.getElementById('pin-err');
+      err.className = 'merr';
+      btn.disabled = true; btn.innerHTML = '<span class="sp"></span>';
+      try {
+        const r = await fetch(`/api/admin/users/${encodeURIComponent(_pinUser)}/reset-pin`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'remove' })
+        });
+        const d = await r.json();
+        if (d.success) {
+          closeOv('ov-pin');
+          toast('🔓 Bloqueio removido!', '#10b981');
+          loadUsers();
+        } else {
+          err.textContent = d.message || 'Erro ao remover.';
+          err.className = 'merr show';
+        }
+      } catch {
+        err.textContent = 'Erro de conexão.';
+        err.className = 'merr show';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '🗑️ Remover Bloqueio';
+      }
+    }
+
   </script>
 </body>
 </html>

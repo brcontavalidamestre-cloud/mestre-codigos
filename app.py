@@ -912,9 +912,10 @@ def api_list_users():
         if uname == current_admin:
             continue  # nao lista a si mesmo
         result.append({
-            "username": uname,
-            "name":     udata.get("name", uname),
-            "role":     udata.get("role", "client")
+            "username":      uname,
+            "name":          udata.get("name", uname),
+            "role":          udata.get("role", "client"),
+            "reset_pin_set": bool(udata.get("reset_pin"))
         })
     return jsonify({"success": True, "users": result})
 
@@ -987,6 +988,77 @@ def api_change_password(username):
     return jsonify({"success": True, "message": "Senha alterada com sucesso."})
 
 # ─── ROTA PRINCIPAL DA APP ────────────────────────────────────────────────────
+
+
+# ─── BLOQUEIO DE REDEFINIÇÃO DE SENHA POR PIN ─────────────────────────────────
+
+@app.route("/api/admin/users/<username>/reset-pin", methods=["PUT"])
+@admin_required
+def api_set_reset_pin(username):
+    """Define ou remove o PIN de 4 dígitos que protege acesso à redefinição de senha."""
+    username = username.strip().lower()
+    current_admin = session.get("username")
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"success": False, "message": "Dados invalidos."}), 400
+
+    action = data.get("action", "set")   # "set" ou "remove"
+    users  = load_users()
+
+    if username not in users:
+        return jsonify({"success": False, "message": "Usuario nao encontrado."}), 404
+    if users[username].get("created_by") != current_admin and username != current_admin:
+        return jsonify({"success": False, "message": "Sem permissao."}), 403
+
+    if action == "remove":
+        users[username].pop("reset_pin", None)
+        save_users(users)
+        return jsonify({"success": True, "message": "Bloqueio removido."})
+
+    pin = str(data.get("pin", "")).strip()
+    if not re.match(r"^\d{4}$", pin):
+        return jsonify({"success": False, "message": "PIN deve ter exatamente 4 digitos numericos."}), 400
+
+    users[username]["reset_pin"] = generate_password_hash(pin)
+    save_users(users)
+    return jsonify({"success": True, "message": "PIN de bloqueio definido com sucesso."})
+
+
+@app.route("/api/verify-reset-pin", methods=["POST"])
+@login_required
+def api_verify_reset_pin():
+    """Cliente verifica o PIN antes de receber o link de redefinição de senha."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"success": False, "message": "Dados invalidos."}), 400
+
+    pin = str(data.get("pin", "")).strip()
+    username = session.get("username")
+    users = load_users()
+    user  = users.get(username, {})
+
+    stored_pin = user.get("reset_pin")
+    if not stored_pin:
+        # Sem PIN configurado → acesso liberado
+        return jsonify({"success": True, "unlocked": True})
+
+    if not re.match(r"^\d{4}$", pin):
+        return jsonify({"success": False, "message": "PIN invalido."}), 400
+
+    if check_password_hash(stored_pin, pin):
+        return jsonify({"success": True, "unlocked": True})
+    else:
+        return jsonify({"success": False, "message": "PIN incorreto."}), 403
+
+
+@app.route("/api/check-reset-pin", methods=["GET"])
+@login_required
+def api_check_reset_pin():
+    """Informa se o usuario logado precisa de PIN para redefinicao de senha."""
+    username = session.get("username")
+    users    = load_users()
+    user     = users.get(username, {})
+    return jsonify({"locked": bool(user.get("reset_pin"))})
 
 @app.route("/api/get-code", methods=["POST"])
 @login_required

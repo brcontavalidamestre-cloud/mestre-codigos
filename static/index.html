@@ -450,6 +450,20 @@
     .selected-platform-badge.globo-all    { border-color: rgba(234,88,12,0.6); color: #fdba74; background: rgba(234,88,12,0.12); }
 
     .form-group { margin-bottom: 16px; }
+    /* PIN bloqueio no painel cliente */
+    .pin-lock-box { display:none; background:rgba(220,38,38,0.08); border:1px solid rgba(220,38,38,0.35); border-radius:14px; padding:18px 20px; margin-bottom:16px; text-align:center; }
+    .pin-lock-box.show { display:block; }
+    .pin-lock-title { color:#fca5a5; font-weight:700; font-size:0.95rem; margin-bottom:6px; }
+    .pin-lock-sub   { color:#f87171; font-size:0.78rem; margin-bottom:14px; opacity:.8; }
+    .pin-lock-inputs { display:flex; gap:10px; justify-content:center; margin-bottom:12px; }
+    .pin-lock-inputs input { width:50px; height:56px; text-align:center; font-size:1.5rem; font-weight:700; border:2px solid rgba(220,38,38,0.4); border-radius:10px; background:rgba(255,255,255,0.04); color:#fff; outline:none; transition:.2s; -moz-appearance:textfield; }
+    .pin-lock-inputs input::-webkit-outer-spin-button,
+    .pin-lock-inputs input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+    .pin-lock-inputs input:focus { border-color:#ef4444; background:rgba(220,38,38,0.1); }
+    .pin-lock-inputs input.ok  { border-color:#10b981; }
+    .pin-lock-err { color:#fca5a5; font-size:0.78rem; min-height:18px; margin-bottom:4px; }
+    .pin-unlock-btn { background:linear-gradient(135deg,#7f1d1d,#dc2626); color:#fff; border:none; border-radius:10px; padding:10px 24px; font-weight:700; font-size:0.88rem; cursor:pointer; transition:.2s; }
+    .pin-unlock-btn:hover { opacity:.85; transform:scale(1.03); }
     .form-label {
       display: block;
       font-size: 0.82rem;
@@ -767,6 +781,20 @@
         🎬 Netflix — Todos os Códigos
       </div>
 
+      <!-- PIN bloqueio — só aparece quando plataforma exige PIN -->
+      <div class="pin-lock-box" id="pin-lock-box">
+        <div class="pin-lock-title">🔐 Acesso Restrito — Redefinição de Senha</div>
+        <div class="pin-lock-sub">Informe o PIN de 4 dígitos fornecido pelo administrador para continuar.</div>
+        <div class="pin-lock-inputs">
+          <input type="number" min="0" max="9" id="cl-pin-d1" oninput="clPinNext(this,'cl-pin-d2')" onkeydown="clPinKey(event,this,'')"/>
+          <input type="number" min="0" max="9" id="cl-pin-d2" oninput="clPinNext(this,'cl-pin-d3')" onkeydown="clPinKey(event,this,'cl-pin-d1')"/>
+          <input type="number" min="0" max="9" id="cl-pin-d3" oninput="clPinNext(this,'cl-pin-d4')" onkeydown="clPinKey(event,this,'cl-pin-d2')"/>
+          <input type="number" min="0" max="9" id="cl-pin-d4" oninput="clPinNext(this,'')"           onkeydown="clPinKey(event,this,'cl-pin-d3')"/>
+        </div>
+        <div class="pin-lock-err" id="cl-pin-err"></div>
+        <button class="pin-unlock-btn" onclick="unlockWithPin()">🔓 Verificar PIN</button>
+      </div>
+
       <div class="form-group">
         <label class="form-label" for="email-input">✉ Seu Email da Conta</label>
         <input
@@ -870,9 +898,105 @@
       'senha-globo':       '🔐 Senha Globo — Recuperar senha'
     };
 
-    function selectPlatform(p) {
+    // ── PIN DE BLOQUEIO — REDEFINIÇÃO DE SENHA ───────────────────────────────
+    let _pinUnlocked = false;  // true quando cliente digitou PIN correto
+
+    async function checkPinRequired(platform) {
+      // Só verifica PIN quando a plataforma é netflix-all (que inclui password-reset)
+      const needsCheck = (platform === 'netflix-all' || platform === 'password-reset');
+      if (!needsCheck) {
+        _pinUnlocked = false;
+        document.getElementById('pin-lock-box').classList.remove('show');
+        document.getElementById('email-input').disabled = false;
+        document.getElementById('btn-buscar').disabled = false;
+        return;
+      }
+      try {
+        const r = await fetch('/api/check-reset-pin');
+        const d = await r.json();
+        if (d.locked && !_pinUnlocked) {
+          // Exibe o bloco de PIN e bloqueia o formulário
+          document.getElementById('pin-lock-box').classList.add('show');
+          document.getElementById('email-input').disabled = true;
+          document.getElementById('btn-buscar').disabled = true;
+          ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4'].forEach(id => {
+            document.getElementById(id).value = '';
+          });
+          document.getElementById('cl-pin-err').textContent = '';
+          setTimeout(() => document.getElementById('cl-pin-d1').focus(), 150);
+        } else {
+          document.getElementById('pin-lock-box').classList.remove('show');
+          document.getElementById('email-input').disabled = false;
+          document.getElementById('btn-buscar').disabled = false;
+        }
+      } catch { /* sem bloqueio se erro de rede */ }
+    }
+
+    function clPinNext(el, nextId) {
+      const v = el.value.toString().replace(/\D/g,'');
+      el.value = v.slice(-1);
+      if (v && nextId) document.getElementById(nextId).focus();
+    }
+
+    function clPinKey(e, el, prevId) {
+      if (e.key === 'Backspace' && !el.value && prevId) {
+        document.getElementById(prevId).focus();
+      }
+    }
+
+    function getClPin() {
+      return ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4']
+        .map(id => document.getElementById(id).value.replace(/\D/g,''))
+        .join('');
+    }
+
+    async function unlockWithPin() {
+      const pin = getClPin();
+      const errEl = document.getElementById('cl-pin-err');
+      errEl.textContent = '';
+      if (pin.length !== 4) {
+        errEl.textContent = 'Digite os 4 dígitos do PIN.';
+        return;
+      }
+      const btn = document.querySelector('.pin-unlock-btn');
+      btn.disabled = true; btn.textContent = 'Verificando...';
+      try {
+        const r = await fetch('/api/verify-reset-pin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ pin })
+        });
+        const d = await r.json();
+        if (d.success && d.unlocked) {
+          _pinUnlocked = true;
+          document.getElementById('pin-lock-box').classList.remove('show');
+          document.getElementById('email-input').disabled = false;
+          document.getElementById('btn-buscar').disabled = false;
+          document.getElementById('email-input').focus();
+          // Marca os campos com borda verde por 1s
+          ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4'].forEach(id =>
+            document.getElementById(id).classList.add('ok'));
+        } else {
+          errEl.textContent = d.message || 'PIN incorreto.';
+          ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4'].forEach(id => {
+            const el = document.getElementById(id);
+            el.value = '';
+            el.classList.remove('ok');
+          });
+          document.getElementById('cl-pin-d1').focus();
+        }
+      } catch {
+        errEl.textContent = 'Erro de conexão. Tente novamente.';
+      } finally {
+        btn.disabled = false; btn.textContent = '🔓 Verificar PIN';
+      }
+    }
+    // ── FIM PIN ───────────────────────────────────────────────────────────────
+
+        function selectPlatform(p) {
       // 1. Atualiza estado
       currentPlatform = p;
+      _pinUnlocked = false;  // reseta PIN ao trocar de plataforma
 
       // 2. Atualiza badge IMEDIATAMENTE (sem depender de switchTab)
       const badge = document.getElementById('selected-badge');
@@ -889,7 +1013,10 @@
       // 4. Esconde resultado anterior
       hideResult();
 
-      // 5. Rola suavemente até o formulário
+      // 5. Verifica se esta plataforma exige PIN
+      checkPinRequired(p);
+
+      // 6. Rola suavemente até o formulário
       const formSection = document.querySelector('.form-section');
       if (formSection) {
         formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
