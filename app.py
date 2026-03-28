@@ -239,6 +239,13 @@ PLATFORM_CONFIG = {
         "type": "code"
     },
     # ── GLOBO SENHA: recuperação de senha ──────────────────────────────────────
+    # ── STREAMING ALL: Max + Prime Video ────────────────────────────────────
+    "streaming-all": {
+        "from_keyword": "amazon.com",
+        "subject_keywords": ["max", "prime", "amazon"],
+        "name": "Max & Prime Video",
+        "type": "code"
+    },
     # ── GLOBO ALL: busca nas 3 sub-plataformas Globo ────────────────────────
     "globo-all": {
         "from_keyword": "globo.com",
@@ -1001,6 +1008,20 @@ def get_code():
             except Exception:
                 continue
         return jsonify({"success": False, "message": "Nenhum email Globo encontrado para este endereço."})
+
+    # ── Busca unificada Streaming: Max + Prime Video em sequência ──
+    if platform == "streaming-all":
+        STREAMING_SUBS = ["max", "prime-video"]
+        for sub in STREAMING_SUBS:
+            try:
+                code, link, error = search_code(user_email, sub)
+                if code:
+                    return jsonify({"success": True, "code": code, "platform": sub, "type": "code"})
+                elif link:
+                    return jsonify({"success": True, "link": link, "platform": sub, "type": "link"})
+            except Exception:
+                continue
+        return jsonify({"success": False, "message": "Nenhum email Max ou Prime Video encontrado para este endereço."})
 
     code, link, error = search_code(user_email, platform)
     if code:

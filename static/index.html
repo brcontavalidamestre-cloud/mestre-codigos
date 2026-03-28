@@ -251,6 +251,17 @@
         border-color: rgba(220,38,38,0.8) !important;
         box-shadow: 0 0 20px rgba(220,38,38,0.3) !important;
     }
+    /* Card unificado Streaming (Max + Prime) */
+    .streaming-all-card {
+        width: 100% !important;
+        flex: 1 !important;
+        border: 1px solid rgba(124,58,237,0.4) !important;
+        background: linear-gradient(135deg, rgba(109,40,217,0.30), rgba(76,29,149,0.15)) !important;
+    }
+    .streaming-all-card:hover {
+        border-color: rgba(124,58,237,0.8) !important;
+        box-shadow: 0 0 20px rgba(124,58,237,0.3) !important;
+    }
     /* Disney group – fundo azul escuro sutil */
     .platform-group:has(.disney-group) .platform-group-cards {
         background: rgba(0,20,60,0.18);
@@ -699,15 +710,10 @@
         <div class="platform-group">
           <div class="platform-group-label outros-group">📦 Outras Plataformas</div>
           <div class="platform-group-cards">
-            <div class="platform-card" onclick="selectPlatform('max')" id="card-max">
+            <div class="platform-card streaming-all-card" onclick="selectPlatform('streaming-all')" id="card-streaming-all">
               <span class="platform-logo">🎞️</span>
-              <div class="platform-name">Max</div>
-              <div class="platform-desc">Código único</div>
-            </div>
-            <div class="platform-card" onclick="selectPlatform('prime-video')" id="card-prime-video">
-              <span class="platform-logo">📺</span>
-              <div class="platform-name">Prime Video</div>
-              <div class="platform-desc">Tentativa de login</div>
+              <div class="platform-name">Max & Prime Video</div>
+              <div class="platform-desc">Max · Prime Video</div>
             </div>
           </div>
         </div>
@@ -781,11 +787,8 @@
         <div class="tab-group">
           <div class="tab-group-label tg-outros">📦 Outras Plataformas</div>
           <div class="tab-group-buttons">
-            <button class="tab-btn max" id="tab-max" onclick="switchTab('max')">
-              🎞️ Código Max
-            </button>
-            <button class="tab-btn prime-video" id="tab-prime-video" onclick="switchTab('prime-video')">
-              📺 Prime Video
+            <button class="tab-btn max" id="tab-streaming-all" onclick="switchTab('streaming-all')">
+              🎞️ Max & Prime Video
             </button>
           </div>
         </div>
@@ -902,6 +905,7 @@
       'max':               '🎞️ Max — Código único',
       'prime-video':       '📺 Prime Video — Sign-in attempt',
       'globo-all':         '📡 Globo — Todos os Códigos',
+      'streaming-all':     '🎞️ Max & Prime Video — Código',
       'bug-globo':         '🛡️ Bug Globo — Etapa de segurança',
       'codigo-globo':      '🔢 Código Globo — Conta Globo',
       'senha-globo':       '🔐 Senha Globo — Recuperar senha'
@@ -993,6 +997,7 @@
         'netflix-temp': 'Acesso Temporário Netflix',
         'max': 'Max',
         'prime-video': 'Prime Video',
+        'streaming-all': 'Max & Prime Video',
         'globo-all': 'Todos os Códigos Globo',
         'bug-globo': 'Bug Globo',
         'codigo-globo': 'Código Globo',
