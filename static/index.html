@@ -229,6 +229,17 @@
         border-color: rgba(239,68,68,0.8) !important;
         box-shadow: 0 0 20px rgba(239,68,68,0.3) !important;
     }
+    /* Card unificado Disney+ – destaque especial */
+    .disney-all-card {
+        width: 100% !important;
+        flex: 1 !important;
+        border: 1px solid rgba(59,130,246,0.4) !important;
+        background: linear-gradient(135deg, rgba(29,78,216,0.35), rgba(30,58,95,0.20)) !important;
+    }
+    .disney-all-card:hover {
+        border-color: rgba(59,130,246,0.8) !important;
+        box-shadow: 0 0 20px rgba(59,130,246,0.3) !important;
+    }
     /* Disney group – fundo azul escuro sutil */
     .platform-group:has(.disney-group) .platform-group-cards {
         background: rgba(0,20,60,0.18);
@@ -665,15 +676,10 @@
         <div class="platform-group">
           <div class="platform-group-label disney-group">✨ Disney+</div>
           <div class="platform-group-cards">
-            <div class="platform-card" onclick="selectPlatform('disney')" id="card-disney">
+            <div class="platform-card disney-all-card" onclick="selectPlatform('disney-all')" id="card-disney-all">
               <span class="platform-logo">✨</span>
-              <div class="platform-name">Disney+</div>
-              <div class="platform-desc">Código de acesso</div>
-            </div>
-            <div class="platform-card" onclick="selectPlatform('disney-residence')" id="card-disney-residence">
-              <span class="platform-logo">🏡</span>
-              <div class="platform-name">Residência Disney+</div>
-              <div class="platform-desc">Link de atualização Disney+</div>
+              <div class="platform-name">Todos os Códigos Disney+</div>
+              <div class="platform-desc">Código de acesso · Residência Disney+</div>
             </div>
           </div>
         </div>
@@ -764,11 +770,8 @@
         <div class="tab-group">
           <div class="tab-group-label tg-disney">✨ Disney+</div>
           <div class="tab-group-buttons">
-            <button class="tab-btn disney" id="tab-disney" onclick="switchTab('disney')">
-              ✨ Código Disney+
-            </button>
-            <button class="tab-btn disney-res" id="tab-disney-residence" onclick="switchTab('disney-residence')">
-              🏡 Residência Disney+
+            <button class="tab-btn disney" id="tab-disney-all" onclick="switchTab('disney-all')">
+              ✨ Todos os Códigos Disney+
             </button>
           </div>
         </div>
@@ -894,6 +897,7 @@
 
     const platformLabels = {
       netflix: '🎬 Netflix — Código de acesso',
+      'disney-all':    '✨ Disney+ — Todos os Códigos',
       disney:  '✨ Disney+ — Código de acesso',
       'netflix-residence': '🏠 Residência Netflix — Link de atualização',
       'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição',
@@ -984,6 +988,7 @@
       const box = document.getElementById('result-box');
       const names = {
         netflix: 'Netflix',
+        'disney-all': 'Todos os Códigos Disney+',
         disney: 'Disney+',
         'netflix-residence': 'Residência Netflix',
         'password-reset': 'Redefinição de Senha Netflix',

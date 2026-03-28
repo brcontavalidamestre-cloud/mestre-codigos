@@ -348,6 +348,13 @@ PLATFORM_CONFIG = {
         "type": "link"
     },
     # ── DISNEY+ RESIDÊNCIA: link de atualização (PT/EN/ES) ────────────────────
+    # ── DISNEY ALL: busca em ambas as plataformas Disney+ ────────────────────
+    "disney-all": {
+        "from_keyword": "disneyplus.com",
+        "subject_keywords": ["disney"],
+        "name": "Todos os Códigos Disney+",
+        "type": "code"
+    },
     "disney-residence": {
         "from_keyword": "disneyplus.com",
         "subject_keywords": [
@@ -959,6 +966,20 @@ def get_code():
             except Exception:
                 continue
         return jsonify({"success": False, "message": "Nenhum email Netflix encontrado para este endereço."})
+
+    # ── Busca unificada Disney+: tenta as 2 sub-plataformas em sequência ──
+    if platform == "disney-all":
+        DISNEY_SUBS = ["disney", "disney-residence"]
+        for sub in DISNEY_SUBS:
+            try:
+                code, link, error = search_code(user_email, sub)
+                if code:
+                    return jsonify({"success": True, "code": code, "platform": sub, "type": "code"})
+                elif link:
+                    return jsonify({"success": True, "link": link, "platform": sub, "type": "link"})
+            except Exception:
+                continue
+        return jsonify({"success": False, "message": "Nenhum email Disney+ encontrado para este endereço."})
 
     code, link, error = search_code(user_email, platform)
     if code:
