@@ -910,7 +910,6 @@
     };
 
     // ── PIN DE BLOQUEIO — aparece APÓS busca, só se resultado for redefinição ──
-    let _pendingData = null;  // guarda o resultado enquanto aguarda PIN
 
     function clPinNext(el, nextId) {
       const v = el.value.toString().replace(/\D/g,'');
@@ -937,8 +936,7 @@
         .join('');
     }
 
-    async function showPinOverlay(data) {
-      _pendingData = data;
+    async function showPinOverlay() {
       ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4'].forEach(id => {
         const el = document.getElementById(id);
         el.value = '';
@@ -951,7 +949,6 @@
 
     function closePinOverlay() {
       document.getElementById('pin-overlay').classList.remove('show');
-      _pendingData = null;
     }
 
     async function unlockWithPin() {
@@ -971,16 +968,19 @@
           body: JSON.stringify({ pin })
         });
         const d = await r.json();
-        if (d.success && d.unlocked) {
-          // PIN correto — mostrar resultado
+        if (d.success && d.unlocked && d.link) {
           ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4'].forEach(id =>
             document.getElementById(id).classList.add('pin-ok'));
+          const unlockedData = {
+            link: d.link,
+            platform: d.platform || 'password-reset',
+            type: d.type || 'link'
+          };
           setTimeout(() => {
             closePinOverlay();
-            if (_pendingData) showSuccess(_pendingData);
+            showSuccess(unlockedData);
           }, 400);
         } else {
-          // PIN errado — shake + limpar
           errEl.textContent = d.message || 'PIN incorreto. Tente novamente.';
           const inputs = ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4'];
           inputs.forEach(id => {
@@ -1062,22 +1062,13 @@
         });
         const data = await res.json();
 
-        if (data.success && (data.code || data.link)) {
-          // Se for link de redefinição de senha, verifica PIN antes de mostrar
-          if (data.platform === 'password-reset' && data.type === 'link') {
-            try {
-              const pr = await fetch('/api/check-reset-pin');
-              const pd = await pr.json();
-              if (pd.locked) {
-                showPinOverlay(data);  // guarda o resultado e exibe overlay de PIN
-              } else {
-                showSuccess(data);    // sem PIN configurado, mostra direto
-              }
-            } catch {
-              showSuccess(data);      // se falhar a verificação, mostra direto
-            }
-          } else {
+        if (data.success) {
+          if (data.pin_required && data.platform === 'password-reset') {
+            showPinOverlay();
+          } else if (data.code || data.link) {
             showSuccess(data);
+          } else {
+            showError(data.message || 'Código não encontrado.');
           }
         } else {
           showError(data.message || 'Código não encontrado.');

@@ -8,6 +8,7 @@ import re
 import os
 import json
 import unicodedata
+import time
 from datetime import timedelta
 
 app = Flask(__name__, static_folder='static')
@@ -22,6 +23,36 @@ app.permanent_session_lifetime = timedelta(hours=8)
 # Fallback para /tmp se /data não existir ainda
 _data_dir = "/data" if os.path.isdir("/data") else "/tmp"
 USERS_FILE = os.environ.get("USERS_FILE", os.path.join(_data_dir, "users.json"))
+
+# Link pendente de redefinição protegido por PIN (armazenado no servidor, não no cliente)
+_pending_reset_links = {}
+_PENDING_RESET_TTL = 300  # 5 minutos
+
+def _set_pending_reset_link(username, link):
+    _pending_reset_links[username] = {
+        "link": link,
+        "expires_at": time.time() + _PENDING_RESET_TTL
+    }
+
+def _pop_pending_reset_link(username):
+    item = _pending_reset_links.pop(username, None)
+    if not item:
+        return None
+    if item.get("expires_at", 0) < time.time():
+        return None
+    return item.get("link")
+
+def _peek_pending_reset_link(username):
+    item = _pending_reset_links.get(username)
+    if not item:
+        return None
+    if item.get("expires_at", 0) < time.time():
+        _pending_reset_links.pop(username, None)
+        return None
+    return item.get("link")
+
+def _clear_pending_reset_link(username):
+    _pending_reset_links.pop(username, None)
 
 def load_users():
     if os.path.exists(USERS_FILE):
@@ -1101,18 +1132,41 @@ def api_verify_reset_pin():
     users = load_users()
     user  = users.get(username, {})
 
+    pending_link = _peek_pending_reset_link(username)
+    if not pending_link:
+        return jsonify({"success": False, "message": "Nenhum link protegido pendente. Faça a busca novamente."}), 409
+
     stored_pin = user.get("reset_pin")
     if not stored_pin:
-        # Sem PIN configurado → acesso liberado
-        return jsonify({"success": True, "unlocked": True})
+        # Sem PIN configurado no momento da verificação: libera o link pendente do servidor.
+        released_link = _pop_pending_reset_link(username)
+        if not released_link:
+            return jsonify({"success": False, "message": "Link expirado. Faça a busca novamente."}), 410
+        return jsonify({
+            "success": True,
+            "unlocked": True,
+            "link": released_link,
+            "platform": "password-reset",
+            "type": "link"
+        })
 
     if not re.match(r"^\d{4}$", pin):
         return jsonify({"success": False, "message": "PIN invalido."}), 400
 
-    if check_password_hash(stored_pin, pin):
-        return jsonify({"success": True, "unlocked": True})
-    else:
+    if not check_password_hash(stored_pin, pin):
         return jsonify({"success": False, "message": "PIN incorreto."}), 403
+
+    released_link = _pop_pending_reset_link(username)
+    if not released_link:
+        return jsonify({"success": False, "message": "Link expirado. Faça a busca novamente."}), 410
+
+    return jsonify({
+        "success": True,
+        "unlocked": True,
+        "link": released_link,
+        "platform": "password-reset",
+        "type": "link"
+    })
 
 
 @app.route("/api/check-reset-pin", methods=["GET"])
@@ -1122,7 +1176,10 @@ def api_check_reset_pin():
     username = session.get("username")
     users    = load_users()
     user     = users.get(username, {})
-    return jsonify({"locked": bool(user.get("reset_pin"))})
+    return jsonify({
+        "locked": bool(user.get("reset_pin")),
+        "pending": bool(_peek_pending_reset_link(username))
+    })
 
 @app.route("/api/get-code", methods=["POST"])
 @login_required
@@ -1151,20 +1208,47 @@ def get_code():
         "streaming-all": (["max", "prime-video"],
                           "Nenhum email Max ou Prime Video encontrado para este endereço."),
     }
+    username = session.get("username")
+    _clear_pending_reset_link(username)
+
     if platform in UNIFIED_MAP:
         subs, err_msg = UNIFIED_MAP[platform]
         code, link, matched_plat, error = search_code_unified(user_email, subs)
         if code:
             return jsonify({"success": True, "code": code, "platform": matched_plat, "type": "code"})
         elif link:
+            if matched_plat == "password-reset":
+                users = load_users()
+                user = users.get(username, {})
+                if user.get("reset_pin"):
+                    _set_pending_reset_link(username, link)
+                    return jsonify({
+                        "success": True,
+                        "platform": "password-reset",
+                        "type": "pin_required",
+                        "pin_required": True,
+                        "message": "PIN necessario para liberar o link de redefinicao."
+                    })
             return jsonify({"success": True, "link": link, "platform": matched_plat, "type": "link"})
         else:
-            return jsonify({"success": False, "message": err_msg})
+            return jsonify({"success": False, "message": error or err_msg})
 
     code, link, error = search_code(user_email, platform)
     if code:
         return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})
     elif link:
+        if platform == "password-reset":
+            users = load_users()
+            user = users.get(username, {})
+            if user.get("reset_pin"):
+                _set_pending_reset_link(username, link)
+                return jsonify({
+                    "success": True,
+                    "platform": "password-reset",
+                    "type": "pin_required",
+                    "pin_required": True,
+                    "message": "PIN necessario para liberar o link de redefinicao."
+                })
         return jsonify({"success": True, "link": link, "platform": platform, "type": "link"})
     else:
         return jsonify({"success": False, "message": error or "Nao encontrado."})
