@@ -344,6 +344,12 @@ PLATFORM_CONFIG = {
             "atualizar sua resid",
             "atualizar resid",
             "atualizar",
+            "importante: como atualizar sua residencia netflix",
+            "importante: como atualizar sua residência netflix",
+            "como atualizar sua residencia netflix",
+            "como atualizar sua residência netflix",
+            "enc: importante: como atualizar sua residencia netflix",
+            "enc: importante: como atualizar sua residência netflix",
             # Inglês
             "update your Netflix",
             "Netflix Home",
@@ -770,7 +776,7 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                         st2, msgs2 = mail.search(None, "SUBJECT", prefix)
                     if st2 != "OK" or not msgs2[0]:
                         continue
-                    fwd_ids = msgs2[0].split()[-20:]  # últimos 20 encaminhados
+                    fwd_ids = msgs2[0].split()[-80:]  # últimos 80 encaminhados
                     if not fwd_ids:
                         continue
                     id_str2 = b",".join(fwd_ids)
@@ -959,30 +965,34 @@ def search_code_unified(user_email, platform_list):
                 mail.logout()
                 return found_result[0], found_result[1], found_result[2], None
 
-            # 5ª tentativa: busca direcionada por SUBJECT para password-reset
-            # Necessária porque emails de redefinição são raros e podem sair do top 50
-            # quando chegam muitos emails Netflix de outros tipos OU quando o top 50
-            # contém emails de outros clientes que não correspondem ao user_email digitado.
+            # 5ª tentativa: busca direcionada por SUBJECT para password-reset / netflix-residence
+            # Necessária porque emails raros ou encaminhados podem sair do top recente
+            # OU o top conter emails de outros clientes que não correspondem ao user_email digitado.
+            targeted_platforms = []
             if "password-reset" in plat_configs:
-                targeted_terms = ["redefini", "password", "reset", "restablec", "i-reset"]
+                targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset"]))
+            if "netflix-residence" in plat_configs:
+                targeted_platforms.append(("netflix-residence", ["residencia", "residência", "atualizar", "household", "hogar", "importante"]))
+
+            for target_plat, targeted_terms in targeted_platforms:
                 since_7d = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
                 targeted_matches = []
 
                 targeted_matches.extend(_targeted_subject_search(
-                    mail, "INBOX", sender, "password-reset", seen_ids,
+                    mail, "INBOX", sender, target_plat, seen_ids,
                     targeted_terms, since_date=since_7d
                 ))
 
                 if not targeted_matches:
                     targeted_matches.extend(_targeted_subject_search(
-                        mail, "INBOX", sender, "password-reset", seen_ids,
+                        mail, "INBOX", sender, target_plat, seen_ids,
                         targeted_terms, since_date=None
                     ))
 
                 if not targeted_matches:
                     for mb in spam_boxes:
                         targeted_matches.extend(_targeted_subject_search(
-                            mail, mb, sender, "password-reset", seen_ids,
+                            mail, mb, sender, target_plat, seen_ids,
                             targeted_terms, since_date=None
                         ))
                         if targeted_matches:
