@@ -947,39 +947,52 @@ def search_code_unified(user_email, platform_list):
                     if matched:
                         break
 
+            # matched já vem do mais recente para o mais antigo
+            found_result = None
+            for mb, plat_key, eid in matched:
+                code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
+                if code or link:
+                    found_result = (code, link, plat_key)
+                    break
+
+            if found_result:
+                mail.logout()
+                return found_result[0], found_result[1], found_result[2], None
+
             # 5ª tentativa: busca direcionada por SUBJECT para password-reset
             # Necessária porque emails de redefinição são raros e podem sair do top 50
-            # quando chegam muitos emails Netflix de outros tipos.
-            if not matched and "password-reset" in plat_configs:
+            # quando chegam muitos emails Netflix de outros tipos OU quando o top 50
+            # contém emails de outros clientes que não correspondem ao user_email digitado.
+            if "password-reset" in plat_configs:
                 targeted_terms = ["redefini", "password", "reset", "restablec", "i-reset"]
                 since_7d = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
+                targeted_matches = []
 
-                matched.extend(_targeted_subject_search(
+                targeted_matches.extend(_targeted_subject_search(
                     mail, "INBOX", sender, "password-reset", seen_ids,
                     targeted_terms, since_date=since_7d
                 ))
 
-                if not matched:
-                    matched.extend(_targeted_subject_search(
+                if not targeted_matches:
+                    targeted_matches.extend(_targeted_subject_search(
                         mail, "INBOX", sender, "password-reset", seen_ids,
                         targeted_terms, since_date=None
                     ))
 
-                if not matched:
+                if not targeted_matches:
                     for mb in spam_boxes:
-                        matched.extend(_targeted_subject_search(
+                        targeted_matches.extend(_targeted_subject_search(
                             mail, mb, sender, "password-reset", seen_ids,
                             targeted_terms, since_date=None
                         ))
-                        if matched:
+                        if targeted_matches:
                             break
 
-            # matched já vem do mais recente para o mais antigo
-            for mb, plat_key, eid in matched:
-                code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
-                if code or link:
-                    mail.logout()
-                    return code, link, plat_key, None
+                for mb, plat_key, eid in targeted_matches:
+                    code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
+                    if code or link:
+                        mail.logout()
+                        return code, link, plat_key, None
 
         mail.logout()
         return None, None, None, "Nenhum email encontrado para este endereco."
