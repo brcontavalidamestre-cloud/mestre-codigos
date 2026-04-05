@@ -831,6 +831,71 @@ def _fetch_and_extract(mail, mailbox, eid, plat_key, user_email):
         return None, None
 
 
+def _targeted_subject_search(mail, mailbox, from_kw, plat_key, seen_ids,
+                             subject_terms, since_date=None):
+    """
+    Busca direcionada por SUBJECT para plataformas raras/valiosas como password-reset.
+    Isso evita perder emails quando há muitos emails Netflix recentes de outros tipos.
+    Retorna (mailbox, plat_key, eid) do mais recente para o mais antigo.
+    """
+    matched = []
+    try:
+        sel_status, _ = mail.select(mailbox, readonly=True)
+        if sel_status != "OK":
+            return matched
+
+        collected = []
+        seen_local = set()
+        for term in subject_terms:
+            try:
+                criteria = ["FROM", from_kw, "SUBJECT", term]
+                if since_date:
+                    criteria += ["SINCE", since_date]
+                st, msgs = mail.search(None, *criteria)
+                if st != "OK" or not msgs[0]:
+                    continue
+                for eid in msgs[0].split():
+                    if eid not in seen_local:
+                        seen_local.add(eid)
+                        collected.append(eid)
+            except Exception:
+                continue
+
+        if not collected:
+            return matched
+
+        # Ordena por ID crescente e pega os últimos 120; depois reverte no final
+        collected = sorted(collected, key=lambda x: int(x))[-120:]
+        id_str = b",".join(collected)
+        st_b, data_b = mail.fetch(id_str, "(BODY[HEADER.FIELDS (SUBJECT)])")
+        if st_b != "OK":
+            return matched
+
+        cfg = PLATFORM_CONFIG[plat_key]
+        idx = 0
+        for item in data_b:
+            if isinstance(item, tuple):
+                if idx >= len(collected):
+                    break
+                eid = collected[idx]
+                hdr = email.message_from_bytes(item[1])
+                subj = decode_str(hdr.get("Subject", ""))
+                key = (mailbox, eid)
+                if key not in seen_ids and subject_matches(
+                    subj,
+                    cfg["subject_keywords"],
+                    cfg.get("negative_keywords")
+                ):
+                    matched.append((mailbox, plat_key, eid))
+                    seen_ids.add(key)
+                idx += 1
+    except Exception:
+        pass
+
+    matched.reverse()
+    return matched
+
+
 def search_code_unified(user_email, platform_list):
     """
     Busca múltiplas plataformas do mesmo remetente em UMA ÚNICA passagem IMAP.
@@ -882,7 +947,34 @@ def search_code_unified(user_email, platform_list):
                     if matched:
                         break
 
-            # matched já vem do mais recente para o mais antigo (reversed em _batch_search_mailbox)
+            # 5ª tentativa: busca direcionada por SUBJECT para password-reset
+            # Necessária porque emails de redefinição são raros e podem sair do top 50
+            # quando chegam muitos emails Netflix de outros tipos.
+            if not matched and "password-reset" in plat_configs:
+                targeted_terms = ["redefini", "password", "reset", "restablec", "i-reset"]
+                since_7d = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
+
+                matched.extend(_targeted_subject_search(
+                    mail, "INBOX", sender, "password-reset", seen_ids,
+                    targeted_terms, since_date=since_7d
+                ))
+
+                if not matched:
+                    matched.extend(_targeted_subject_search(
+                        mail, "INBOX", sender, "password-reset", seen_ids,
+                        targeted_terms, since_date=None
+                    ))
+
+                if not matched:
+                    for mb in spam_boxes:
+                        matched.extend(_targeted_subject_search(
+                            mail, mb, sender, "password-reset", seen_ids,
+                            targeted_terms, since_date=None
+                        ))
+                        if matched:
+                            break
+
+            # matched já vem do mais recente para o mais antigo
             for mb, plat_key, eid in matched:
                 code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
                 if code or link:
