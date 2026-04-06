@@ -174,17 +174,27 @@ PLATFORM_CONFIG = {
             "seu codigo de acesso temporario da netflix",
             "código de acesso temporário da netflix",
             "codigo de acesso temporario da netflix",
+            "nova solicitação de acesso",
+            "nova solicitacao de acesso",
+            "solicitação de acesso",
+            "solicitacao de acesso",
             # Inglês
             "temporary access",
             "temp access",
             "your temporary access",
             "netflix temporary code",
+            "new sign-in request",
+            "new login request",
+            "new access request",
             # Espanhol
             "acceso temporal",
             "código de acceso temporal",
             "tu código de acceso temporal",
             "codigo de acceso temporal",
-            "acceso temporal de netflix"
+            "acceso temporal de netflix",
+            "nueva solicitud de inicio de sesión",
+            "nueva solicitud de inicio de sesion",
+            "nueva solicitud de acceso"
         ],
         "name": "Codigo Temporario Netflix",
         "type": "link"
@@ -436,6 +446,18 @@ PLATFORM_CONFIG = {
             "enc: complete a solicitação de redefinição de senha",
             "enc: complete a solicitacao de redefinicao de senha"
         ],
+        "negative_keywords": [
+            "nova solicitação de acesso",
+            "nova solicitacao de acesso",
+            "solicitação de acesso",
+            "solicitacao de acesso",
+            "new sign-in request",
+            "new login request",
+            "new access request",
+            "nueva solicitud de inicio de sesión",
+            "nueva solicitud de inicio de sesion",
+            "nueva solicitud de acceso"
+        ],
         "name": "Redefinicao de Senha Netflix",
         "type": "link"
     },
@@ -593,9 +615,10 @@ def extract_link(html_body, platform):
         ]
         domain = "netflix.com"
     elif platform == "netflix-temp":
-        # Botão "Receber código" no email de acesso temporário
+        # Link de acesso temporário / nova solicitação de acesso
         patterns = [
-            r'href=["\'](https://www\.netflix\.com/[^"\' ]*(?:temporary|tempor|receive|receber|acesso)[^"\' ]*)["\']',
+            r'href=["\'](https://www\.netflix\.com/ilum\?code=[^"\' ]+)["\']',
+            r'href=["\'](https://www\.netflix\.com/[^"\' ]*(?:temporary|tempor|receive|receber|acesso|request|solicita|login|signin|sign-in)[^"\' ]*)["\']',
             r'href=["\'](https://[^"\' ]*netflix\.com[^"\' ]*(?:code|codigo|auth|verify|token)[^"\' ]*)["\']',
             r'href=["\'](https://www\.netflix\.com/[^"\' ]{40,})["\']',
         ]
@@ -1080,6 +1103,8 @@ def search_code_unified(user_email, platform_list):
             targeted_platforms = []
             if "password-reset" in plat_configs:
                 targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset"]))
+            if "netflix-temp" in plat_configs:
+                targeted_platforms.append(("netflix-temp", ["tempor", "temporary", "solicitacao de acesso", "solicitação de acesso", "sign-in request", "login request", "inicio de sesion", "inicio de sesión"]))
             if "netflix-residence" in plat_configs:
                 targeted_platforms.append(("netflix-residence", ["residencia", "atualizar", "household", "hogar", "importante"]))
             if "disney" in plat_configs:
