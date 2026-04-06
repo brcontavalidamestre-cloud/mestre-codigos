@@ -177,6 +177,13 @@ PLATFORM_CONFIG = {
             # Português
             "digo de acesso",
             "código de acesso disney",
+            "codigo de acesso disney",
+            "seu código de acesso único para o disney+",
+            "seu codigo de acesso unico para o disney+",
+            "código de acesso único para o disney+",
+            "codigo de acesso unico para o disney+",
+            "código de acesso único disney+",
+            "codigo de acesso unico disney+",
             # Inglês
             "your one-time passcode for disney+",
             "your disney+ verification code",
@@ -194,6 +201,17 @@ PLATFORM_CONFIG = {
             "tu código de acceso de disney+",
             "tu código de acceso único para disney+",
             "tu codigo de acceso unico para disney+"
+        ],
+        "negative_keywords": [
+            "we noticed a new login",
+            "identificamos um novo login",
+            "novo login",
+            "new login",
+            "sua conta mydisney foi atualizada",
+            "mydisney was updated",
+            "complete your disney+ subscription",
+            "sabia que o disney+ tem beneficios",
+            "sabia que o disney+ tem benefícios"
         ],
         "name": "Disney+",
         "type": "code"
@@ -1045,6 +1063,8 @@ def search_code_unified(user_email, platform_list):
                 targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset"]))
             if "netflix-residence" in plat_configs:
                 targeted_platforms.append(("netflix-residence", ["residencia", "atualizar", "household", "hogar", "importante"]))
+            if "disney" in plat_configs:
+                targeted_platforms.append(("disney", ["codigo de acesso", "acesso unico", "access code", "verification code", "passcode", "codigo de verificacion"]))
 
             if targeted_platforms:
                 # Usa uma conexão nova só para a fase direcionada.
