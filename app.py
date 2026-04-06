@@ -673,12 +673,23 @@ from datetime import datetime as _dt, timedelta as _td
 _spam_boxes_cache = None
 
 def connect_imap():
-    """Conecta ao IMAP com timeout curto para evitar travamento."""
-    sock = _socket.create_connection((IMAP_SERVER, IMAP_PORT), timeout=8)
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT)
-    mail.sock.settimeout(8)
+    """Conecta ao IMAP com timeout um pouco maior e sem vazar socket auxiliar."""
+    mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=20)
+    try:
+        mail.sock.settimeout(20)
+    except Exception:
+        pass
     mail.login(EMAIL_USER, EMAIL_PASS)
     return mail
+
+
+def _safe_logout(mail):
+    """Encerra a sessão IMAP sem deixar exceções de timeout vazarem ao usuário."""
+    try:
+        if mail is not None:
+            mail.logout()
+    except Exception:
+        pass
 
 def _get_spam_boxes(mail):
     """Descobre caixas de spam uma única vez e armazena em cache."""
@@ -840,8 +851,8 @@ def _fetch_and_extract(mail, mailbox, eid, plat_key, user_email):
 def _targeted_subject_search(mail, mailbox, from_kw, plat_key, seen_ids,
                              subject_terms, since_date=None):
     """
-    Busca direcionada por SUBJECT para plataformas raras/valiosas como password-reset.
-    Isso evita perder emails quando há muitos emails Netflix recentes de outros tipos.
+    Busca direcionada por assunto sem disparar vários SEARCH SUBJECT caros.
+    Faz 1 SEARCH por remetente, pega uma janela recente e filtra assuntos em memória.
     Retorna (mailbox, plat_key, eid) do mais recente para o mais antigo.
     """
     matched = []
@@ -850,29 +861,19 @@ def _targeted_subject_search(mail, mailbox, from_kw, plat_key, seen_ids,
         if sel_status != "OK":
             return matched
 
-        collected = []
-        seen_local = set()
-        for term in subject_terms:
-            try:
-                criteria = ["FROM", from_kw, "SUBJECT", term]
-                if since_date:
-                    criteria += ["SINCE", since_date]
-                st, msgs = mail.search(None, *criteria)
-                if st != "OK" or not msgs[0]:
-                    continue
-                for eid in msgs[0].split():
-                    if eid not in seen_local:
-                        seen_local.add(eid)
-                        collected.append(eid)
-            except Exception:
-                continue
-
-        if not collected:
+        criteria = ["FROM", from_kw]
+        if since_date:
+            criteria += ["SINCE", since_date]
+        st, msgs = mail.search(None, *criteria)
+        if st != "OK" or not msgs[0]:
             return matched
 
-        # Ordena por ID crescente e pega os últimos 120; depois reverte no final
-        collected = sorted(collected, key=lambda x: int(x))[-120:]
-        id_str = b",".join(collected)
+        all_ids = msgs[0].split()
+        recent_ids = all_ids[-250:]
+        if not recent_ids:
+            return matched
+
+        id_str = b",".join(recent_ids)
         st_b, data_b = mail.fetch(id_str, "(BODY[HEADER.FIELDS (SUBJECT)])")
         if st_b != "OK":
             return matched
@@ -881,13 +882,15 @@ def _targeted_subject_search(mail, mailbox, from_kw, plat_key, seen_ids,
         idx = 0
         for item in data_b:
             if isinstance(item, tuple):
-                if idx >= len(collected):
+                if idx >= len(recent_ids):
                     break
-                eid = collected[idx]
+                eid = recent_ids[idx]
                 hdr = email.message_from_bytes(item[1])
                 subj = decode_str(hdr.get("Subject", ""))
+                subj_norm = normalize(subj)
+                fast_hit = any(normalize(term) in subj_norm for term in subject_terms)
                 key = (mailbox, eid)
-                if key not in seen_ids and subject_matches(
+                if key not in seen_ids and fast_hit and subject_matches(
                     subj,
                     cfg["subject_keywords"],
                     cfg.get("negative_keywords")
@@ -905,39 +908,33 @@ def _targeted_subject_search(mail, mailbox, from_kw, plat_key, seen_ids,
 def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
                                subject_terms, since_date=None):
     """
-    Busca direcionada em emails encaminhados (ENC:/FW:/Fwd:) SEM depender do remetente.
-    Necessário para casos em que o cliente encaminha para a caixa mestre via Gmail/Outlook.
+    Busca encaminhados recentes sem usar SEARCH SUBJECT por prefixo.
+    Quando há data, usa SEARCH SINCE; sem data, varre só a cauda da caixa por faixa sequencial.
     Retorna (mailbox, plat_key, eid) do mais recente para o mais antigo.
     """
     matched = []
     try:
-        sel_status, _ = mail.select(mailbox, readonly=True)
+        sel_status, sel_data = mail.select(mailbox, readonly=True)
         if sel_status != "OK":
             return matched
 
-        collected = []
-        seen_local = set()
-        for prefix in FWD_PREFIXES_SEARCH:
-            try:
-                criteria = ["SUBJECT", prefix]
-                if since_date:
-                    criteria += ["SINCE", since_date]
-                st, msgs = mail.search(None, *criteria)
-                if st != "OK" or not msgs[0]:
-                    continue
-                for eid in msgs[0].split():
-                    if eid not in seen_local:
-                        seen_local.add(eid)
-                        collected.append(eid)
-            except Exception:
-                continue
+        recent_ids = []
+        if since_date:
+            st, msgs = mail.search(None, "SINCE", since_date)
+            if st != "OK" or not msgs[0]:
+                return matched
+            recent_ids = msgs[0].split()[-1500:]
+        else:
+            total_msgs = int(sel_data[0]) if sel_data and sel_data[0] else 0
+            if total_msgs <= 0:
+                return matched
+            start_seq = max(1, total_msgs - 1500 + 1)
+            recent_ids = [str(i).encode() for i in range(start_seq, total_msgs + 1)]
 
-        if not collected:
+        if not recent_ids:
             return matched
 
-        # últimos 250 encaminhados para dar cobertura melhor
-        collected = sorted(collected, key=lambda x: int(x))[-250:]
-        id_str = b",".join(collected)
+        id_str = b",".join(recent_ids)
         st_b, data_b = mail.fetch(id_str, "(BODY[HEADER.FIELDS (SUBJECT)])")
         if st_b != "OK":
             return matched
@@ -946,18 +943,21 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
         idx = 0
         for item in data_b:
             if isinstance(item, tuple):
-                if idx >= len(collected):
+                if idx >= len(recent_ids):
                     break
-                eid = collected[idx]
+                eid = recent_ids[idx]
                 hdr = email.message_from_bytes(item[1])
                 subj = decode_str(hdr.get("Subject", ""))
+                subj_upper = subj.upper()
+                if not any(subj_upper.startswith(pfx.upper()) for pfx in FWD_PREFIXES_STRIP):
+                    idx += 1
+                    continue
                 subj_clean = subj
                 for pfx in FWD_PREFIXES_STRIP:
                     if subj_clean.upper().startswith(pfx.upper()):
                         subj_clean = subj_clean[len(pfx):].strip()
                         break
                 key = (mailbox, eid)
-                # usa subject_terms como filtro rápido + subject_keywords oficiais
                 fast_hit = any(normalize(term) in normalize(subj_clean) for term in subject_terms)
                 if key not in seen_ids and fast_hit and subject_matches(
                     subj_clean,
@@ -1034,7 +1034,7 @@ def search_code_unified(user_email, platform_list):
                     break
 
             if found_result:
-                mail.logout()
+                _safe_logout(mail)
                 return found_result[0], found_result[1], found_result[2], None
 
             # 5ª tentativa: busca direcionada por SUBJECT para password-reset / netflix-residence
@@ -1044,7 +1044,14 @@ def search_code_unified(user_email, platform_list):
             if "password-reset" in plat_configs:
                 targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset"]))
             if "netflix-residence" in plat_configs:
-                targeted_platforms.append(("netflix-residence", ["residencia", "residência", "atualizar", "household", "hogar", "importante"]))
+                targeted_platforms.append(("netflix-residence", ["residencia", "atualizar", "household", "hogar", "importante"]))
+
+            if targeted_platforms:
+                # Usa uma conexão nova só para a fase direcionada.
+                # Isso evita que um socket já cansado/expirado derrube a consulta inteira.
+                _safe_logout(mail)
+                mail = connect_imap()
+                spam_boxes = _get_spam_boxes(mail)
 
             for target_plat, targeted_terms in targeted_platforms:
                 since_7d = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
@@ -1096,14 +1103,18 @@ def search_code_unified(user_email, platform_list):
                 for mb, plat_key, eid in targeted_matches:
                     code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
                     if code or link:
-                        mail.logout()
+                        _safe_logout(mail)
                         return code, link, plat_key, None
 
-        mail.logout()
+        _safe_logout(mail)
         return None, None, None, "Nenhum email encontrado para este endereco."
     except imaplib.IMAP4.error as e:
+        _safe_logout(locals().get("mail"))
         return None, None, None, "Erro de conexao com servidor de email: " + str(e)
     except Exception as e:
+        _safe_logout(locals().get("mail"))
+        if "timed out object" in str(e).lower() or "timed out" in str(e).lower():
+            return None, None, None, "Tempo de consulta excedido no servidor de email. Tente novamente."
         return None, None, None, "Erro interno: " + str(e)
 
 
