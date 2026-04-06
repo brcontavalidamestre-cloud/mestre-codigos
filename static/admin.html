@@ -402,7 +402,7 @@
         Usuário: <strong style="color:var(--tw)" id="pin-user-label">—</strong>
       </p>
       <p style="text-align:center;color:#a78bfa;font-size:0.78rem;margin-bottom:2px;" id="pin-sub">
-        Digite um PIN de 4 dígitos para bloquear o acesso à redefinição de senha.
+        A redefinição de senha usa PIN automático por padrão. Se não houver PIN personalizado, o padrão é 1995.
       </p>
       <!-- Inputs de 4 dígitos -->
       <div class="pin-inputs" id="pin-inputs-wrap">
@@ -414,7 +414,7 @@
       <div class="merr" id="pin-err"></div>
       <div class="mbts" style="margin-top:16px;">
         <button class="bcan" onclick="closeOv('ov-pin')">Cancelar</button>
-        <button class="bok" id="pin-rm-btn" onclick="confirmPinRemove()" style="background:linear-gradient(135deg,#7f1d1d,#dc2626);display:none;">🗑️ Remover Bloqueio</button>
+        <button class="bok" id="pin-rm-btn" onclick="confirmPinRemove()" style="background:linear-gradient(135deg,#0f766e,#14b8a6);display:none;">♻️ Restaurar Padrão 1995</button>
         <button class="bok" id="pin-set-btn" onclick="confirmPinSet()">🔐 Salvar PIN</button>
       </div>
     </div>
@@ -457,14 +457,14 @@
           <td>${x(u.name || '—')}</td>
           <td><span class="bdg ${u.role === 'admin' ? 'badm' : 'bcli'}">${u.role === 'admin' ? '⭐ Admin' : '👤 Cliente'}</span></td>
           <td style="text-align:center;">
-            ${u.reset_pin_set
-              ? `<span class="pin-badge on">🔒 Bloqueado</span>`
-              : `<span class="pin-badge off">🔓 Livre</span>`}
+            ${u.reset_pin_custom
+              ? `<span class="pin-badge on">🔒 Personalizado</span>`
+              : `<span class="pin-badge on">🔒 Padrão 1995</span>`}
           </td>
           <td>
             <div class="abts">
               <button class="bsm bpw" onclick="openPw('${x(u.username)}')">🔑 Alterar Senha</button>
-              <button class="bsm bpin ${u.reset_pin_set ? 'locked' : ''}" onclick="openPin('${x(u.username)}', ${u.reset_pin_set})">${u.reset_pin_set ? '🔒 PIN Ativo' : '🔓 Definir PIN'}</button>
+              <button class="bsm bpin locked" onclick="openPin('${x(u.username)}', ${u.reset_pin_custom})">${u.reset_pin_custom ? '🔒 PIN Personalizado' : '🔒 PIN Padrão 1995'}</button>
               <button class="bsm bdel" onclick="openDel('${x(u.username)}')">🗑️ Remover</button>
             </div>
           </td>
@@ -627,15 +627,15 @@
       document.getElementById('pin-err').textContent = '';
 
       if (hasPin) {
-        document.getElementById('pin-modal-title').textContent = '🔒 PIN Ativo — Alterar ou Remover';
-        document.getElementById('pin-sub').textContent = 'Digite um novo PIN de 4 dígitos para substituir, ou remova o bloqueio.';
+        document.getElementById('pin-modal-title').textContent = '🔒 PIN Personalizado Ativo';
+        document.getElementById('pin-sub').textContent = 'Digite um novo PIN de 4 dígitos para substituir o PIN atual ou restaure o padrão 1995.';
         document.getElementById('pin-rm-btn').style.display = '';
         document.getElementById('pin-set-btn').textContent = '🔐 Alterar PIN';
       } else {
-        document.getElementById('pin-modal-title').textContent = '🔓 Definir PIN de Bloqueio';
-        document.getElementById('pin-sub').textContent = 'Digite um PIN de 4 dígitos. O cliente precisará informá-lo para acessar o link de redefinição de senha.';
+        document.getElementById('pin-modal-title').textContent = '🔒 PIN Padrão Ativo (1995)';
+        document.getElementById('pin-sub').textContent = 'A redefinição de senha já sai protegida automaticamente com o PIN padrão 1995. Se quiser, digite outro PIN de 4 dígitos para personalizar.';
         document.getElementById('pin-rm-btn').style.display = 'none';
-        document.getElementById('pin-set-btn').textContent = '🔐 Salvar PIN';
+        document.getElementById('pin-set-btn').textContent = '🔐 Definir PIN Personalizado';
       }
       document.getElementById('ov-pin').classList.add('open');
       setTimeout(() => document.getElementById('pin-d1').focus(), 100);
@@ -679,7 +679,7 @@
         const d = await r.json();
         if (d.success) {
           closeOv('ov-pin');
-          toast('🔐 PIN de bloqueio definido!', '#d97706');
+          toast('🔐 PIN da redefinição salvo!', '#d97706');
           loadUsers();
         } else {
           err.textContent = d.message || 'Erro ao salvar PIN.';
@@ -690,7 +690,7 @@
         err.className = 'merr show';
       } finally {
         btn.disabled = false;
-        btn.innerHTML = _pinHasPin ? '🔐 Alterar PIN' : '🔐 Salvar PIN';
+        btn.innerHTML = _pinHasPin ? '🔐 Alterar PIN' : '🔐 Definir PIN Personalizado';
       }
     }
 
@@ -703,12 +703,12 @@
         const r = await fetch(`/api/admin/users/${encodeURIComponent(_pinUser)}/reset-pin`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ action: 'remove' })
+          body: JSON.stringify({ action: 'restore_default' })
         });
         const d = await r.json();
         if (d.success) {
           closeOv('ov-pin');
-          toast('🔓 Bloqueio removido!', '#10b981');
+          toast('♻️ PIN restaurado para o padrão 1995!', '#10b981');
           loadUsers();
         } else {
           err.textContent = d.message || 'Erro ao remover.';
@@ -719,7 +719,7 @@
         err.className = 'merr show';
       } finally {
         btn.disabled = false;
-        btn.innerHTML = '🗑️ Remover Bloqueio';
+        btn.innerHTML = '♻️ Restaurar Padrão 1995';
       }
     }
 

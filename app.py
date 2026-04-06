@@ -27,6 +27,7 @@ USERS_FILE = os.environ.get("USERS_FILE", os.path.join(_data_dir, "users.json"))
 # Link pendente de redefinição protegido por PIN (armazenado no servidor, não no cliente)
 _pending_reset_links = {}
 _PENDING_RESET_TTL = 300  # 5 minutos
+DEFAULT_RESET_PIN = os.environ.get("DEFAULT_RESET_PIN", "1995")
 
 def _set_pending_reset_link(username, link):
     _pending_reset_links[username] = {
@@ -53,6 +54,24 @@ def _peek_pending_reset_link(username):
 
 def _clear_pending_reset_link(username):
     _pending_reset_links.pop(username, None)
+
+
+def _user_has_custom_reset_pin(user):
+    return bool((user or {}).get("reset_pin"))
+
+
+def _is_reset_pin_protected(user):
+    # Redefinição de senha agora SEMPRE exige PIN.
+    return True
+
+
+def _verify_reset_pin_value(user, pin):
+    user = user or {}
+    custom_pin = user.get("reset_pin")
+    if custom_pin:
+        return check_password_hash(custom_pin, pin)
+    return pin == DEFAULT_RESET_PIN
+
 
 def load_users():
     if os.path.exists(USERS_FILE):
@@ -1248,10 +1267,11 @@ def api_list_users():
         if uname == current_admin:
             continue  # nao lista a si mesmo
         result.append({
-            "username":      uname,
-            "name":          udata.get("name", uname),
-            "role":          udata.get("role", "client"),
-            "reset_pin_set": bool(udata.get("reset_pin"))
+            "username":         uname,
+            "name":             udata.get("name", uname),
+            "role":             udata.get("role", "client"),
+            "reset_pin_set":    _is_reset_pin_protected(udata),
+            "reset_pin_custom": _user_has_custom_reset_pin(udata)
         })
     return jsonify({"success": True, "users": result})
 
@@ -1331,14 +1351,14 @@ def api_change_password(username):
 @app.route("/api/admin/users/<username>/reset-pin", methods=["PUT"])
 @admin_required
 def api_set_reset_pin(username):
-    """Define ou remove o PIN de 4 dígitos que protege acesso à redefinição de senha."""
+    """Define PIN personalizado ou restaura o PIN padrão da redefinição de senha."""
     username = username.strip().lower()
     current_admin = session.get("username")
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"success": False, "message": "Dados invalidos."}), 400
 
-    action = data.get("action", "set")   # "set" ou "remove"
+    action = data.get("action", "set")
     users  = load_users()
 
     if username not in users:
@@ -1346,10 +1366,14 @@ def api_set_reset_pin(username):
     if users[username].get("created_by") != current_admin and username != current_admin:
         return jsonify({"success": False, "message": "Sem permissao."}), 403
 
-    if action == "remove":
+    if action in ("remove", "restore_default", "reset_default"):
         users[username].pop("reset_pin", None)
         save_users(users)
-        return jsonify({"success": True, "message": "Bloqueio removido."})
+        return jsonify({
+            "success": True,
+            "message": f"PIN restaurado para o padrão {DEFAULT_RESET_PIN}.",
+            "default_pin_active": True
+        })
 
     pin = str(data.get("pin", "")).strip()
     if not re.match(r"^\d{4}$", pin):
@@ -1357,7 +1381,11 @@ def api_set_reset_pin(username):
 
     users[username]["reset_pin"] = generate_password_hash(pin)
     save_users(users)
-    return jsonify({"success": True, "message": "PIN de bloqueio definido com sucesso."})
+    return jsonify({
+        "success": True,
+        "message": "PIN de bloqueio definido com sucesso.",
+        "custom_pin_active": True
+    })
 
 
 @app.route("/api/verify-reset-pin", methods=["POST"])
@@ -1377,24 +1405,10 @@ def api_verify_reset_pin():
     if not pending_link:
         return jsonify({"success": False, "message": "Nenhum link protegido pendente. Faça a busca novamente."}), 409
 
-    stored_pin = user.get("reset_pin")
-    if not stored_pin:
-        # Sem PIN configurado no momento da verificação: libera o link pendente do servidor.
-        released_link = _pop_pending_reset_link(username)
-        if not released_link:
-            return jsonify({"success": False, "message": "Link expirado. Faça a busca novamente."}), 410
-        return jsonify({
-            "success": True,
-            "unlocked": True,
-            "link": released_link,
-            "platform": "password-reset",
-            "type": "link"
-        })
-
     if not re.match(r"^\d{4}$", pin):
         return jsonify({"success": False, "message": "PIN invalido."}), 400
 
-    if not check_password_hash(stored_pin, pin):
+    if not _verify_reset_pin_value(user, pin):
         return jsonify({"success": False, "message": "PIN incorreto."}), 403
 
     released_link = _pop_pending_reset_link(username)
@@ -1413,12 +1427,13 @@ def api_verify_reset_pin():
 @app.route("/api/check-reset-pin", methods=["GET"])
 @login_required
 def api_check_reset_pin():
-    """Informa se o usuario logado precisa de PIN para redefinicao de senha."""
+    """Informa o estado do PIN da redefinição de senha do usuário logado."""
     username = session.get("username")
     users    = load_users()
     user     = users.get(username, {})
     return jsonify({
-        "locked": bool(user.get("reset_pin")),
+        "locked": _is_reset_pin_protected(user),
+        "custom_pin": _user_has_custom_reset_pin(user),
         "pending": bool(_peek_pending_reset_link(username))
     })
 
@@ -1459,17 +1474,14 @@ def get_code():
             return jsonify({"success": True, "code": code, "platform": matched_plat, "type": "code"})
         elif link:
             if matched_plat == "password-reset":
-                users = load_users()
-                user = users.get(username, {})
-                if user.get("reset_pin"):
-                    _set_pending_reset_link(username, link)
-                    return jsonify({
-                        "success": True,
-                        "platform": "password-reset",
-                        "type": "pin_required",
-                        "pin_required": True,
-                        "message": "PIN necessario para liberar o link de redefinicao."
-                    })
+                _set_pending_reset_link(username, link)
+                return jsonify({
+                    "success": True,
+                    "platform": "password-reset",
+                    "type": "pin_required",
+                    "pin_required": True,
+                    "message": "PIN necessario para liberar o link de redefinicao."
+                })
             return jsonify({"success": True, "link": link, "platform": matched_plat, "type": "link"})
         else:
             return jsonify({"success": False, "message": error or err_msg})
@@ -1479,17 +1491,14 @@ def get_code():
         return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})
     elif link:
         if platform == "password-reset":
-            users = load_users()
-            user = users.get(username, {})
-            if user.get("reset_pin"):
-                _set_pending_reset_link(username, link)
-                return jsonify({
-                    "success": True,
-                    "platform": "password-reset",
-                    "type": "pin_required",
-                    "pin_required": True,
-                    "message": "PIN necessario para liberar o link de redefinicao."
-                })
+            _set_pending_reset_link(username, link)
+            return jsonify({
+                "success": True,
+                "platform": "password-reset",
+                "type": "pin_required",
+                "pin_required": True,
+                "message": "PIN necessario para liberar o link de redefinicao."
+            })
         return jsonify({"success": True, "link": link, "platform": platform, "type": "link"})
     else:
         return jsonify({"success": False, "message": error or "Nao encontrado."})
