@@ -776,7 +776,7 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                         st2, msgs2 = mail.search(None, "SUBJECT", prefix)
                     if st2 != "OK" or not msgs2[0]:
                         continue
-                    fwd_ids = msgs2[0].split()[-80:]  # últimos 80 encaminhados
+                    fwd_ids = msgs2[0].split()[-200:]  # últimos 200 encaminhados
                     if not fwd_ids:
                         continue
                     id_str2 = b",".join(fwd_ids)
@@ -902,6 +902,78 @@ def _targeted_subject_search(mail, mailbox, from_kw, plat_key, seen_ids,
     return matched
 
 
+def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
+                               subject_terms, since_date=None):
+    """
+    Busca direcionada em emails encaminhados (ENC:/FW:/Fwd:) SEM depender do remetente.
+    Necessário para casos em que o cliente encaminha para a caixa mestre via Gmail/Outlook.
+    Retorna (mailbox, plat_key, eid) do mais recente para o mais antigo.
+    """
+    matched = []
+    try:
+        sel_status, _ = mail.select(mailbox, readonly=True)
+        if sel_status != "OK":
+            return matched
+
+        collected = []
+        seen_local = set()
+        for prefix in FWD_PREFIXES_SEARCH:
+            try:
+                criteria = ["SUBJECT", prefix]
+                if since_date:
+                    criteria += ["SINCE", since_date]
+                st, msgs = mail.search(None, *criteria)
+                if st != "OK" or not msgs[0]:
+                    continue
+                for eid in msgs[0].split():
+                    if eid not in seen_local:
+                        seen_local.add(eid)
+                        collected.append(eid)
+            except Exception:
+                continue
+
+        if not collected:
+            return matched
+
+        # últimos 250 encaminhados para dar cobertura melhor
+        collected = sorted(collected, key=lambda x: int(x))[-250:]
+        id_str = b",".join(collected)
+        st_b, data_b = mail.fetch(id_str, "(BODY[HEADER.FIELDS (SUBJECT)])")
+        if st_b != "OK":
+            return matched
+
+        cfg = PLATFORM_CONFIG[plat_key]
+        idx = 0
+        for item in data_b:
+            if isinstance(item, tuple):
+                if idx >= len(collected):
+                    break
+                eid = collected[idx]
+                hdr = email.message_from_bytes(item[1])
+                subj = decode_str(hdr.get("Subject", ""))
+                subj_clean = subj
+                for pfx in FWD_PREFIXES_STRIP:
+                    if subj_clean.upper().startswith(pfx.upper()):
+                        subj_clean = subj_clean[len(pfx):].strip()
+                        break
+                key = (mailbox, eid)
+                # usa subject_terms como filtro rápido + subject_keywords oficiais
+                fast_hit = any(normalize(term) in normalize(subj_clean) for term in subject_terms)
+                if key not in seen_ids and fast_hit and subject_matches(
+                    subj_clean,
+                    cfg["subject_keywords"],
+                    cfg.get("negative_keywords")
+                ):
+                    matched.append((mailbox, plat_key, eid))
+                    seen_ids.add(key)
+                idx += 1
+    except Exception:
+        pass
+
+    matched.reverse()
+    return matched
+
+
 def search_code_unified(user_email, platform_list):
     """
     Busca múltiplas plataformas do mesmo remetente em UMA ÚNICA passagem IMAP.
@@ -978,6 +1050,7 @@ def search_code_unified(user_email, platform_list):
                 since_7d = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
                 targeted_matches = []
 
+                # 5a. emails diretos do remetente oficial
                 targeted_matches.extend(_targeted_subject_search(
                     mail, "INBOX", sender, target_plat, seen_ids,
                     targeted_terms, since_date=since_7d
@@ -993,6 +1066,28 @@ def search_code_unified(user_email, platform_list):
                     for mb in spam_boxes:
                         targeted_matches.extend(_targeted_subject_search(
                             mail, mb, sender, target_plat, seen_ids,
+                            targeted_terms, since_date=None
+                        ))
+                        if targeted_matches:
+                            break
+
+                # 5b. fallback forte para emails encaminhados (ENC:/FW:/Fwd:)
+                if not targeted_matches:
+                    targeted_matches.extend(_targeted_forwarded_search(
+                        mail, "INBOX", target_plat, seen_ids,
+                        targeted_terms, since_date=since_7d
+                    ))
+
+                if not targeted_matches:
+                    targeted_matches.extend(_targeted_forwarded_search(
+                        mail, "INBOX", target_plat, seen_ids,
+                        targeted_terms, since_date=None
+                    ))
+
+                if not targeted_matches:
+                    for mb in spam_boxes:
+                        targeted_matches.extend(_targeted_forwarded_search(
+                            mail, mb, target_plat, seen_ids,
                             targeted_terms, since_date=None
                         ))
                         if targeted_matches:
