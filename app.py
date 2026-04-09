@@ -116,6 +116,11 @@ PLATFORM_CONFIG = {
             # Português
             "digo de acesso",
             "código de acesso netflix",
+            "codigo de acesso netflix",
+            "netflix: seu código de acesso",
+            "netflix: seu codigo de acesso",
+            "seu código de acesso da netflix",
+            "seu codigo de acesso da netflix",
             # Inglês
             "your netflix access code",
             "netflix access code",
@@ -123,12 +128,15 @@ PLATFORM_CONFIG = {
             "your netflix verification code",
             "your one-time passcode for netflix",
             "netflix one-time passcode",
+            "netflix: your access code",
             # Espanhol
             "tu código de acceso netflix",
             "código de acceso netflix",
             "codigo de acceso netflix",
             "tu código de verificación netflix",
-            "codigo de verificacion netflix"
+            "codigo de verificacion netflix",
+            "netflix: tu código de acceso",
+            "netflix: tu codigo de acceso"
         ],
         "negative_keywords": ["temporario", "temporário", "temporal", "temporary", "acceso temporal"],
         "name": "Netflix",
@@ -1127,6 +1135,10 @@ def search_code_unified(user_email, platform_list):
             targeted_platforms = []
             if "password-reset" in plat_configs:
                 targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset"]))
+            if "netflix" in plat_configs:
+                targeted_platforms.append(("netflix", ["netflix: seu codigo de acesso", "netflix: seu código de acesso", "codigo de acesso netflix", "código de acesso netflix", "netflix access code", "netflix verification code", "one-time passcode"]))
+            if "netflix-login" in plat_configs:
+                targeted_platforms.append(("netflix-login", ["sign in code", "sign-in code", "login code", "codigo de inicio", "código de início", "iniciar sessão", "iniciar sesion"]))
             if "netflix-temp" in plat_configs:
                 targeted_platforms.append(("netflix-temp", ["tempor", "temporary", "solicitacao de acesso", "solicitação de acesso", "sign-in request", "login request", "inicio de sesion", "inicio de sesión"]))
             if "netflix-residence" in plat_configs:
