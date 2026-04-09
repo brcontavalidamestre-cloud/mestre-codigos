@@ -432,7 +432,10 @@ PLATFORM_CONFIG = {
         "from_keyword": "netflix.com",
         "subject_keywords": [
             # Português
+            "Complete a solicitação de redefinição de senha",
             "Complete a solicitacao de redefinicao de senha",
+            "complete a solicitação de redefinição de senha",
+            "complete a solicitacao de redefinicao de senha",
             "redefinicao de senha",
             "redefini",
             "redefinir senha",
@@ -1134,7 +1137,7 @@ def search_code_unified(user_email, platform_list):
             # OU o top conter emails de outros clientes que não correspondem ao user_email digitado.
             targeted_platforms = []
             if "password-reset" in plat_configs:
-                targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset"]))
+                targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset", "complete a solicitacao", "complete a solicitação"]))
             if "netflix" in plat_configs:
                 targeted_platforms.append(("netflix", ["netflix: seu codigo de acesso", "netflix: seu código de acesso", "codigo de acesso netflix", "código de acesso netflix", "netflix access code", "netflix verification code", "one-time passcode"]))
             if "netflix-login" in plat_configs:
