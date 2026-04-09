@@ -513,17 +513,50 @@ def normalize(text):
     nfkd = unicodedata.normalize("NFKD", text)
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
+def strip_forward_prefixes(subject):
+    """Remove prefixos comuns de encaminhamento/resposta repetidamente."""
+    if not subject:
+        return ""
+    prefixes = [
+        "ENC:", "FW:", "FWD:", "RES:", "RV:", "RE:", "WG:", "TR:", "I:",
+        "ENC: ", "FW: ", "FWD: ", "RES: ", "RV: ", "RE: ", "WG: ", "TR: ", "I: "
+    ]
+    cleaned = subject.strip()
+    changed = True
+    while changed and cleaned:
+        changed = False
+        upper = cleaned.upper()
+        for pfx in prefixes:
+            if upper.startswith(pfx.upper()):
+                cleaned = cleaned[len(pfx):].strip()
+                changed = True
+                break
+    return cleaned
+
 def subject_matches(subject, keywords, negative_keywords=None):
-    subj_norm  = normalize(subject)
-    subj_lower = subject.lower()
+    subj_clean = strip_forward_prefixes(subject)
+    variants = [subject or ""]
+    if subj_clean and subj_clean not in variants:
+        variants.append(subj_clean)
+
+    subj_norms = [normalize(s) for s in variants]
+    subj_lowers = [s.lower() for s in variants]
+
     # Rejeita se o assunto contiver alguma palavra negativa
     if negative_keywords:
         for nkw in negative_keywords:
-            if normalize(nkw) in subj_norm or nkw.lower() in subj_lower:
-                return False
+            nkw_norm = normalize(nkw)
+            nkw_lower = nkw.lower()
+            for subj_norm, subj_lower in zip(subj_norms, subj_lowers):
+                if nkw_norm in subj_norm or nkw_lower in subj_lower:
+                    return False
+
     for kw in keywords:
-        if normalize(kw) in subj_norm or kw.lower() in subj_lower:
-            return True
+        kw_norm = normalize(kw)
+        kw_lower = kw.lower()
+        for subj_norm, subj_lower in zip(subj_norms, subj_lowers):
+            if kw_norm in subj_norm or kw_lower in subj_lower:
+                return True
     return False
 
 def get_html_body(msg):
@@ -785,8 +818,8 @@ def _get_spam_boxes(mail):
         _spam_boxes_cache = []
     return _spam_boxes_cache
 
-FWD_PREFIXES_SEARCH = ["ENC:", "FW:", "Fwd:"]
-FWD_PREFIXES_STRIP  = ["ENC:", "FW:", "FWD:", "RES:", "ENC: ", "FW: "]
+FWD_PREFIXES_SEARCH = ["ENC:", "FW:", "Fwd:", "RES:", "RE:"]
+FWD_PREFIXES_STRIP  = ["ENC:", "FW:", "FWD:", "Fwd:", "RES:", "RV:", "RE:", "WG:", "TR:", "I:", "ENC: ", "FW: ", "FWD: ", "Fwd: ", "RES: ", "RV: ", "RE: ", "WG: ", "TR: ", "I: "]
 
 def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                            use_date_filter=True, since_date=None):
@@ -862,11 +895,7 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                             eid3 = fwd_ids[id_idx2]
                             hdr3  = email.message_from_bytes(item3[1])
                             subj3 = decode_str(hdr3.get("Subject", ""))
-                            subj_clean = subj3
-                            for pfx in FWD_PREFIXES_STRIP:
-                                if subj_clean.upper().startswith(pfx.upper()):
-                                    subj_clean = subj_clean[len(pfx):].strip()
-                                    break
+                            subj_clean = strip_forward_prefixes(subj3)
                             key3 = (mailbox, eid3)
                             if key3 not in seen_ids:
                                 for plat_key, plat_cfg in platform_configs.items():
@@ -1008,15 +1037,10 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
                 eid = recent_ids[idx]
                 hdr = email.message_from_bytes(item[1])
                 subj = decode_str(hdr.get("Subject", ""))
-                subj_upper = subj.upper()
-                if not any(subj_upper.startswith(pfx.upper()) for pfx in FWD_PREFIXES_STRIP):
+                subj_clean = strip_forward_prefixes(subj)
+                if subj_clean == subj:
                     idx += 1
                     continue
-                subj_clean = subj
-                for pfx in FWD_PREFIXES_STRIP:
-                    if subj_clean.upper().startswith(pfx.upper()):
-                        subj_clean = subj_clean[len(pfx):].strip()
-                        break
                 key = (mailbox, eid)
                 fast_hit = any(normalize(term) in normalize(subj_clean) for term in subject_terms)
                 if key not in seen_ids and fast_hit and subject_matches(
