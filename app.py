@@ -10,9 +10,6 @@ import json
 import unicodedata
 from datetime import timedelta
 
-MICROSOFT_DOMAINS = {"hotmail.com", "outlook.com", "live.com", "msn.com"}
-FORWARD_PREFIX_RE = re.compile(r'^\s*(?:(?:enc|fw|fwd|re|rv|tr|wg|aw)\s*:\s*)+', re.IGNORECASE)
-
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
@@ -58,17 +55,7 @@ EMAIL_PASS  = os.environ.get("EMAIL_PASS", "Mcodigo10@")
 PLATFORM_CONFIG = {
     "netflix": {
         "from_keyword": "netflix.com",
-        "subject_keywords": [
-            "netflix: seu codigo de acesso",
-            "netflix: seu codigo de inicio de sessao",
-            "netflix: your sign-in code",
-            "netflix: your login code",
-            "netflix: tu codigo de inicio de sesion",
-            "codigo de acesso",
-            "sign-in code",
-            "login code",
-            "codigo de inicio de sesion"
-        ],
+        "subject_keywords": ["digo de acesso"],
         "name": "Netflix",
         "type": "code"
     },
@@ -129,35 +116,15 @@ def decode_str(s):
     return result
 
 def normalize(text):
-    text = (text or "").lower()
+    text = text.lower()
     nfkd = unicodedata.normalize("NFKD", text)
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
-def email_domain(email_value):
-    email_value = (email_value or "").strip().lower()
-    return email_value.split("@", 1)[1] if "@" in email_value else ""
-
-def is_microsoft_mailbox(email_value):
-    return email_domain(email_value) in MICROSOFT_DOMAINS
-
-def clean_subject(subject):
-    cleaned = (subject or "").strip()
-    previous = None
-    while previous != cleaned:
-        previous = cleaned
-        cleaned = FORWARD_PREFIX_RE.sub("", cleaned).strip()
-    return cleaned
-
 def subject_matches(subject, keywords):
-    subj_clean = clean_subject(subject)
-    subj_norm = normalize(subj_clean)
-    subj_lower = subj_clean.lower()
+    subj_norm  = normalize(subject)
+    subj_lower = subject.lower()
     for kw in keywords:
-        kw_norm = normalize(clean_subject(kw))
-        kw_lower = clean_subject(kw).lower()
-        if kw_norm and kw_norm in subj_norm:
-            return True
-        if kw_lower and kw_lower in subj_lower:
+        if normalize(kw) in subj_norm or kw.lower() in subj_lower:
             return True
     return False
 
@@ -246,18 +213,12 @@ def extract_link(html_body, platform):
     return None
 
 def email_matches_user(msg, html_body, user_email):
-    user_lower = (user_email or "").lower()
-    if user_lower in (html_body or "").lower():
+    user_lower = user_email.lower()
+    if user_lower in html_body.lower():
         return True
-    for header in ["To", "Delivered-To", "X-Original-To", "Cc", "Bcc"]:
+    for header in ["To", "Delivered-To", "X-Original-To"]:
         if user_lower in decode_str(msg.get(header, "")).lower():
             return True
-    try:
-        raw_text = msg.as_string().lower()
-        if user_lower in raw_text:
-            return True
-    except Exception:
-        pass
     return False
 
 def connect_imap():
@@ -272,55 +233,37 @@ def search_code(user_email, platform):
     try:
         mail = connect_imap()
         mail.select("INBOX")
-        from_kw = config["from_keyword"]
-        subj_kws = config["subject_keywords"]
+        from_kw     = config["from_keyword"]
+        subj_kws    = config["subject_keywords"]
         result_type = config.get("type", "code")
-        microsoft_mode = is_microsoft_mailbox(user_email)
-
-        if microsoft_mode:
-            status, msgs = mail.search(None, "ALL")
-        else:
-            status, msgs = mail.search(None, "FROM", from_kw)
-
+        status, msgs = mail.search(None, "FROM", from_kw)
         if status != "OK" or not msgs[0]:
             mail.logout()
             return None, None, "Nenhum email da plataforma encontrado."
-
-        all_ids = msgs[0].split()
-        recent_limit = 250 if microsoft_mode else 100
-        recent_ids = all_ids[-recent_limit:]
+        all_ids    = msgs[0].split()
+        recent_ids = all_ids[-100:]
         recent_ids.reverse()
         matched_ids = []
-
         for eid in recent_ids:
             try:
-                status, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT FROM TO DELIVERED-TO X-ORIGINAL-TO)])")
-                if status != "OK" or not data or not data[0]:
+                status, data = mail.fetch(eid, "(BODY[HEADER.FIELDS (SUBJECT)])")
+                if status != "OK":
                     continue
-                hdr = email.message_from_bytes(data[0][1])
+                hdr  = email.message_from_bytes(data[0][1])
                 subj = decode_str(hdr.get("Subject", ""))
-                from_line = decode_str(hdr.get("From", "")).lower()
-
-                if not subject_matches(subj, subj_kws):
-                    continue
-
-                if not microsoft_mode and from_kw.lower() not in from_line:
-                    continue
-
-                matched_ids.append(eid)
+                if subject_matches(subj, subj_kws):
+                    matched_ids.append(eid)
             except Exception:
                 continue
-
         if not matched_ids:
             mail.logout()
             return None, None, ("Nenhum email de " + config["name"] + " encontrado. Verifique se o email ja chegou.")
-
         for eid in matched_ids:
             try:
                 status, data = mail.fetch(eid, "(RFC822)")
                 if status != "OK":
                     continue
-                msg = email.message_from_bytes(data[0][1])
+                msg       = email.message_from_bytes(data[0][1])
                 html_body = get_html_body(msg)
                 if email_matches_user(msg, html_body, user_email):
                     if result_type == "link":
@@ -335,7 +278,6 @@ def search_code(user_email, platform):
                             return code, None, None
             except Exception:
                 continue
-
         mail.logout()
         return None, None, ("Email da conta nao encontrado. Verifique se digitou o email correto.")
     except imaplib.IMAP4.error as e:
