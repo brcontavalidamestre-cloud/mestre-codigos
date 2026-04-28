@@ -141,7 +141,6 @@ PLATFORM_CONFIG = {
         "from_keyword": "netflix.com",
         "subject_keywords": [
             # Português
-            "netflix: seu código de acesso",
             "digo de acesso",
             "código de acesso netflix",
             # Inglês
@@ -700,7 +699,12 @@ def email_matches_user(msg, html_body, user_email):
         return True
 
     # 2. Verifica nos headers principais
-    for header in ["To", "Delivered-To", "X-Original-To", "X-Forwarded-To"]:
+    #    Ajustado para suportar encaminhados do Hotmail/Outlook,
+    #    onde o email do usuário pode aparecer em From/Sender/Reply-To
+    for header in [
+        "To", "Delivered-To", "X-Original-To", "X-Forwarded-To",
+        "From", "Sender", "Reply-To", "Return-Path"
+    ]:
         if user_lower in decode_str(msg.get(header, "")).lower():
             return True
 
@@ -724,7 +728,7 @@ def email_matches_user(msg, html_body, user_email):
     except Exception:
         pass
 
-    # 4. Varre os bytes brutos do email (corrigido: decode antes de lower())
+    # 4. Varre os bytes brutos do email
     try:
         raw_str = msg.as_bytes().decode("utf-8", errors="ignore").lower()
         if user_lower in raw_str:
@@ -733,16 +737,13 @@ def email_matches_user(msg, html_body, user_email):
         pass
 
     # 5. Matching relaxado: parte do usuário antes do "@"
-    #    Netflix password-reset não inclui o email no corpo, só o primeiro nome.
-    #    Mas o username (ex: "ivo89cg") costuma aparecer em links ou cabeçalhos.
     try:
         username = user_lower.split("@")[0]
-        domain   = user_lower.split("@")[1] if "@" in user_lower else ""
-        if len(username) >= 5:                     # evita falsos positivos
+        if len(username) >= 5:
             combined = html_body.lower()
             if username in combined:
                 return True
-            # Tenta também nas partes de texto
+
             if msg.is_multipart():
                 for part in msg.walk():
                     ct = part.get_content_type()
