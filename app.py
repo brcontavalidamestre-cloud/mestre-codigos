@@ -108,6 +108,33 @@ IMAP_PORT   = int(os.environ.get("IMAP_PORT", 993))
 EMAIL_USER  = os.environ.get("EMAIL_USER", "mestre@codigo.log.br")
 EMAIL_PASS  = os.environ.get("EMAIL_PASS", "Mcodigo10@")
 
+# Caixa secundária opcional: preencha no Railway para pesquisar em 2 caixas
+SECOND_IMAP_SERVER = os.environ.get("SECOND_IMAP_SERVER") or os.environ.get("IMAP_SERVER_2") or IMAP_SERVER
+SECOND_IMAP_PORT   = int(os.environ.get("SECOND_IMAP_PORT") or os.environ.get("IMAP_PORT_2") or IMAP_PORT)
+SECOND_EMAIL_USER  = os.environ.get("SECOND_EMAIL_USER") or os.environ.get("EMAIL_USER_2") or os.environ.get("EMAIL_USER2", "")
+SECOND_EMAIL_PASS  = os.environ.get("SECOND_EMAIL_PASS") or os.environ.get("EMAIL_PASS_2") or os.environ.get("EMAIL_PASS2", "")
+
+
+def get_imap_accounts():
+    accounts = [
+        {
+            "name": "caixa-principal",
+            "server": IMAP_SERVER,
+            "port": IMAP_PORT,
+            "user": EMAIL_USER,
+            "password": EMAIL_PASS,
+        }
+    ]
+    if SECOND_EMAIL_USER and SECOND_EMAIL_PASS:
+        accounts.append({
+            "name": "caixa-secundaria",
+            "server": SECOND_IMAP_SERVER,
+            "port": SECOND_IMAP_PORT,
+            "user": SECOND_EMAIL_USER,
+            "password": SECOND_EMAIL_PASS,
+        })
+    return accounts
+
 PLATFORM_CONFIG = {
     # ── NETFLIX: código de acesso (PT/EN/ES) ──────────────────────────────────
     "netflix": {
@@ -513,7 +540,14 @@ def normalize(text):
     nfkd = unicodedata.normalize("NFKD", text)
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
+FORWARD_PREFIX_RE = re.compile(r'^\s*((?:fw|fwd|enc|re)\s*:\s*)+', re.IGNORECASE)
+
+def clean_subject_prefixes(subject):
+    subject = subject or ""
+    return FORWARD_PREFIX_RE.sub("", subject).strip()
+
 def subject_matches(subject, keywords, negative_keywords=None):
+    subject = clean_subject_prefixes(subject)
     subj_norm  = normalize(subject)
     subj_lower = subject.lower()
     # Rejeita se o assunto contiver alguma palavra negativa
@@ -730,16 +764,22 @@ import socket as _socket
 from datetime import datetime as _dt, timedelta as _td
 
 # ── Cache de caixas de spam disponíveis (descoberto 1x, reutilizado) ──────────
-_spam_boxes_cache = None
+_spam_boxes_cache = {}
 
-def connect_imap():
+
+def _account_cache_key(account_cfg):
+    return f"{account_cfg.get('user','')}@{account_cfg.get('server','')}:{account_cfg.get('port','')}"
+
+
+def connect_imap(account_cfg=None):
     """Conecta ao IMAP com timeout um pouco maior e sem vazar socket auxiliar."""
-    mail = imaplib.IMAP4_SSL(IMAP_SERVER, IMAP_PORT, timeout=20)
+    account_cfg = account_cfg or get_imap_accounts()[0]
+    mail = imaplib.IMAP4_SSL(account_cfg["server"], int(account_cfg["port"]), timeout=20)
     try:
         mail.sock.settimeout(20)
     except Exception:
         pass
-    mail.login(EMAIL_USER, EMAIL_PASS)
+    mail.login(account_cfg["user"], account_cfg["password"])
     return mail
 
 
@@ -751,11 +791,12 @@ def _safe_logout(mail):
     except Exception:
         pass
 
-def _get_spam_boxes(mail):
-    """Descobre caixas de spam uma única vez e armazena em cache."""
-    global _spam_boxes_cache
-    if _spam_boxes_cache is not None:
-        return _spam_boxes_cache
+def _get_spam_boxes(mail, account_cfg=None):
+    """Descobre caixas de spam uma única vez por conta e armazena em cache."""
+    account_cfg = account_cfg or get_imap_accounts()[0]
+    cache_key = _account_cache_key(account_cfg)
+    if cache_key in _spam_boxes_cache:
+        return _spam_boxes_cache[cache_key]
     SPAM_CANDIDATES = ["Spam", "Junk", "SPAM", "JUNK",
                        "[Gmail]/Spam", "[Gmail]/Lixo Eletrônico",
                        "Junk Email", "Bulk Mail", "Lixo Eletronico"]
@@ -780,13 +821,12 @@ def _get_spam_boxes(mail):
                 if cand.lower() == avail.lower():
                     result.append(avail)
                     break
-        _spam_boxes_cache = result
+        _spam_boxes_cache[cache_key] = result
     except Exception:
-        _spam_boxes_cache = []
-    return _spam_boxes_cache
+        _spam_boxes_cache[cache_key] = []
+    return _spam_boxes_cache[cache_key]
 
-FWD_PREFIXES_SEARCH = ["ENC:", "FW:", "Fwd:"]
-FWD_PREFIXES_STRIP  = ["ENC:", "FW:", "FWD:", "RES:", "ENC: ", "FW: "]
+FWD_PREFIXES_SEARCH = ["ENC:", "FW:", "Fwd:", "FWD:", "RE:"]
 
 def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                            use_date_filter=True, since_date=None):
@@ -862,11 +902,7 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                             eid3 = fwd_ids[id_idx2]
                             hdr3  = email.message_from_bytes(item3[1])
                             subj3 = decode_str(hdr3.get("Subject", ""))
-                            subj_clean = subj3
-                            for pfx in FWD_PREFIXES_STRIP:
-                                if subj_clean.upper().startswith(pfx.upper()):
-                                    subj_clean = subj_clean[len(pfx):].strip()
-                                    break
+                            subj_clean = clean_subject_prefixes(subj3)
                             key3 = (mailbox, eid3)
                             if key3 not in seen_ids:
                                 for plat_key, plat_cfg in platform_configs.items():
@@ -1009,14 +1045,10 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
                 hdr = email.message_from_bytes(item[1])
                 subj = decode_str(hdr.get("Subject", ""))
                 subj_upper = subj.upper()
-                if not any(subj_upper.startswith(pfx.upper()) for pfx in FWD_PREFIXES_STRIP):
+                subj_clean = clean_subject_prefixes(subj)
+                if subj_clean == subj.strip():
                     idx += 1
                     continue
-                subj_clean = subj
-                for pfx in FWD_PREFIXES_STRIP:
-                    if subj_clean.upper().startswith(pfx.upper()):
-                        subj_clean = subj_clean[len(pfx):].strip()
-                        break
                 key = (mailbox, eid)
                 fast_hit = any(normalize(term) in normalize(subj_clean) for term in subject_terms)
                 if key not in seen_ids and fast_hit and subject_matches(
@@ -1037,7 +1069,7 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
 def search_code_unified(user_email, platform_list):
     """
     Busca múltiplas plataformas do mesmo remetente em UMA ÚNICA passagem IMAP.
-    Usa batch-fetch de headers → muito mais rápido que N chamadas sequenciais.
+    Agora consulta também uma segunda caixa IMAP, se configurada.
     Retorna (code, link, matched_platform, error).
     """
     # Agrupar plataformas por remetente
@@ -1051,136 +1083,130 @@ def search_code_unified(user_email, platform_list):
             by_sender[fk] = {}
         by_sender[fk][p] = cfg
 
-    try:
-        mail = connect_imap()
-        today     = _dt.utcnow().strftime("%d-%b-%Y")
-        since_2d  = (_dt.utcnow() - _td(days=2)).strftime("%d-%b-%Y")
-        spam_boxes = _get_spam_boxes(mail)
-        seen_ids   = set()
+    accounts = get_imap_accounts()
+    if not accounts:
+        return None, None, None, "Nenhuma caixa de email configurada."
 
-        for sender, plat_configs in by_sender.items():
-            # 1ª tentativa: INBOX hoje
-            matched = _batch_search_mailbox(
-                mail, "INBOX", sender, plat_configs, seen_ids,
-                use_date_filter=True, since_date=today)
+    last_error = None
 
-            # 2ª tentativa: INBOX 48h
-            if not matched:
+    for account_cfg in accounts:
+        mail = None
+        try:
+            mail = connect_imap(account_cfg)
+            today     = _dt.utcnow().strftime("%d-%b-%Y")
+            since_2d  = (_dt.utcnow() - _td(days=2)).strftime("%d-%b-%Y")
+            spam_boxes = _get_spam_boxes(mail, account_cfg)
+            seen_ids   = set()
+
+            for sender, plat_configs in by_sender.items():
                 matched = _batch_search_mailbox(
                     mail, "INBOX", sender, plat_configs, seen_ids,
-                    use_date_filter=True, since_date=since_2d)
+                    use_date_filter=True, since_date=today)
 
-            # 3ª tentativa: INBOX sem filtro
-            if not matched:
-                matched = _batch_search_mailbox(
-                    mail, "INBOX", sender, plat_configs, seen_ids,
-                    use_date_filter=False)
+                if not matched:
+                    matched = _batch_search_mailbox(
+                        mail, "INBOX", sender, plat_configs, seen_ids,
+                        use_date_filter=True, since_date=since_2d)
 
-            # 4ª tentativa: spam
-            if not matched:
-                for mb in spam_boxes:
-                    matched.extend(_batch_search_mailbox(
-                        mail, mb, sender, plat_configs, seen_ids,
-                        use_date_filter=False))
-                    if matched:
-                        break
+                if not matched:
+                    matched = _batch_search_mailbox(
+                        mail, "INBOX", sender, plat_configs, seen_ids,
+                        use_date_filter=False)
 
-            # matched já vem do mais recente para o mais antigo
-            found_result = None
-            for mb, plat_key, eid in matched:
-                code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
-                if code or link:
-                    found_result = (code, link, plat_key)
-                    break
-
-            if found_result:
-                _safe_logout(mail)
-                return found_result[0], found_result[1], found_result[2], None
-
-            # 5ª tentativa: busca direcionada por SUBJECT para password-reset / netflix-residence
-            # Necessária porque emails raros ou encaminhados podem sair do top recente
-            # OU o top conter emails de outros clientes que não correspondem ao user_email digitado.
-            targeted_platforms = []
-            if "password-reset" in plat_configs:
-                targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset"]))
-            if "netflix-temp" in plat_configs:
-                targeted_platforms.append(("netflix-temp", ["tempor", "temporary", "solicitacao de acesso", "solicitação de acesso", "sign-in request", "login request", "inicio de sesion", "inicio de sesión"]))
-            if "netflix-residence" in plat_configs:
-                targeted_platforms.append(("netflix-residence", ["residencia", "atualizar", "household", "hogar", "importante"]))
-            if "disney" in plat_configs:
-                targeted_platforms.append(("disney", ["codigo de acesso", "acesso unico", "access code", "verification code", "passcode", "codigo de verificacion"]))
-
-            if targeted_platforms:
-                # Usa uma conexão nova só para a fase direcionada.
-                # Isso evita que um socket já cansado/expirado derrube a consulta inteira.
-                _safe_logout(mail)
-                mail = connect_imap()
-                spam_boxes = _get_spam_boxes(mail)
-
-            for target_plat, targeted_terms in targeted_platforms:
-                since_7d = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
-                targeted_matches = []
-
-                # 5a. emails diretos do remetente oficial
-                targeted_matches.extend(_targeted_subject_search(
-                    mail, "INBOX", sender, target_plat, seen_ids,
-                    targeted_terms, since_date=since_7d
-                ))
-
-                if not targeted_matches:
-                    targeted_matches.extend(_targeted_subject_search(
-                        mail, "INBOX", sender, target_plat, seen_ids,
-                        targeted_terms, since_date=None
-                    ))
-
-                if not targeted_matches:
+                if not matched:
                     for mb in spam_boxes:
-                        targeted_matches.extend(_targeted_subject_search(
-                            mail, mb, sender, target_plat, seen_ids,
-                            targeted_terms, since_date=None
-                        ))
-                        if targeted_matches:
+                        matched.extend(_batch_search_mailbox(
+                            mail, mb, sender, plat_configs, seen_ids,
+                            use_date_filter=False))
+                        if matched:
                             break
 
-                # 5b. fallback forte para emails encaminhados (ENC:/FW:/Fwd:)
-                if not targeted_matches:
-                    targeted_matches.extend(_targeted_forwarded_search(
-                        mail, "INBOX", target_plat, seen_ids,
-                        targeted_terms, since_date=since_7d
-                    ))
-
-                if not targeted_matches:
-                    targeted_matches.extend(_targeted_forwarded_search(
-                        mail, "INBOX", target_plat, seen_ids,
-                        targeted_terms, since_date=None
-                    ))
-
-                if not targeted_matches:
-                    for mb in spam_boxes:
-                        targeted_matches.extend(_targeted_forwarded_search(
-                            mail, mb, target_plat, seen_ids,
-                            targeted_terms, since_date=None
-                        ))
-                        if targeted_matches:
-                            break
-
-                for mb, plat_key, eid in targeted_matches:
+                for mb, plat_key, eid in matched:
                     code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
                     if code or link:
                         _safe_logout(mail)
                         return code, link, plat_key, None
 
-        _safe_logout(mail)
-        return None, None, None, "Nenhum email encontrado para este endereco."
-    except imaplib.IMAP4.error as e:
-        _safe_logout(locals().get("mail"))
-        return None, None, None, "Erro de conexao com servidor de email: " + str(e)
-    except Exception as e:
-        _safe_logout(locals().get("mail"))
-        if "timed out object" in str(e).lower() or "timed out" in str(e).lower():
-            return None, None, None, "Tempo de consulta excedido no servidor de email. Tente novamente."
-        return None, None, None, "Erro interno: " + str(e)
+                targeted_platforms = []
+                if "password-reset" in plat_configs:
+                    targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset"]))
+                if "netflix-temp" in plat_configs:
+                    targeted_platforms.append(("netflix-temp", ["tempor", "temporary", "solicitacao de acesso", "solicitação de acesso", "sign-in request", "login request", "inicio de sesion", "inicio de sesión"]))
+                if "netflix-residence" in plat_configs:
+                    targeted_platforms.append(("netflix-residence", ["residencia", "atualizar", "household", "hogar", "importante"]))
+                if "disney" in plat_configs:
+                    targeted_platforms.append(("disney", ["codigo de acesso", "acesso unico", "access code", "verification code", "passcode", "codigo de verificacion"]))
 
+                if targeted_platforms:
+                    _safe_logout(mail)
+                    mail = connect_imap(account_cfg)
+                    spam_boxes = _get_spam_boxes(mail, account_cfg)
+
+                for target_plat, targeted_terms in targeted_platforms:
+                    since_7d = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
+                    targeted_matches = []
+
+                    targeted_matches.extend(_targeted_subject_search(
+                        mail, "INBOX", sender, target_plat, seen_ids,
+                        targeted_terms, since_date=since_7d
+                    ))
+
+                    if not targeted_matches:
+                        targeted_matches.extend(_targeted_subject_search(
+                            mail, "INBOX", sender, target_plat, seen_ids,
+                            targeted_terms, since_date=None
+                        ))
+
+                    if not targeted_matches:
+                        for mb in spam_boxes:
+                            targeted_matches.extend(_targeted_subject_search(
+                                mail, mb, sender, target_plat, seen_ids,
+                                targeted_terms, since_date=None
+                            ))
+                            if targeted_matches:
+                                break
+
+                    if not targeted_matches:
+                        targeted_matches.extend(_targeted_forwarded_search(
+                            mail, "INBOX", target_plat, seen_ids,
+                            targeted_terms, since_date=since_7d
+                        ))
+
+                    if not targeted_matches:
+                        targeted_matches.extend(_targeted_forwarded_search(
+                            mail, "INBOX", target_plat, seen_ids,
+                            targeted_terms, since_date=None
+                        ))
+
+                    if not targeted_matches:
+                        for mb in spam_boxes:
+                            targeted_matches.extend(_targeted_forwarded_search(
+                                mail, mb, target_plat, seen_ids,
+                                targeted_terms, since_date=None
+                            ))
+                            if targeted_matches:
+                                break
+
+                    for mb, plat_key, eid in targeted_matches:
+                        code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
+                        if code or link:
+                            _safe_logout(mail)
+                            return code, link, plat_key, None
+
+            _safe_logout(mail)
+        except imaplib.IMAP4.error as e:
+            last_error = f"[{account_cfg.get('name')}] Erro de conexao com servidor de email: {e}"
+            _safe_logout(mail)
+            continue
+        except Exception as e:
+            _safe_logout(mail)
+            if "timed out object" in str(e).lower() or "timed out" in str(e).lower():
+                last_error = f"[{account_cfg.get('name')}] Tempo de consulta excedido no servidor de email."
+            else:
+                last_error = f"[{account_cfg.get('name')}] Erro interno: {e}"
+            continue
+
+    return None, None, None, last_error or "Nenhum email encontrado para este endereco."
 
 def search_code(user_email, platform):
     """Busca código/link para uma plataforma específica (usa search_code_unified internamente)."""
