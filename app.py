@@ -141,6 +141,7 @@ PLATFORM_CONFIG = {
         "from_keyword": "netflix.com",
         "subject_keywords": [
             # Português
+            "netflix: seu código de acesso",
             "digo de acesso",
             "código de acesso netflix",
             # Inglês
