@@ -275,9 +275,13 @@ PLATFORM_CONFIG = {
     },
     # ── MAX: código único ──────────────────────────────────────────────────────
     "max": {
-        "from_keyword": "max.com",
+        "from_keyword": "hbomax.com",
         "subject_keywords": [
             # Português
+            "temporário: aqui está seu código único",
+            "temporario: aqui esta seu codigo unico",
+            "aqui está seu código único",
+            "aqui esta seu codigo unico",
             "seu código único",
             "seu codigo unico",
             # Inglês
