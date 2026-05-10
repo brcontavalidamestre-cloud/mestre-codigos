@@ -91,9 +91,30 @@ PLATFORM_CONFIG = {
     },
     'disney': {
         'from_keyword': 'disneyplus.com',
-        'subject_keywords': ['digo de acesso'],
+        'from_keywords': ['disneyplus.com', 'disney.com', 'disney'],
+        'subject_keywords': [
+            'digo de acesso',
+            'codigo de acesso',
+            'código de acesso',
+            'código',
+            'codigo',
+            'access code',
+            'one-time',
+            'verificação',
+            'verificacao',
+            'verification',
+            'Quer atualizar sua Residencia do Disney+',
+            'atualizar sua Residencia do Disney',
+            'Residencia do Disney',
+            'residência do Disney',
+            'residência',
+            'residencia',
+            'update your Disney+ Home',
+            'Disney+ Home',
+            'household'
+        ],
         'name': 'Disney+',
-        'type': 'code'
+        'type': 'auto'
     },
     'globo': {
         'from_keyword': 'globo.com',
@@ -109,18 +130,6 @@ PLATFORM_CONFIG = {
         'name': 'Max / Prime Video',
         'type': 'code'
     },
-    'disney-residence': {
-        'from_keyword': 'disneyplus.com',
-        'subject_keywords': [
-            'Quer atualizar sua Residencia do Disney+',
-            'atualizar sua Residencia do Disney',
-            'Residencia do Disney',
-            'update your Disney+ Home',
-            'Disney+ Home'
-        ],
-        'name': 'Residência Disney+',
-        'type': 'link'
-    }
 }
 
 
@@ -404,10 +413,15 @@ def search_code(user_email, platform):
                     subj = decode_str(msg.get('Subject', ''))
                     subj_norm = normalize(subj)
                     if result_type == 'auto':
-                        link_keywords = ['atualizar', 'resid', 'household', 'redefini', 'reset password', 'password reset', 'restablecimiento']
+                        link_keywords = ['atualizar', 'resid', 'household', 'home', 'redefini', 'reset password', 'password reset', 'restablecimiento']
                         is_link = any(kw in subj_norm for kw in link_keywords)
                         if is_link:
-                            sub_platform = 'password-reset' if any(kw in subj_norm for kw in ['redefini', 'reset password', 'password reset', 'restablecimiento']) else 'netflix-residence'
+                            if platform == 'disney':
+                                sub_platform = 'disney-residence'
+                            elif any(kw in subj_norm for kw in ['redefini', 'reset password', 'password reset', 'restablecimiento']):
+                                sub_platform = 'password-reset'
+                            else:
+                                sub_platform = 'netflix-residence'
                             link = extract_link(html_body, sub_platform)
                             if link:
                                 mail.logout()

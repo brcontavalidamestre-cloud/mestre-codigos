@@ -118,7 +118,7 @@
 
         <div class="platform-row" id="row-disney">
           <div class="icon">✨</div>
-          <div class="info"><div class="pname">Disney+</div><div class="pdesc">Código de acesso único</div></div>
+          <div class="info"><div class="pname">Disney+</div><div class="pdesc">Código e atualização de residência</div></div>
           <div class="form">
             <input class="input" type="email" placeholder="email da conta..." data-platform="disney" onkeydown="if(event.key==='Enter') buscar('disney')">
             <button class="btn btn-search" onclick="buscar('disney')">✦ Buscar</button>
@@ -146,15 +146,7 @@
           <div class="result" id="result-max-prime"></div>
         </div>
 
-        <div class="platform-row" id="row-disney-residence">
-          <div class="icon">🏡</div>
-          <div class="info"><div class="pname">Residência Disney+</div><div class="pdesc">Link para atualizar residência</div></div>
-          <div class="form">
-            <input class="input" type="email" placeholder="email da conta..." data-platform="disney-residence" onkeydown="if(event.key==='Enter') buscar('disney-residence')">
-            <button class="btn btn-search" onclick="buscar('disney-residence')">✦ Buscar</button>
-          </div>
-          <div class="result" id="result-disney-residence"></div>
-        </div>
+
       </section>
     </div>
 
@@ -187,8 +179,7 @@
     let activeOrderNsu='';
     let pollTimer=null;
     const platformNames={
-      'netflix':'Netflix','disney':'Disney+','globo':'Globoplay','max-prime':'Max / Prime Video',
-      'disney-residence':'Residência Disney+'
+      'netflix':'Netflix','disney':'Disney+','globo':'Globoplay','max-prime':'Max / Prime Video'
     };
 
     function toast(msg){const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500)}
