@@ -72,6 +72,24 @@ PLATFORM_CONFIG = {
         'name': 'Disney+',
         'type': 'code'
     },
+    'globo': {
+        'from_keyword': 'globo.com',
+        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'verificação', 'verificacao', 'globoplay', 'acesso'],
+        'name': 'Globoplay',
+        'type': 'code'
+    },
+    'max': {
+        'from_keyword': 'max.com',
+        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'verificação', 'verification', 'sign in', 'entrar', 'one-time'],
+        'name': 'Max',
+        'type': 'code'
+    },
+    'prime': {
+        'from_keyword': 'amazon',
+        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'verificação', 'verification', 'one-time password', 'OTP', 'sign-in'],
+        'name': 'Prime Video',
+        'type': 'code'
+    },
     'netflix-residence': {
         'from_keyword': 'netflix.com',
         'subject_keywords': ['atualizar'],
@@ -739,6 +757,7 @@ def api_list_credentials():
     for p in DEFAULT_PRODUCTS:
         items = creds.get(p['id'], [])
         available = sum(1 for it in items if not it.get('used'))
+        delivered = sum(1 for it in items if it.get('delivered_at'))
         products_meta.append({
             'id': p['id'],
             'name': p['name'],
@@ -746,6 +765,7 @@ def api_list_credentials():
             'total': len(items),
             'available': available,
             'used': len(items) - available,
+            'delivered': delivered,
             'items': items
         })
     return jsonify({'success': True, 'products': products_meta})
@@ -801,6 +821,8 @@ def api_reset_credential(product_id, credential_id):
         if it.get('id') == credential_id:
             it['used'] = False
             it.pop('used_at', None)
+            it.pop('delivered_to', None)
+            it.pop('delivered_at', None)
             found = True
             break
     if not found:
@@ -808,6 +830,61 @@ def api_reset_credential(product_id, credential_id):
     creds[product_id] = items
     save_credentials(creds)
     return jsonify({'success': True, 'message': 'Acesso liberado novamente.'})
+
+
+@app.route('/api/admin/credentials/<product_id>/<credential_id>', methods=['PUT'])
+@admin_required
+def api_update_credential(product_id, credential_id):
+    data = request.get_json(silent=True) or {}
+    creds = load_credentials()
+    items = creds.get(product_id, [])
+    found = None
+    for it in items:
+        if it.get('id') == credential_id:
+            found = it
+            break
+    if not found:
+        return jsonify({'success': False, 'message': 'Acesso não encontrado.'}), 404
+    if 'email' in data:
+        new_email = str(data.get('email', '')).strip()
+        if not new_email:
+            return jsonify({'success': False, 'message': 'Email é obrigatório.'}), 400
+        found['email'] = new_email
+    if 'password' in data:
+        new_password = str(data.get('password', '')).strip()
+        if not new_password:
+            return jsonify({'success': False, 'message': 'Senha é obrigatória.'}), 400
+        found['password'] = new_password
+    if 'note' in data:
+        found['note'] = str(data.get('note', '')).strip()
+    found['updated_at'] = now_iso()
+    creds[product_id] = items
+    save_credentials(creds)
+    return jsonify({'success': True, 'message': 'Acesso atualizado.'})
+
+
+@app.route('/api/admin/credentials/<product_id>/<credential_id>/deliver', methods=['POST'])
+@admin_required
+def api_mark_credential_delivered(product_id, credential_id):
+    data = request.get_json(silent=True) or {}
+    delivered_to = str(data.get('delivered_to', '')).strip()
+    creds = load_credentials()
+    items = creds.get(product_id, [])
+    found = None
+    for it in items:
+        if it.get('id') == credential_id:
+            found = it
+            break
+    if not found:
+        return jsonify({'success': False, 'message': 'Acesso não encontrado.'}), 404
+    found['used'] = True
+    found['used_at'] = found.get('used_at') or now_iso()
+    found['delivered_at'] = now_iso()
+    if delivered_to:
+        found['delivered_to'] = delivered_to
+    creds[product_id] = items
+    save_credentials(creds)
+    return jsonify({'success': True, 'message': 'Acesso marcado como entregue.'})
 
 
 @app.route('/api/get-code', methods=['POST'])

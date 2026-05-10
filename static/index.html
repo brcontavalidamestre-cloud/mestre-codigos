@@ -66,6 +66,15 @@
         <div class="platform" id="card-disney" onclick="selectPlatform('disney')">
           <div style="font-size:2.4rem">✨</div><div class="name">Disney+</div><div class="desc">Código de acesso único</div>
         </div>
+        <div class="platform" id="card-globo" onclick="selectPlatform('globo')">
+          <div style="font-size:2.4rem">📺</div><div class="name">Globoplay</div><div class="desc">Código de acesso temporário</div>
+        </div>
+        <div class="platform" id="card-max" onclick="selectPlatform('max')">
+          <div style="font-size:2.4rem">🎞️</div><div class="name">Max</div><div class="desc">Código de acesso temporário</div>
+        </div>
+        <div class="platform" id="card-prime" onclick="selectPlatform('prime')">
+          <div style="font-size:2.4rem">🎥</div><div class="name">Prime Video</div><div class="desc">Código de acesso temporário</div>
+        </div>
       </div>
     </section>
 
@@ -82,8 +91,11 @@
     <section class="card">
       <div class="title">✦ Acessar Código ✦</div>
       <div class="tabs">
-        <button class="tab active" id="tab-netflix" onclick="switchTab('netflix')">🎬 Código Netflix</button>
-        <button class="tab" id="tab-disney" onclick="switchTab('disney')">✨ Código Disney+</button>
+        <button class="tab active" id="tab-netflix" onclick="switchTab('netflix')">🎬 Netflix</button>
+        <button class="tab" id="tab-disney" onclick="switchTab('disney')">✨ Disney+</button>
+        <button class="tab" id="tab-globo" onclick="switchTab('globo')">📺 Globoplay</button>
+        <button class="tab" id="tab-max" onclick="switchTab('max')">🎞️ Max</button>
+        <button class="tab" id="tab-prime" onclick="switchTab('prime')">🎥 Prime Video</button>
       </div>
       <div class="badge" id="selected-badge">🎬 Netflix — Código de acesso temporário</div>
       <div class="group">
@@ -120,7 +132,7 @@
     let currentPlatform='netflix';
     let activeOrderNsu='';
     let pollTimer=null;
-    const platformLabels={netflix:'🎬 Netflix — Código de acesso temporário',disney:'✨ Disney+ — Código de acesso único'};
+    const platformLabels={netflix:'🎬 Netflix — Código de acesso temporário',disney:'✨ Disney+ — Código de acesso único',globo:'📺 Globoplay — Código de acesso temporário',max:'🎞️ Max — Código de acesso temporário',prime:'🎥 Prime Video — Código de acesso temporário'};
 
     function toast(msg){const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500)}
     function copyText(v){navigator.clipboard.writeText(v).then(()=>toast('✓ Copiado!'))}
@@ -137,7 +149,7 @@
         const res=await fetch('/api/get-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,platform:currentPlatform})});
         const data=await res.json();
         if(data.success && data.code){
-          const names={netflix:'Netflix',disney:'Disney+'};
+          const names={netflix:'Netflix',disney:'Disney+',globo:'Globoplay',max:'Max',prime:'Prime Video'};
           const box=document.getElementById('result-box');
           box.className='box success';
           box.innerHTML=`<div style="font-size:2.2rem">✨</div><div class="muted">Código encontrado!</div><div class="code">${data.code}</div><div class="muted">Plataforma: ${names[currentPlatform]||currentPlatform}</div><div class="inline"><button class="mini" onclick="copyText('${data.code}')">📋 Copiar Código</button></div>`;
