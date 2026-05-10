@@ -108,7 +108,7 @@
 
         <div class="platform-row" id="row-netflix">
           <div class="icon">🎬</div>
-          <div class="info"><div class="pname">Netflix</div><div class="pdesc">Código de acesso temporário</div></div>
+          <div class="info"><div class="pname">Netflix</div><div class="pdesc">Código, residência e redefinição de senha</div></div>
           <div class="form">
             <input class="input" type="email" placeholder="email da conta..." data-platform="netflix" onkeydown="if(event.key==='Enter') buscar('netflix')">
             <button class="btn btn-search" onclick="buscar('netflix')">✦ Buscar</button>
@@ -144,26 +144,6 @@
             <button class="btn btn-search" onclick="buscar('max-prime')">✦ Buscar</button>
           </div>
           <div class="result" id="result-max-prime"></div>
-        </div>
-
-        <div class="platform-row" id="row-netflix-residence">
-          <div class="icon">🏠</div>
-          <div class="info"><div class="pname">Residência Netflix</div><div class="pdesc">Link para atualizar residência</div></div>
-          <div class="form">
-            <input class="input" type="email" placeholder="email da conta..." data-platform="netflix-residence" onkeydown="if(event.key==='Enter') buscar('netflix-residence')">
-            <button class="btn btn-search" onclick="buscar('netflix-residence')">✦ Buscar</button>
-          </div>
-          <div class="result" id="result-netflix-residence"></div>
-        </div>
-
-        <div class="platform-row" id="row-password-reset">
-          <div class="icon">🔑</div>
-          <div class="info"><div class="pname">Redefinição Netflix</div><div class="pdesc">Link de redefinição de senha</div></div>
-          <div class="form">
-            <input class="input" type="email" placeholder="email da conta..." data-platform="password-reset" onkeydown="if(event.key==='Enter') buscar('password-reset')">
-            <button class="btn btn-search" onclick="buscar('password-reset')">✦ Buscar</button>
-          </div>
-          <div class="result" id="result-password-reset"></div>
         </div>
 
         <div class="platform-row" id="row-disney-residence">
@@ -208,7 +188,7 @@
     let pollTimer=null;
     const platformNames={
       'netflix':'Netflix','disney':'Disney+','globo':'Globoplay','max-prime':'Max / Prime Video',
-      'netflix-residence':'Residência Netflix','password-reset':'Redefinição Netflix','disney-residence':'Residência Disney+'
+      'disney-residence':'Residência Disney+'
     };
 
     function toast(msg){const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500)}

@@ -62,9 +62,32 @@ EMAIL_PASS = os.environ.get('EMAIL_PASS', 'Mcodigo10@')
 PLATFORM_CONFIG = {
     'netflix': {
         'from_keyword': 'netflix.com',
-        'subject_keywords': ['digo de acesso'],
+        'from_keywords': ['netflix.com'],
+        'subject_keywords': [
+            'digo de acesso',
+            'codigo de acesso',
+            'código de acesso',
+            'código',
+            'codigo',
+            'access code',
+            'atualizar',
+            'atualizar resid',
+            'residência',
+            'residencia',
+            'household',
+            'update your household',
+            'Complete a solicitacao de redefinicao de senha',
+            'redefinicao de senha',
+            'redefini',
+            'Completa tu solicitud de restablecimiento de contrasena',
+            'restablecimiento de contrasena',
+            'reset password',
+            'password reset',
+            'reset ang password',
+            'Tapusin ang request mong i-reset ang password'
+        ],
         'name': 'Netflix',
-        'type': 'code'
+        'type': 'auto'
     },
     'disney': {
         'from_keyword': 'disneyplus.com',
@@ -85,28 +108,6 @@ PLATFORM_CONFIG = {
         'subject_keywords': ['digo de acesso', 'codigo de acesso', 'código', 'codigo', 'verificação', 'verificacao', 'verification', 'sign in', 'sign-in', 'signin', 'entrar', 'one-time', 'one time', 'OTP', 'OTP', 'login', 'acesso', 'amazon', 'prime video', 'max'],
         'name': 'Max / Prime Video',
         'type': 'code'
-    },
-    'netflix-residence': {
-        'from_keyword': 'netflix.com',
-        'subject_keywords': ['atualizar'],
-        'name': 'Residência Netflix',
-        'type': 'link'
-    },
-    'password-reset': {
-        'from_keyword': 'netflix.com',
-        'subject_keywords': [
-            'Complete a solicitacao de redefinicao de senha',
-            'redefinicao de senha',
-            'Completa tu solicitud de restablecimiento de contrasena',
-            'restablecimiento de contrasena',
-            'Tapusin ang request mong i-reset ang password',
-            'reset ang password',
-            'reset password',
-            'password reset',
-            'redefini'
-        ],
-        'name': 'Redefinição de Senha Netflix',
-        'type': 'link'
     },
     'disney-residence': {
         'from_keyword': 'disneyplus.com',
@@ -400,7 +401,23 @@ def search_code(user_email, platform):
                 msg = email.message_from_bytes(data[0][1])
                 html_body = get_html_body(msg)
                 if email_matches_user(msg, html_body, user_email):
-                    if result_type == 'link':
+                    subj = decode_str(msg.get('Subject', ''))
+                    subj_norm = normalize(subj)
+                    if result_type == 'auto':
+                        link_keywords = ['atualizar', 'resid', 'household', 'redefini', 'reset password', 'password reset', 'restablecimiento']
+                        is_link = any(kw in subj_norm for kw in link_keywords)
+                        if is_link:
+                            sub_platform = 'password-reset' if any(kw in subj_norm for kw in ['redefini', 'reset password', 'password reset', 'restablecimiento']) else 'netflix-residence'
+                            link = extract_link(html_body, sub_platform)
+                            if link:
+                                mail.logout()
+                                return None, link, None
+                        else:
+                            code = extract_code_from_html(html_body)
+                            if code:
+                                mail.logout()
+                                return code, None, None
+                    elif result_type == 'link':
                         link = extract_link(html_body, platform)
                         if link:
                             mail.logout()
