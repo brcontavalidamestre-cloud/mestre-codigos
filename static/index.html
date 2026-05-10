@@ -18,40 +18,70 @@
     .mist{position:fixed;border-radius:50%;filter:blur(120px);opacity:.12;z-index:0;pointer-events:none;animation:float 12s ease-in-out infinite alternate}
     .mist-1{width:600px;height:600px;background:var(--purple);top:-150px;left:-150px}.mist-2{width:500px;height:500px;background:var(--gold);bottom:-100px;right:-100px;animation-delay:4s}
     @keyframes float{from{transform:scale(1) translateY(0)}to{transform:scale(1.15) translateY(-30px)}}
-    .wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 18px 60px}
-    header{text-align:center;padding:42px 16px 18px}.logo{width:88px;height:88px;margin:0 auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;border:2px solid var(--border-gold);background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 0 30px rgba(109,40,217,.35)}
-    h1{font-family:'Cinzel',serif;font-size:clamp(2rem,6vw,3.1rem);font-weight:900;letter-spacing:3px;text-transform:uppercase;background:linear-gradient(135deg,var(--gold-light),var(--gold),#a855f7,var(--gold-light));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 4s linear infinite}
+    .wrap{position:relative;z-index:1;max-width:760px;margin:0 auto;padding:0 18px 60px}
+    header{text-align:center;padding:34px 16px 14px}.logo{width:74px;height:74px;margin:0 auto 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:34px;border:2px solid var(--border-gold);background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 0 30px rgba(109,40,217,.35)}
+    h1{font-family:'Cinzel',serif;font-size:clamp(1.7rem,5vw,2.4rem);font-weight:900;letter-spacing:3px;text-transform:uppercase;background:linear-gradient(135deg,var(--gold-light),var(--gold),#a855f7,var(--gold-light));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 4s linear infinite}
     @keyframes shimmer{to{background-position:200% center}}
-    .subtitle{margin-top:10px;color:var(--muted)} .divider{width:220px;height:2px;margin:20px auto;background:linear-gradient(90deg,transparent,var(--gold),#a855f7,var(--gold),transparent)}
-    .card{background:linear-gradient(135deg,rgba(19,0,41,.92),rgba(26,0,53,.92));border:1px solid var(--border-gold);border-radius:20px;padding:28px 22px;margin-bottom:24px;box-shadow:0 8px 40px rgba(0,0,0,.45)}
-    .title{font-family:'Cinzel',serif;font-size:1rem;color:var(--gold);letter-spacing:3px;text-transform:uppercase;display:flex;align-items:center;gap:10px;margin-bottom:10px}.title:before,.title:after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border-gold))}.title:before{background:linear-gradient(90deg,var(--border-gold),transparent)}
-    .subtitle2{text-align:center;color:var(--muted);font-size:.92rem;margin-bottom:22px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
-    .platform,.product{background:rgba(59,7,100,.28);border:1px solid var(--border);border-radius:14px;padding:20px 16px;text-align:center;transition:.25s;position:relative;overflow:hidden}.platform{cursor:pointer}.platform:hover,.platform.active,.product:hover{transform:translateY(-3px);border-color:#a855f7;box-shadow:0 0 20px rgba(168,85,247,.25)}.platform.active{border-color:var(--gold);background:rgba(245,158,11,.08)}
-    .product-badge{display:inline-block;margin-bottom:10px;padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:700;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:var(--gold-light)}
-    .product-logo-wrap{height:72px;display:flex;align-items:center;justify-content:center;margin:4px 0 14px}
-    .product-logo{max-width:170px;max-height:56px;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35))}
-    .name{font-family:'Cinzel',serif;font-size:1rem;font-weight:700}.desc{font-size:.84rem;color:var(--muted);line-height:1.5;margin-top:6px}.price{font-family:'Cinzel',serif;color:var(--gold-light);font-size:1.45rem;margin:12px 0 8px}
-    .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:18px}.step{text-align:center;padding:16px 10px}.stepnum{width:44px;height:44px;margin:0 auto 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--purple),var(--purple2));border:1px solid var(--border-gold);font-family:'Cinzel',serif;color:var(--gold-light);font-weight:700}
-    .tabs{display:flex;gap:10px;margin-bottom:20px;background:rgba(0,0,0,.3);border-radius:12px;padding:4px;flex-wrap:wrap}.tab{flex:1;min-width:120px;padding:10px 8px;border:none;border-radius:10px;background:transparent;color:var(--muted);cursor:pointer;font-weight:700}.tab.active{background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff}
-    .badge{display:inline-flex;gap:8px;align-items:center;padding:6px 16px;border-radius:20px;background:rgba(109,40,217,.2);border:1px solid var(--border);color:#c084fc;margin-bottom:18px;font-size:.83rem;font-weight:600}
-    .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.group{margin-bottom:16px}.label{display:block;font-size:.83rem;color:var(--muted);margin-bottom:8px}.input{width:100%;background:rgba(59,7,100,.2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;color:#fff;outline:none;font-family:'Raleway',sans-serif}.input:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.15)}
-    .btn,.btn2{width:100%;padding:15px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff;font-family:'Cinzel',serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 20px rgba(109,40,217,.35)} .btn:hover,.btn2:hover{transform:translateY(-1px)} .btn:disabled,.btn2:disabled{opacity:.65;cursor:not-allowed}
-    .btn2{margin-top:12px}
-    .box{display:none;margin-top:18px;border-radius:14px;padding:22px;text-align:center}.success{display:block;background:linear-gradient(135deg,rgba(15,60,15,.5),rgba(10,40,10,.4));border:1px solid rgba(74,222,128,.4)}.error{display:block;background:linear-gradient(135deg,rgba(80,10,10,.5),rgba(60,5,5,.4));border:1px solid rgba(252,165,165,.3)}.info{display:block;background:linear-gradient(135deg,rgba(20,30,70,.4),rgba(10,20,45,.4));border:1px solid rgba(96,165,250,.3)}
-    .code{font-family:'Cinzel',serif;font-size:2.2rem;letter-spacing:7px;color:var(--gold-light);margin:10px 0}.muted{color:var(--muted);font-size:.85rem;line-height:1.6}.inline{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}.mini{padding:10px 16px;border-radius:8px;border:1px solid var(--border-gold);background:rgba(245,158,11,.1);color:var(--gold);cursor:pointer;font-weight:700}
-    footer{text-align:center;padding:20px;color:rgba(196,181,253,.4);font-size:.78rem} footer span{color:var(--gold)}
-    .toast{position:fixed;right:24px;bottom:24px;background:rgba(19,0,41,.96);border:1px solid var(--border-gold);border-radius:12px;padding:14px 18px;color:var(--gold-light);transform:translateX(220px);opacity:0;transition:.35s;z-index:99}.toast.show{transform:translateX(0);opacity:1}
-
-    .menu{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:6px 0 26px}
-    .menu-btn{padding:14px 24px;border-radius:14px;border:1px solid var(--border);background:rgba(59,7,100,.28);color:var(--muted);font-family:'Cinzel',serif;font-weight:700;letter-spacing:2px;text-transform:uppercase;cursor:pointer;transition:.25s;font-size:.85rem}
-    .menu-btn:hover{transform:translateY(-2px);border-color:#a855f7}
-    .menu-btn.active{background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff;border-color:var(--border-gold);box-shadow:0 6px 22px rgba(109,40,217,.35)}
-
+    .subtitle{margin-top:8px;color:var(--muted);font-size:.9rem} .divider{width:200px;height:2px;margin:14px auto 0;background:linear-gradient(90deg,transparent,var(--gold),#a855f7,var(--gold),transparent)}
+    .card{background:linear-gradient(135deg,rgba(19,0,41,.92),rgba(26,0,53,.92));border:1px solid var(--border-gold);border-radius:16px;padding:18px 16px;margin-bottom:14px;box-shadow:0 6px 30px rgba(0,0,0,.4)}
+    .title{font-family:'Cinzel',serif;font-size:.92rem;color:var(--gold);letter-spacing:2px;text-transform:uppercase;display:flex;align-items:center;gap:10px;margin-bottom:10px}.title:before,.title:after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border-gold))}.title:before{background:linear-gradient(90deg,var(--border-gold),transparent)}
+    .subtitle2{text-align:center;color:var(--muted);font-size:.86rem;margin-bottom:14px}
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .row .input{flex:1;min-width:0}
+    .input{width:100%;background:rgba(59,7,100,.2);border:1px solid var(--border);border-radius:10px;padding:12px 14px;color:#fff;outline:none;font-family:'Raleway',sans-serif;font-size:.95rem}
+    .input:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.15)}
+    .btn,.btn2{padding:12px 16px;border:none;border-radius:10px;background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff;font-family:'Cinzel',serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 18px rgba(109,40,217,.32);font-size:.86rem}
+    .btn:hover,.btn2:hover{transform:translateY(-1px)} .btn:disabled,.btn2:disabled{opacity:.65;cursor:not-allowed}
+    .btn-search{min-width:140px}
+    .platform-row{display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(59,7,100,.22);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;transition:.2s}
+    .platform-row:hover{border-color:#a855f7;box-shadow:0 0 14px rgba(168,85,247,.18)}
+    .platform-row .icon{font-size:1.7rem;width:42px;text-align:center}
+    .platform-row .info{flex:1;min-width:140px}
+    .platform-row .pname{font-family:'Cinzel',serif;font-weight:700;font-size:.95rem}
+    .platform-row .pdesc{font-size:.75rem;color:var(--muted);margin-top:2px}
+    .platform-row .form{display:flex;gap:8px;flex:2;min-width:240px;flex-wrap:wrap}
+    .platform-row .form .input{flex:1;min-width:160px;padding:10px 12px;font-size:.88rem}
+    .platform-row .form .btn-search{padding:10px 14px;font-size:.78rem}
+    .result{margin-top:8px;border-radius:10px;padding:12px;font-size:.88rem;display:none}
+    .result.success{display:block;background:linear-gradient(135deg,rgba(15,60,15,.5),rgba(10,40,10,.4));border:1px solid rgba(74,222,128,.4)}
+    .result.error{display:block;background:linear-gradient(135deg,rgba(80,10,10,.5),rgba(60,5,5,.4));border:1px solid rgba(252,165,165,.3)}
+    .code{font-family:'Cinzel',serif;font-size:1.6rem;letter-spacing:6px;color:var(--gold-light);margin:6px 0;text-align:center}
+    .muted{color:var(--muted);font-size:.82rem;line-height:1.5}
+    .inline{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-top:8px}
+    .mini{padding:7px 12px;border-radius:8px;border:1px solid var(--border-gold);background:rgba(245,158,11,.1);color:var(--gold);cursor:pointer;font-weight:700;font-size:.78rem}
+    .link-output{word-break:break-all;font-size:.82rem;background:rgba(0,0,0,.3);padding:8px;border-radius:6px;color:var(--gold-light);margin-bottom:6px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+    .product{background:rgba(59,7,100,.28);border:1px solid var(--border);border-radius:14px;padding:18px 14px;text-align:center;transition:.25s}
+    .product:hover{transform:translateY(-3px);border-color:#a855f7;box-shadow:0 0 18px rgba(168,85,247,.22)}
+    .product-badge{display:inline-block;margin-bottom:8px;padding:5px 9px;border-radius:999px;font-size:.7rem;font-weight:700;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:var(--gold-light)}
+    .product-logo-wrap{height:60px;display:flex;align-items:center;justify-content:center;margin:2px 0 10px}
+    .product-logo{max-width:150px;max-height:48px;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35))}
+    .name{font-family:'Cinzel',serif;font-size:.98rem;font-weight:700}
+    .desc{font-size:.78rem;color:var(--muted);line-height:1.5;margin-top:6px}
+    .price{font-family:'Cinzel',serif;color:var(--gold-light);font-size:1.3rem;margin:10px 0 6px}
+    .product .btn2{width:100%;padding:11px}
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;margin-bottom:14px}
+    .form-grid .input{padding:11px 12px;font-size:.88rem}
+    .box{display:none;margin-top:14px;border-radius:12px;padding:18px;text-align:center}
+    .box.success{display:block;background:linear-gradient(135deg,rgba(15,60,15,.5),rgba(10,40,10,.4));border:1px solid rgba(74,222,128,.4)}
+    .box.error{display:block;background:linear-gradient(135deg,rgba(80,10,10,.5),rgba(60,5,5,.4));border:1px solid rgba(252,165,165,.3)}
+    .box.info{display:block;background:linear-gradient(135deg,rgba(20,30,70,.4),rgba(10,20,45,.4));border:1px solid rgba(96,165,250,.3)}
+    footer{text-align:center;padding:18px;color:rgba(196,181,253,.4);font-size:.74rem} footer span{color:var(--gold)}
+    .toast{position:fixed;right:20px;bottom:20px;background:rgba(19,0,41,.96);border:1px solid var(--border-gold);border-radius:10px;padding:12px 16px;color:var(--gold-light);transform:translateX(220px);opacity:0;transition:.35s;z-index:99}.toast.show{transform:translateX(0);opacity:1}
+    .menu{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin:4px 0 16px}
+    .menu-btn{padding:11px 18px;border-radius:12px;border:1px solid var(--border);background:rgba(59,7,100,.28);color:var(--muted);font-family:'Cinzel',serif;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;cursor:pointer;transition:.25s;font-size:.78rem}
+    .menu-btn:hover{transform:translateY(-1px);border-color:#a855f7}
+    .menu-btn.active{background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff;border-color:var(--border-gold);box-shadow:0 4px 16px rgba(109,40,217,.3)}
     .view{display:none}.view.active{display:block}
-    .link-output{word-break:break-all;font-size:.9rem;background:rgba(0,0,0,.3);padding:10px;border-radius:8px;color:var(--gold-light)}
-
-    @media (max-width:700px){.tabs{flex-direction:column}.grid{grid-template-columns:1fr}.code{font-size:1.7rem;letter-spacing:4px}.menu-btn{flex:1;padding:12px 14px;font-size:.8rem}}
+    @media (max-width:600px){
+      .platform-row{flex-direction:column;align-items:stretch}
+      .platform-row .info{text-align:center}
+      .platform-row .form{flex-direction:column}
+      .platform-row .form .btn-search{width:100%}
+      .grid{grid-template-columns:1fr}
+      .code{font-size:1.3rem;letter-spacing:4px}
+      .menu-btn{flex:1;font-size:.74rem;padding:10px 12px}
+    }
   </style>
 </head>
 <body>
@@ -70,56 +100,81 @@
       <button class="menu-btn" id="menu-loja" onclick="switchView('loja')">🛒 Loja com Pix</button>
     </nav>
 
-    <!-- VIEW: CONSULTAR CÓDIGOS -->
+    <!-- VIEW: CONSULTAR CÓDIGOS (compacto, uma consulta abaixo da outra) -->
     <div class="view active" id="view-codigos">
       <section class="card">
-        <div class="title">✦ Plataformas Disponíveis ✦</div>
-        <p class="subtitle2">Selecione a plataforma do código que você quer buscar</p>
-        <div class="grid">
-          <div class="platform active" id="card-netflix" onclick="selectPlatform('netflix')">
-            <div style="font-size:2.4rem">🎬</div><div class="name">Netflix</div><div class="desc">Código de acesso temporário</div>
-          </div>
-          <div class="platform" id="card-disney" onclick="selectPlatform('disney')">
-            <div style="font-size:2.4rem">✨</div><div class="name">Disney+</div><div class="desc">Código de acesso único</div>
-          </div>
-          <div class="platform" id="card-globo" onclick="selectPlatform('globo')">
-            <div style="font-size:2.4rem">📺</div><div class="name">Globoplay</div><div class="desc">Código de acesso temporário</div>
-          </div>
-          <div class="platform" id="card-max" onclick="selectPlatform('max')">
-            <div style="font-size:2.4rem">🎞️</div><div class="name">Max</div><div class="desc">Código de acesso temporário</div>
-          </div>
-          <div class="platform" id="card-prime" onclick="selectPlatform('prime')">
-            <div style="font-size:2.4rem">🎥</div><div class="name">Prime Video</div><div class="desc">Código de acesso temporário</div>
-          </div>
-        </div>
-      </section>
+        <div class="title">✦ Consultar Códigos ✦</div>
+        <p class="subtitle2">Digite o email da conta e clique em buscar na plataforma desejada.</p>
 
-      <section class="card">
-        <div class="title">✦ Como Solicitar ✦</div>
-        <div class="steps">
-          <div class="step"><div class="stepnum">1</div><div class="muted">Escolha a plataforma acima</div></div>
-          <div class="step"><div class="stepnum">2</div><div class="muted">Digite o email da conta</div></div>
-          <div class="step"><div class="stepnum">3</div><div class="muted">Solicite o código no app ou site</div></div>
-          <div class="step"><div class="stepnum">4</div><div class="muted">Clique em Buscar Código e aguarde</div></div>
+        <div class="platform-row" id="row-netflix">
+          <div class="icon">🎬</div>
+          <div class="info"><div class="pname">Netflix</div><div class="pdesc">Código de acesso temporário</div></div>
+          <div class="form">
+            <input class="input" type="email" placeholder="email da conta..." data-platform="netflix" onkeydown="if(event.key==='Enter') buscar('netflix')">
+            <button class="btn btn-search" onclick="buscar('netflix')">✦ Buscar</button>
+          </div>
+          <div class="result" id="result-netflix"></div>
         </div>
-      </section>
 
-      <section class="card">
-        <div class="title">✦ Acessar Código ✦</div>
-        <div class="tabs">
-          <button class="tab active" id="tab-netflix" onclick="switchTab('netflix')">🎬 Netflix</button>
-          <button class="tab" id="tab-disney" onclick="switchTab('disney')">✨ Disney+</button>
-          <button class="tab" id="tab-globo" onclick="switchTab('globo')">📺 Globoplay</button>
-          <button class="tab" id="tab-max" onclick="switchTab('max')">🎞️ Max</button>
-          <button class="tab" id="tab-prime" onclick="switchTab('prime')">🎥 Prime Video</button>
+        <div class="platform-row" id="row-disney">
+          <div class="icon">✨</div>
+          <div class="info"><div class="pname">Disney+</div><div class="pdesc">Código de acesso único</div></div>
+          <div class="form">
+            <input class="input" type="email" placeholder="email da conta..." data-platform="disney" onkeydown="if(event.key==='Enter') buscar('disney')">
+            <button class="btn btn-search" onclick="buscar('disney')">✦ Buscar</button>
+          </div>
+          <div class="result" id="result-disney"></div>
         </div>
-        <div class="badge" id="selected-badge">🎬 Netflix — Código de acesso temporário</div>
-        <div class="group">
-          <label class="label" for="email-input">✉ Seu Email da Conta</label>
-          <input class="input" type="email" id="email-input" placeholder="Digite seu email..." onkeydown="if(event.key==='Enter') buscarCodigo()">
+
+        <div class="platform-row" id="row-globo">
+          <div class="icon">📺</div>
+          <div class="info"><div class="pname">Globoplay</div><div class="pdesc">Código de acesso temporário</div></div>
+          <div class="form">
+            <input class="input" type="email" placeholder="email da conta..." data-platform="globo" onkeydown="if(event.key==='Enter') buscar('globo')">
+            <button class="btn btn-search" onclick="buscar('globo')">✦ Buscar</button>
+          </div>
+          <div class="result" id="result-globo"></div>
         </div>
-        <button class="btn" id="btn-buscar" onclick="buscarCodigo()">✦ Buscar Código</button>
-        <div class="box" id="result-box"></div>
+
+        <div class="platform-row" id="row-max-prime">
+          <div class="icon">🎞️</div>
+          <div class="info"><div class="pname">Max / Prime Video</div><div class="pdesc">Código de acesso temporário</div></div>
+          <div class="form">
+            <input class="input" type="email" placeholder="email da conta..." data-platform="max-prime" onkeydown="if(event.key==='Enter') buscar('max-prime')">
+            <button class="btn btn-search" onclick="buscar('max-prime')">✦ Buscar</button>
+          </div>
+          <div class="result" id="result-max-prime"></div>
+        </div>
+
+        <div class="platform-row" id="row-netflix-residence">
+          <div class="icon">🏠</div>
+          <div class="info"><div class="pname">Residência Netflix</div><div class="pdesc">Link para atualizar residência</div></div>
+          <div class="form">
+            <input class="input" type="email" placeholder="email da conta..." data-platform="netflix-residence" onkeydown="if(event.key==='Enter') buscar('netflix-residence')">
+            <button class="btn btn-search" onclick="buscar('netflix-residence')">✦ Buscar</button>
+          </div>
+          <div class="result" id="result-netflix-residence"></div>
+        </div>
+
+        <div class="platform-row" id="row-password-reset">
+          <div class="icon">🔑</div>
+          <div class="info"><div class="pname">Redefinição Netflix</div><div class="pdesc">Link de redefinição de senha</div></div>
+          <div class="form">
+            <input class="input" type="email" placeholder="email da conta..." data-platform="password-reset" onkeydown="if(event.key==='Enter') buscar('password-reset')">
+            <button class="btn btn-search" onclick="buscar('password-reset')">✦ Buscar</button>
+          </div>
+          <div class="result" id="result-password-reset"></div>
+        </div>
+
+        <div class="platform-row" id="row-disney-residence">
+          <div class="icon">🏡</div>
+          <div class="info"><div class="pname">Residência Disney+</div><div class="pdesc">Link para atualizar residência</div></div>
+          <div class="form">
+            <input class="input" type="email" placeholder="email da conta..." data-platform="disney-residence" onkeydown="if(event.key==='Enter') buscar('disney-residence')">
+            <button class="btn btn-search" onclick="buscar('disney-residence')">✦ Buscar</button>
+          </div>
+          <div class="result" id="result-disney-residence"></div>
+        </div>
       </section>
     </div>
 
@@ -129,9 +184,9 @@
         <div class="title">✦ Loja com Pix ✦</div>
         <p class="subtitle2">Checkout integrado com InfinitePay e liberação automática após aprovação</p>
         <div class="form-grid">
-          <div class="group"><label class="label">Nome do cliente</label><input class="input" id="customer-name" placeholder="Seu nome"></div>
-          <div class="group"><label class="label">Email do cliente</label><input class="input" id="customer-email" placeholder="seu@email.com"></div>
-          <div class="group"><label class="label">Telefone do cliente</label><input class="input" id="customer-phone" placeholder="+5511999999999"></div>
+          <input class="input" id="customer-name" placeholder="Nome do cliente">
+          <input class="input" id="customer-email" placeholder="Email do cliente">
+          <input class="input" id="customer-phone" placeholder="Telefone (+5511...)">
         </div>
         <div class="grid" id="products-grid"></div>
         <div class="box" id="payment-box"></div>
@@ -149,15 +204,11 @@
     function animate(){ctx.clearRect(0,0,canvas.width,canvas.height); stars.forEach(s=>{s.a+=s.s*s.d; if(s.a>=1||s.a<=0)s.d*=-1; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fillStyle=s.g?`rgba(245,158,11,${s.a})`:`rgba(196,181,253,${s.a*.8})`; ctx.fill()}); requestAnimationFrame(animate)}
     addEventListener('resize',()=>{resizeCanvas(); createStars()}); resizeCanvas(); createStars(); animate();
 
-    let currentPlatform='netflix';
     let activeOrderNsu='';
     let pollTimer=null;
-    const platformLabels={
-      netflix:'🎬 Netflix — Código de acesso temporário',
-      disney:'✨ Disney+ — Código de acesso único',
-      globo:'📺 Globoplay — Código de acesso temporário',
-      max:'🎞️ Max — Código de acesso temporário',
-      prime:'🎥 Prime Video — Código de acesso temporário'
+    const platformNames={
+      'netflix':'Netflix','disney':'Disney+','globo':'Globoplay','max-prime':'Max / Prime Video',
+      'netflix-residence':'Residência Netflix','password-reset':'Redefinição Netflix','disney-residence':'Residência Disney+'
     };
 
     function toast(msg){const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500)}
@@ -172,34 +223,46 @@
       window.scrollTo({top:0,behavior:'smooth'});
     }
 
-    function selectPlatform(p){currentPlatform=p; document.querySelectorAll('.platform').forEach(el=>el.classList.remove('active')); document.getElementById('card-'+p).classList.add('active'); switchTab(p)}
-    function switchTab(p){currentPlatform=p; document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active')); document.getElementById('tab-'+p).classList.add('active'); document.getElementById('selected-badge').textContent=platformLabels[p]||p; document.querySelectorAll('.platform').forEach(el=>el.classList.remove('active')); document.getElementById('card-'+p).classList.add('active'); hideResult()}
-    function hideResult(){const box=document.getElementById('result-box'); box.className='box'; box.innerHTML=''}
-
-    async function buscarCodigo(){
-      const email=document.getElementById('email-input').value.trim(); const btn=document.getElementById('btn-buscar');
-      if(!email) return showResult('error','⚠️','Código não localizado','Por favor, informe seu email.');
-      if(!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) return showResult('error','⚠️','Código não localizado','Email inválido. Verifique e tente novamente.');
-      btn.disabled=true; btn.textContent='Buscando...';
-      try{
-        const res=await fetch('/api/get-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,platform:currentPlatform})});
-        const data=await res.json();
-        if(data.success && data.code){
-          const names={netflix:'Netflix',disney:'Disney+',globo:'Globoplay',max:'Max',prime:'Prime Video'};
-          const box=document.getElementById('result-box');
-          box.className='box success';
-          box.innerHTML=`<div style="font-size:2.2rem">✨</div><div class="muted">Código encontrado!</div><div class="code">${data.code}</div><div class="muted">Plataforma: ${names[currentPlatform]||currentPlatform}</div><div class="inline"><button class="mini" onclick="copyText('${data.code}')">📋 Copiar Código</button></div>`;
-        } else if(data.success && data.link){
-          showResult('success','🔗','Link encontrado',`<div class="link-output">${data.link}</div><div class="inline"><button class="mini" onclick="window.open('${data.link}','_blank')">Abrir Link</button><button class="mini" onclick="copyText('${data.link}')">Copiar Link</button></div>`);
-        } else {
-          showResult('error','⚠️','Código não localizado',data.message||'Código não encontrado.');
-        }
-      }catch(e){ showResult('error','⚠️','Erro de conexão','Tente novamente em instantes.'); }
-      finally{ btn.disabled=false; btn.textContent='✦ Buscar Código'; }
+    function showResultIn(platform, type, html){
+      const box=document.getElementById('result-'+platform);
+      box.className='result '+type;
+      box.innerHTML=html;
     }
 
-    function showResult(type,emoji,title,msgHtml){const box=document.getElementById('result-box'); box.className='box '+type; box.innerHTML=`<div style="font-size:2.2rem">${emoji}</div><div style="font-family:Cinzel,serif;font-weight:700;margin-bottom:8px">${title}</div><div class="muted">${msgHtml}</div>`}
-    function showPayment(type,emoji,title,html){const box=document.getElementById('payment-box'); box.className='box '+type; box.innerHTML=`<div style="font-size:2.2rem">${emoji}</div><div style="font-family:Cinzel,serif;font-weight:700;margin-bottom:8px">${title}</div><div class="muted">${html}</div>`}
+    async function buscar(platform){
+      const row=document.getElementById('row-'+platform);
+      const input=row.querySelector('input[data-platform="'+platform+'"]');
+      const btn=row.querySelector('button.btn-search');
+      const email=(input.value||'').trim();
+      if(!email){ showResultIn(platform,'error','<b>⚠️ Informe o email da conta.</b>'); return; }
+      if(!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)){ showResultIn(platform,'error','<b>⚠️ Email inválido.</b>'); return; }
+      const oldText=btn.textContent;
+      btn.disabled=true; btn.textContent='Buscando...';
+      showResultIn(platform,'info','<div class="muted">⏳ Buscando código, aguarde...</div>');
+      try{
+        const res=await fetch('/api/get-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,platform})});
+        const data=await res.json();
+        if(data.success && data.code){
+          showResultIn(platform,'success',
+            `<div class="muted">✨ Código encontrado para <b>${platformNames[platform]||platform}</b></div>`+
+            `<div class="code">${data.code}</div>`+
+            `<div class="inline"><button class="mini" onclick="copyText('${data.code}')">📋 Copiar Código</button></div>`);
+        } else if(data.success && data.link){
+          showResultIn(platform,'success',
+            `<div class="muted">🔗 Link encontrado para <b>${platformNames[platform]||platform}</b></div>`+
+            `<div class="link-output">${data.link}</div>`+
+            `<div class="inline"><button class="mini" onclick="window.open('${data.link}','_blank')">Abrir Link</button><button class="mini" onclick="copyText('${data.link}')">Copiar</button></div>`);
+        } else {
+          showResultIn(platform,'error','<b>⚠️ Código não localizado.</b><div class="muted">'+(data.message||'Tente novamente em instantes.')+'</div>');
+        }
+      }catch(e){
+        showResultIn(platform,'error','<b>⚠️ Erro de conexão.</b><div class="muted">Tente novamente em instantes.</div>');
+      }
+      finally{ btn.disabled=false; btn.textContent=oldText; }
+    }
+
+    /* LOJA */
+    function showPayment(type,emoji,title,html){const box=document.getElementById('payment-box'); box.className='box '+type; box.innerHTML=`<div style="font-size:2rem">${emoji}</div><div style="font-family:Cinzel,serif;font-weight:700;margin-bottom:8px">${title}</div><div class="muted">${html}</div>`}
 
     async function loadProducts(){
       try{
@@ -294,7 +357,6 @@
       }catch(e){ showPayment('error','⚠️','Erro', 'Não foi possível confirmar o retorno agora.'); }
     }
 
-    // Abrir a aba certa baseado em hash (#loja ou #codigos)
     (function initFromHash(){
       const h=(location.hash||'').replace('#','');
       if(h==='loja') switchView('loja');

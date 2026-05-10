@@ -74,20 +74,16 @@ PLATFORM_CONFIG = {
     },
     'globo': {
         'from_keyword': 'globo.com',
-        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'verificação', 'verificacao', 'globoplay', 'acesso'],
+        'from_keywords': ['globo.com', 'globoplay.com', 'globoplay'],
+        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'verificação', 'verificacao', 'globoplay', 'acesso', 'código', 'codigo', 'one-time', 'login', 'entrar'],
         'name': 'Globoplay',
         'type': 'code'
     },
-    'max': {
+    'max-prime': {
         'from_keyword': 'max.com',
-        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'verificação', 'verification', 'sign in', 'entrar', 'one-time'],
-        'name': 'Max',
-        'type': 'code'
-    },
-    'prime': {
-        'from_keyword': 'amazon',
-        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'verificação', 'verification', 'one-time password', 'OTP', 'sign-in'],
-        'name': 'Prime Video',
+        'from_keywords': ['max.com', 'hbomax', 'warnermedia', 'amazon.com', 'amazon.com.br', 'primevideo', 'amazonses.com', 'amazon'],
+        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'código', 'codigo', 'verificação', 'verificacao', 'verification', 'sign in', 'sign-in', 'signin', 'entrar', 'one-time', 'one time', 'OTP', 'OTP', 'login', 'acesso', 'amazon', 'prime video', 'max'],
+        'name': 'Max / Prime Video',
         'type': 'code'
     },
     'netflix-residence': {
@@ -360,15 +356,26 @@ def search_code(user_email, platform):
     try:
         mail = connect_imap()
         mail.select('INBOX')
-        from_kw = config['from_keyword']
+        from_kws = config.get('from_keywords') or [config.get('from_keyword', '')]
+        from_kws = [k for k in from_kws if k]
         subj_kws = config['subject_keywords']
         result_type = config.get('type', 'code')
-        status, msgs = mail.search(None, 'FROM', from_kw)
-        if status != 'OK' or not msgs[0]:
+        all_ids = []
+        seen = set()
+        for fk in from_kws:
+            try:
+                status, msgs = mail.search(None, 'FROM', fk)
+                if status == 'OK' and msgs and msgs[0]:
+                    for eid in msgs[0].split():
+                        if eid not in seen:
+                            seen.add(eid)
+                            all_ids.append(eid)
+            except Exception:
+                continue
+        if not all_ids:
             mail.logout()
             return None, None, 'Nenhum email da plataforma encontrado.'
-        all_ids = msgs[0].split()
-        recent_ids = all_ids[-100:]
+        recent_ids = all_ids[-150:]
         recent_ids.reverse()
         matched_ids = []
         for eid in recent_ids:
