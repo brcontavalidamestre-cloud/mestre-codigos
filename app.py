@@ -471,7 +471,7 @@ def infinitepay_create_link(product, customer_name='', customer_email='', custom
     order_nsu = new_order_nsu()
     payload = {
         'handle': INFINITEPAY_HANDLE,
-        'itens': [
+        'items': [
             {
                 'quantity': 1,
                 'price': int(product['price_cents']),
