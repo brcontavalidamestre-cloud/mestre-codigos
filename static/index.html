@@ -52,58 +52,30 @@
     <header>
       <div class="logo">🧙‍♂️</div>
       <h1>Mestre Códigos</h1>
-      <p class="subtitle">✦ Solicite códigos e venda acessos com Pix automático ✦</p>
+      <p class="subtitle">✦ Loja de acessos com Pix automático ✦</p>
       <div class="divider"></div>
     </header>
 
     <section class="card">
       <div class="title">✦ Plataformas Disponíveis ✦</div>
-      <p class="subtitle2">Selecione a plataforma do código que você quer buscar</p>
+      <p class="subtitle2">Plataformas de streaming disponíveis na loja</p>
       <div class="grid">
-        <div class="platform active" id="card-netflix" onclick="selectPlatform('netflix')">
-          <div style="font-size:2.4rem">🎬</div><div class="name">Netflix</div><div class="desc">Código de acesso temporário</div>
+        <div class="platform" id="card-netflix">
+          <div style="font-size:2.4rem">🎬</div><div class="name">Netflix</div><div class="desc">Acesso premium</div>
         </div>
-        <div class="platform" id="card-disney" onclick="selectPlatform('disney')">
-          <div style="font-size:2.4rem">✨</div><div class="name">Disney+</div><div class="desc">Código de acesso único</div>
+        <div class="platform" id="card-disney">
+          <div style="font-size:2.4rem">✨</div><div class="name">Disney+</div><div class="desc">Acesso premium</div>
         </div>
-        <div class="platform" id="card-globo" onclick="selectPlatform('globo')">
-          <div style="font-size:2.4rem">📺</div><div class="name">Globoplay</div><div class="desc">Código de acesso temporário</div>
+        <div class="platform" id="card-globo">
+          <div style="font-size:2.4rem">📺</div><div class="name">Globoplay</div><div class="desc">Acesso premium</div>
         </div>
-        <div class="platform" id="card-max" onclick="selectPlatform('max')">
-          <div style="font-size:2.4rem">🎞️</div><div class="name">Max</div><div class="desc">Código de acesso temporário</div>
+        <div class="platform" id="card-max">
+          <div style="font-size:2.4rem">🎞️</div><div class="name">Max</div><div class="desc">Acesso premium</div>
         </div>
-        <div class="platform" id="card-prime" onclick="selectPlatform('prime')">
-          <div style="font-size:2.4rem">🎥</div><div class="name">Prime Video</div><div class="desc">Código de acesso temporário</div>
+        <div class="platform" id="card-prime">
+          <div style="font-size:2.4rem">🎥</div><div class="name">Prime Video</div><div class="desc">Acesso premium</div>
         </div>
       </div>
-    </section>
-
-    <section class="card">
-      <div class="title">✦ Como Solicitar ✦</div>
-      <div class="steps">
-        <div class="step"><div class="stepnum">1</div><div class="muted">Escolha a plataforma acima</div></div>
-        <div class="step"><div class="stepnum">2</div><div class="muted">Digite o email da conta</div></div>
-        <div class="step"><div class="stepnum">3</div><div class="muted">Solicite o código no app ou site</div></div>
-        <div class="step"><div class="stepnum">4</div><div class="muted">Clique em Buscar Código e aguarde</div></div>
-      </div>
-    </section>
-
-    <section class="card">
-      <div class="title">✦ Acessar Código ✦</div>
-      <div class="tabs">
-        <button class="tab active" id="tab-netflix" onclick="switchTab('netflix')">🎬 Netflix</button>
-        <button class="tab" id="tab-disney" onclick="switchTab('disney')">✨ Disney+</button>
-        <button class="tab" id="tab-globo" onclick="switchTab('globo')">📺 Globoplay</button>
-        <button class="tab" id="tab-max" onclick="switchTab('max')">🎞️ Max</button>
-        <button class="tab" id="tab-prime" onclick="switchTab('prime')">🎥 Prime Video</button>
-      </div>
-      <div class="badge" id="selected-badge">🎬 Netflix — Código de acesso temporário</div>
-      <div class="group">
-        <label class="label" for="email-input">✉ Seu Email da Conta</label>
-        <input class="input" type="email" id="email-input" placeholder="Digite seu email..." onkeydown="if(event.key==='Enter') buscarCodigo()">
-      </div>
-      <button class="btn" id="btn-buscar" onclick="buscarCodigo()">✦ Buscar Código</button>
-      <div class="box" id="result-box"></div>
     </section>
 
     <section class="card">
@@ -129,40 +101,12 @@
     function animate(){ctx.clearRect(0,0,canvas.width,canvas.height); stars.forEach(s=>{s.a+=s.s*s.d; if(s.a>=1||s.a<=0)s.d*=-1; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fillStyle=s.g?`rgba(245,158,11,${s.a})`:`rgba(196,181,253,${s.a*.8})`; ctx.fill()}); requestAnimationFrame(animate)}
     addEventListener('resize',()=>{resizeCanvas(); createStars()}); resizeCanvas(); createStars(); animate();
 
-    let currentPlatform='netflix';
     let activeOrderNsu='';
     let pollTimer=null;
-    const platformLabels={netflix:'🎬 Netflix — Código de acesso temporário',disney:'✨ Disney+ — Código de acesso único',globo:'📺 Globoplay — Código de acesso temporário',max:'🎞️ Max — Código de acesso temporário',prime:'🎥 Prime Video — Código de acesso temporário'};
 
     function toast(msg){const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500)}
     function copyText(v){navigator.clipboard.writeText(v).then(()=>toast('✓ Copiado!'))}
-    function selectPlatform(p){currentPlatform=p; document.querySelectorAll('.platform').forEach(el=>el.classList.remove('active')); document.getElementById('card-'+p).classList.add('active'); switchTab(p)}
-    function switchTab(p){currentPlatform=p; document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active')); document.getElementById('tab-'+p).classList.add('active'); document.getElementById('selected-badge').textContent=platformLabels[p]; document.querySelectorAll('.platform').forEach(el=>el.classList.remove('active')); document.getElementById('card-'+p).classList.add('active'); hideResult()}
-    function hideResult(){const box=document.getElementById('result-box'); box.className='box'; box.innerHTML=''}
 
-    async function buscarCodigo(){
-      const email=document.getElementById('email-input').value.trim(); const btn=document.getElementById('btn-buscar');
-      if(!email) return showResult('error','⚠️','Código não localizado','Por favor, informe seu email.');
-      if(!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) return showResult('error','⚠️','Código não localizado','Email inválido. Verifique e tente novamente.');
-      btn.disabled=true; btn.textContent='Buscando...';
-      try{
-        const res=await fetch('/api/get-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,platform:currentPlatform})});
-        const data=await res.json();
-        if(data.success && data.code){
-          const names={netflix:'Netflix',disney:'Disney+',globo:'Globoplay',max:'Max',prime:'Prime Video'};
-          const box=document.getElementById('result-box');
-          box.className='box success';
-          box.innerHTML=`<div style="font-size:2.2rem">✨</div><div class="muted">Código encontrado!</div><div class="code">${data.code}</div><div class="muted">Plataforma: ${names[currentPlatform]||currentPlatform}</div><div class="inline"><button class="mini" onclick="copyText('${data.code}')">📋 Copiar Código</button></div>`;
-        } else if(data.success && data.link){
-          showResult('success','🔗','Link encontrado',`<div class="link-output">${data.link}</div><div class="inline"><button class="mini" onclick="window.open('${data.link}','_blank')">Abrir Link</button><button class="mini" onclick="copyText('${data.link}')">Copiar Link</button></div>`);
-        } else {
-          showResult('error','⚠️','Código não localizado',data.message||'Código não encontrado.');
-        }
-      }catch(e){ showResult('error','⚠️','Erro de conexão','Tente novamente em instantes.'); }
-      finally{ btn.disabled=false; btn.textContent='✦ Buscar Código'; }
-    }
-
-    function showResult(type,emoji,title,msgHtml){const box=document.getElementById('result-box'); box.className='box '+type; box.innerHTML=`<div style="font-size:2.2rem">${emoji}</div><div style="font-family:Cinzel,serif;font-weight:700;margin-bottom:8px">${title}</div><div class="muted">${msgHtml}</div>`}
     function showPayment(type,emoji,title,html){const box=document.getElementById('payment-box'); box.className='box '+type; box.innerHTML=`<div style="font-size:2.2rem">${emoji}</div><div style="font-family:Cinzel,serif;font-weight:700;margin-bottom:8px">${title}</div><div class="muted">${html}</div>`}
 
     async function loadProducts(){
