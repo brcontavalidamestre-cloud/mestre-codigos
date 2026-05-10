@@ -3,1235 +3,236 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Central dos Códigos ✦</title>
+  <title>Mestre Códigos ✦</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     :root {
-      --bg-deep:     #06000f;
-      --bg-dark:     #0d0020;
-      --bg-card:     #130029;
-      --bg-card2:    #1a0035;
-      --purple-deep: #3b0764;
-      --purple-mid:  #6d28d9;
-      --purple-bright:#a855f7;
-      --gold:        #f59e0b;
-      --gold-light:  #fcd34d;
-      --gold-pale:   #fef3c7;
-      --text-white:  #f5f0ff;
-      --text-muted:  #c4b5fd;
-      --border:      rgba(168,85,247,0.25);
-      --border-gold: rgba(245,158,11,0.35);
-      --glow-purple: 0 0 30px rgba(109,40,217,0.4);
-      --glow-gold:   0 0 20px rgba(245,158,11,0.3);
-    }
-
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    body {
-      background: var(--bg-deep);
-      color: var(--text-white);
-      font-family: 'Raleway', sans-serif;
-      min-height: 100vh;
-      overflow-x: hidden;
-      position: relative;
-    }
-
-    /* ── FUNDO ESTRELADO ── */
-    #stars-canvas {
-      position: fixed;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 0;
-      pointer-events: none;
-    }
-
-    /* ── NÉVOA MÁGICA ── */
-    .mist {
-      position: fixed;
-      border-radius: 50%;
-      filter: blur(120px);
-      opacity: 0.12;
-      z-index: 0;
-      pointer-events: none;
-      animation: mistFloat 12s ease-in-out infinite alternate;
-    }
-    .mist-1 { width: 600px; height: 600px; background: var(--purple-mid); top: -150px; left: -150px; }
-    .mist-2 { width: 500px; height: 500px; background: var(--gold); bottom: -100px; right: -100px; animation-delay: 4s; }
-    .mist-3 { width: 400px; height: 400px; background: #1d4ed8; top: 40%; left: 50%; animation-delay: 8s; }
-    @keyframes mistFloat { from { transform: scale(1) translateY(0); } to { transform: scale(1.15) translateY(-30px); } }
-
-    /* ── WRAPPER ── */
-    .wrapper {
-      position: relative;
-      z-index: 1;
-      max-width: 820px;
-      margin: 0 auto;
-      padding: 0 20px 60px;
-    }
-
-    /* ── HEADER ── */
-    header {
-      text-align: center;
-      padding: 50px 20px 30px;
-    }
-    .logo-icon {
-      width: 90px; height: 90px;
-      margin: 0 auto 16px;
-      background: linear-gradient(135deg, var(--purple-deep), var(--purple-mid));
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 42px;
-      box-shadow: var(--glow-purple), inset 0 0 20px rgba(168,85,247,0.3);
-      border: 2px solid var(--border-gold);
-      animation: iconPulse 3s ease-in-out infinite;
-    }
-    @keyframes iconPulse {
-      0%,100% { box-shadow: var(--glow-purple), inset 0 0 20px rgba(168,85,247,0.3); }
-      50%      { box-shadow: 0 0 50px rgba(109,40,217,0.7), inset 0 0 30px rgba(168,85,247,0.5), var(--glow-gold); }
-    }
-
-    h1 {
-      font-family: 'Cinzel', serif;
-      font-size: clamp(2rem, 6vw, 3.2rem);
-      font-weight: 900;
-      background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 40%, var(--purple-bright) 80%, var(--gold-light) 100%);
-      background-size: 200% auto;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      animation: shimmer 4s linear infinite;
-      letter-spacing: 3px;
-      text-transform: uppercase;
-    }
-    @keyframes shimmer { to { background-position: 200% center; } }
-
-    .subtitle {
-      margin-top: 8px;
-      font-size: 1rem;
-      color: var(--text-muted);
-      font-weight: 300;
-      letter-spacing: 1px;
-    }
-
-    .gold-divider {
-      width: 200px;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--gold), var(--purple-bright), var(--gold), transparent);
-      margin: 20px auto;
-      border-radius: 2px;
-    }
-
-    /* ── CARDS DE PLATAFORMA ── */
-    .platforms-section {
-      background: linear-gradient(135deg, rgba(19,0,41,0.9), rgba(26,0,53,0.9));
-      border: 1px solid var(--border-gold);
-      border-radius: 20px;
-      padding: 32px 28px;
-      margin-bottom: 28px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 40px rgba(0,0,0,0.5), inset 0 1px 0 rgba(245,158,11,0.15);
-    }
-
-    .section-title {
-      font-family: 'Cinzel', serif;
-      font-size: 1rem;
-      color: var(--gold);
-      letter-spacing: 3px;
-      text-transform: uppercase;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      margin-bottom: 6px;
-    }
-    .section-title::before,
-    .section-title::after {
-      content: '';
-      flex: 1;
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--border-gold));
-    }
-    .section-title::before { background: linear-gradient(90deg, var(--border-gold), transparent); }
-
-    .section-subtitle {
-      text-align: center;
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-bottom: 24px;
-      font-weight: 300;
-    }
-
-    /* ── Grid principal vira coluna empilhada ── */
-    .platform-grid {
-      display: flex;
-      flex-direction: column;
-      gap: 20px;
-    }
-
-    /* ── Grupos de plataforma – caixas visuais ── */
-    .platform-group {
-        width: 100%;
-        border-radius: 16px;
-        overflow: hidden;
-        border: 1px solid rgba(255,255,255,0.08);
-    }
-    .platform-group-label {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 0.75rem;
-        font-weight: 800;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        padding: 10px 18px;
-        margin-bottom: 0;
-        border-radius: 0;
-    }
-    .platform-group-label.netflix-group {
-        background: linear-gradient(90deg, rgba(185,28,28,0.55), rgba(127,29,29,0.30));
-        color: #fca5a5;
-        border-bottom: 1px solid rgba(239,68,68,0.35);
-    }
-    .platform-group-label.disney-group {
-        background: linear-gradient(90deg, rgba(29,78,216,0.55), rgba(30,58,95,0.30));
-        color: #93c5fd;
-        border-bottom: 1px solid rgba(59,130,246,0.35);
-    }
-    .platform-group-label.outros-group {
-        background: linear-gradient(90deg, rgba(109,40,217,0.45), rgba(76,29,149,0.20));
-        color: #c4b5fd;
-        border-bottom: 1px solid rgba(124,58,237,0.35);
-    }
-    .platform-group-label.globo-group {
-        background: linear-gradient(90deg, rgba(220,38,38,0.35), rgba(239,68,68,0.15));
-        color: #fda4af;
-        border-bottom: 1px solid rgba(220,38,38,0.35);
-    }
-    .platform-group-cards {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 10px;
-        padding: 14px;
-        background: rgba(30,0,60,0.25);
-    }
-    /* Netflix group – fundo vermelho escuro sutil */
-    .platform-group:has(.netflix-group) .platform-group-cards {
-        background: rgba(60,0,0,0.18);
-    }
-    /* Card unificado Netflix – destaque especial */
-    .netflix-all-card {
-        width: 100% !important;
-        flex: 1 !important;
-        border: 1px solid rgba(239,68,68,0.4) !important;
-        background: linear-gradient(135deg, rgba(127,29,29,0.35), rgba(185,28,28,0.20)) !important;
-    }
-    .netflix-all-card:hover {
-        border-color: rgba(239,68,68,0.8) !important;
-        box-shadow: 0 0 20px rgba(239,68,68,0.3) !important;
-    }
-    /* Card unificado Disney+ – destaque especial */
-    .disney-all-card {
-        width: 100% !important;
-        flex: 1 !important;
-        border: 1px solid rgba(59,130,246,0.4) !important;
-        background: linear-gradient(135deg, rgba(29,78,216,0.35), rgba(30,58,95,0.20)) !important;
-    }
-    .disney-all-card:hover {
-        border-color: rgba(59,130,246,0.8) !important;
-        box-shadow: 0 0 20px rgba(59,130,246,0.3) !important;
-    }
-    /* Card unificado Globo – destaque especial */
-    .globo-all-card {
-        width: 100% !important;
-        flex: 1 !important;
-        border: 1px solid rgba(220,38,38,0.4) !important;
-        background: linear-gradient(135deg, rgba(185,28,28,0.25), rgba(220,38,38,0.12)) !important;
-    }
-    .globo-all-card:hover {
-        border-color: rgba(220,38,38,0.8) !important;
-        box-shadow: 0 0 20px rgba(220,38,38,0.3) !important;
-    }
-    /* Card unificado Streaming (Max + Prime) */
-    .streaming-all-card {
-        width: 100% !important;
-        flex: 1 !important;
-        border: 1px solid rgba(124,58,237,0.4) !important;
-        background: linear-gradient(135deg, rgba(109,40,217,0.30), rgba(76,29,149,0.15)) !important;
-    }
-    .streaming-all-card:hover {
-        border-color: rgba(124,58,237,0.8) !important;
-        box-shadow: 0 0 20px rgba(124,58,237,0.3) !important;
-    }
-    /* Disney group – fundo azul escuro sutil */
-    .platform-group:has(.disney-group) .platform-group-cards {
-        background: rgba(0,20,60,0.18);
-    }
-    .platform-card {
-      background: rgba(59,7,100,0.3);
-      border: 1px solid var(--border);
-      border-radius: 14px;
-      padding: 20px 16px;
-      text-align: center;
-      transition: all 0.3s ease;
-      cursor: pointer;
-      position: relative;
-      overflow: hidden;
-    }
-    .platform-card::before {
-      content: '';
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 2px;
-      background: linear-gradient(90deg, transparent, var(--purple-bright), transparent);
-      transform: scaleX(0);
-      transition: transform 0.3s ease;
-    }
-    .platform-card:hover::before, .platform-card.active::before { transform: scaleX(1); }
-    .platform-card:hover {
-      border-color: var(--purple-bright);
-      box-shadow: 0 0 20px rgba(168,85,247,0.3);
-      transform: translateY(-3px);
-    }
-    .platform-card.active {
-      border-color: var(--gold);
-      background: rgba(245,158,11,0.08);
-      box-shadow: 0 0 25px rgba(245,158,11,0.2);
-    }
-
-    .platform-logo {
-      font-size: 2.5rem;
-      margin-bottom: 8px;
-      display: block;
-    }
-    .platform-name {
-      font-family: 'Cinzel', serif;
-      font-size: 1rem;
-      font-weight: 700;
-      color: var(--text-white);
-      margin-bottom: 4px;
-    }
-    .platform-desc {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-    }
-
-    /* ── FORMULÁRIO ── */
-    .form-section {
-      background: linear-gradient(135deg, rgba(13,0,32,0.95), rgba(19,0,41,0.95));
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 32px 28px;
-      margin-bottom: 28px;
-      backdrop-filter: blur(10px);
-      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-    }
-
-    .form-section .section-title { margin-bottom: 24px; }
-
-    .selected-platform-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      background: rgba(109,40,217,0.2);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 6px 16px;
-      font-size: 0.82rem;
-      color: var(--purple-bright);
-      margin-bottom: 20px;
-      font-weight: 500;
-      transition: all 0.3s ease;
-    }
-    .selected-platform-badge.netflix  { border-color: rgba(229,9,20,0.5); color: #ff6b6b; background: rgba(229,9,20,0.1); }
-    .selected-platform-badge.disney   { border-color: rgba(17,117,183,0.5); color: #60a5fa; background: rgba(17,117,183,0.1); }
-    .selected-platform-badge.netflix-residence { border-color: rgba(220,38,38,0.5); color: #fca5a5; background: rgba(220,38,38,0.1); }
-    .selected-platform-badge.password-reset { border-color: rgba(16,185,129,0.5); color: #6ee7b7; background: rgba(16,185,129,0.1); }
-    .selected-platform-badge.disney-residence { border-color: rgba(29,78,216,0.5); color: #93c5fd; background: rgba(29,78,216,0.1); }
-
-    /* ── TABS: agrupadas em caixas ── */
-    .tabs {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin-bottom: 24px;
-    }
-    .tab-group {
-      border-radius: 14px;
-      overflow: hidden;
-      border: 1px solid rgba(255,255,255,0.07);
-    }
-    .tab-group-label {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 0.68rem;
-      font-weight: 800;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      padding: 8px 16px;
-      cursor: default;
-    }
-    .tab-group-label.tg-netflix {
-      background: linear-gradient(90deg, rgba(185,28,28,0.55), rgba(127,29,29,0.30));
-      color: #fca5a5;
-      border-bottom: 1px solid rgba(239,68,68,0.30);
-    }
-    .tab-group-label.tg-disney {
-      background: linear-gradient(90deg, rgba(29,78,216,0.55), rgba(30,58,95,0.30));
-      color: #93c5fd;
-      border-bottom: 1px solid rgba(59,130,246,0.30);
-    }
-    .tab-group-label.tg-outros {
-      background: linear-gradient(90deg, rgba(109,40,217,0.45), rgba(76,29,149,0.20));
-      color: #c4b5fd;
-      border-bottom: 1px solid rgba(124,58,237,0.30);
-    }
-    .tab-group-label.tg-globo {
-      background: linear-gradient(90deg, rgba(220,38,38,0.35), rgba(239,68,68,0.15));
-      color: #fda4af;
-      border-bottom: 1px solid rgba(220,38,38,0.30);
-    }
-    .tab-group-buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-      padding: 10px;
-      background: rgba(20,0,45,0.30);
-    }
-    .tab-group:has(.tg-netflix) .tab-group-buttons { background: rgba(50,0,0,0.20); }
-    .tab-group:has(.tg-disney)  .tab-group-buttons { background: rgba(0,15,50,0.20); }
-
-    .tab-btn {
-      padding: 9px 14px;
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      background: rgba(0,0,0,0.20);
-      color: var(--text-muted);
-      font-family: 'Raleway', sans-serif;
-      font-size: 0.80rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      letter-spacing: 0.4px;
-      white-space: nowrap;
-    }
-    .tab-btn:hover { color: var(--text-white); background: rgba(109,40,217,0.2); }
-    .tab-btn.active {
-      background: linear-gradient(135deg, var(--purple-mid), var(--purple-deep));
-      color: var(--text-white);
-      box-shadow: 0 0 15px rgba(109,40,217,0.4);
-    }
-    .tab-btn.netflix.active  { background: linear-gradient(135deg, #b91c1c, #7f1d1d); box-shadow: 0 0 15px rgba(229,9,20,0.4); }
-    .tab-btn.disney.active   { background: linear-gradient(135deg, #1d4ed8, #1e3a5f); box-shadow: 0 0 15px rgba(17,117,183,0.4); }
-    .tab-btn.residence.active { background: linear-gradient(135deg, #7f1d1d, #991b1b); box-shadow: 0 0 15px rgba(220,38,38,0.4); }
-    .tab-btn.password.active  { background: linear-gradient(135deg, #065f46, #047857); box-shadow: 0 0 15px rgba(16,185,129,0.4); }
-    .tab-btn.disney-res.active { background: linear-gradient(135deg, #1e3a8a, #1d4ed8); box-shadow: 0 0 15px rgba(29,78,216,0.5); }
-    .tab-btn.netflix-login.active { background: linear-gradient(135deg, #b91c1c, #dc2626); box-shadow: 0 0 15px rgba(229,9,20,0.5); }
-    .tab-btn.netflix-temp.active { background: linear-gradient(135deg, #92400e, #d97706); box-shadow: 0 0 15px rgba(217,119,6,0.5); }
-    .tab-btn.max.active { background: linear-gradient(135deg, #0f172a, #2563eb); box-shadow: 0 0 15px rgba(37,99,235,0.45); }
-    .tab-btn.prime-video.active { background: linear-gradient(135deg, #0f172a, #10b981); box-shadow: 0 0 15px rgba(16,185,129,0.45); }
-    .tab-btn.bug-globo.active { background: linear-gradient(135deg, #7c2d12, #ea580c); box-shadow: 0 0 15px rgba(234,88,12,0.45); }
-    .tab-btn.codigo-globo.active { background: linear-gradient(135deg, #1d4ed8, #2563eb); box-shadow: 0 0 15px rgba(37,99,235,0.45); }
-    .tab-btn.senha-globo.active { background: linear-gradient(135deg, #065f46, #0f766e); box-shadow: 0 0 15px rgba(13,148,136,0.45); }
-    .selected-platform-badge.netflix-temp { border-color: rgba(217,119,6,0.5); color: #fcd34d; background: rgba(217,119,6,0.1); }
-    .selected-platform-badge.max { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
-    .selected-platform-badge.prime-video { border-color: rgba(16,185,129,0.5); color: #86efac; background: rgba(16,185,129,0.1); }
-    .selected-platform-badge.bug-globo { border-color: rgba(234,88,12,0.5); color: #fdba74; background: rgba(234,88,12,0.1); }
-    .selected-platform-badge.codigo-globo { border-color: rgba(37,99,235,0.5); color: #93c5fd; background: rgba(37,99,235,0.1); }
-    .selected-platform-badge.senha-globo { border-color: rgba(13,148,136,0.5); color: #99f6e4; background: rgba(13,148,136,0.1); }
-    .selected-platform-badge.netflix-login { border-color: rgba(229,9,20,0.5); color: #fca5a5; background: rgba(229,9,20,0.1); }
-    .selected-platform-badge.netflix-all  { border-color: rgba(229,9,20,0.6); color: #ff6b6b; background: rgba(229,9,20,0.12); }
-    .selected-platform-badge.disney-all   { border-color: rgba(17,117,183,0.6); color: #60a5fa; background: rgba(17,117,183,0.12); }
-    .selected-platform-badge.streaming-all { border-color: rgba(37,99,235,0.6); color: #93c5fd; background: rgba(37,99,235,0.12); }
-    .selected-platform-badge.globo-all    { border-color: rgba(234,88,12,0.6); color: #fdba74; background: rgba(234,88,12,0.12); }
-
-    .form-group { margin-bottom: 16px; }
-    /* PIN bloqueio no painel cliente */
-    /* PIN overlay — aparece APÓS a busca, só se resultado for redefinição de senha */
-    .pin-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75); backdrop-filter:blur(4px); z-index:9999; align-items:center; justify-content:center; }
-    .pin-overlay.show { display:flex; }
-    .pin-modal-box { background:linear-gradient(160deg,#1a0a2e,#0f0520); border:1px solid rgba(220,38,38,0.5); border-radius:20px; padding:30px 28px; max-width:340px; width:90%; text-align:center; box-shadow:0 0 40px rgba(220,38,38,0.25); }
-    .pin-modal-icon { font-size:2.2rem; margin-bottom:8px; }
-    .pin-lock-title { color:#fca5a5; font-weight:800; font-size:1rem; margin-bottom:6px; }
-    .pin-lock-sub   { color:#f87171; font-size:0.78rem; margin-bottom:18px; opacity:.85; line-height:1.4; }
-    .pin-lock-inputs { display:flex; gap:10px; justify-content:center; margin-bottom:10px; }
-    .pin-lock-inputs input { width:52px; height:58px; text-align:center; font-size:1.6rem; font-weight:700; border:2px solid rgba(220,38,38,0.5); border-radius:12px; background:rgba(255,255,255,0.05); color:#fff; outline:none; transition:.2s; -moz-appearance:textfield; }
-    .pin-lock-inputs input::-webkit-outer-spin-button,
-    .pin-lock-inputs input::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
-    .pin-lock-inputs input:focus { border-color:#ef4444; background:rgba(220,38,38,0.12); }
-    .pin-lock-inputs input.pin-ok  { border-color:#10b981 !important; background:rgba(16,185,129,0.1) !important; }
-    .pin-lock-inputs input.pin-err-shake { animation: pinShake .35s ease; border-color:#dc2626 !important; }
-    @keyframes pinShake { 0%,100%{transform:translateX(0)} 25%{transform:translateX(-6px)} 75%{transform:translateX(6px)} }
-    .pin-lock-err { color:#fca5a5; font-size:0.78rem; min-height:20px; margin-bottom:8px; }
-    .pin-unlock-btn { background:linear-gradient(135deg,#7f1d1d,#dc2626); color:#fff; border:none; border-radius:10px; padding:11px 28px; font-weight:700; font-size:0.9rem; cursor:pointer; transition:.2s; width:100%; }
-    .pin-unlock-btn:hover { opacity:.88; transform:scale(1.02); }
-    .pin-cancel-link { display:block; margin-top:12px; color:#a78bfa; font-size:0.75rem; cursor:pointer; opacity:.7; }
-    .pin-cancel-link:hover { opacity:1; }
-    .form-label {
-      display: block;
-      font-size: 0.82rem;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-      font-weight: 500;
-      letter-spacing: 0.5px;
-    }
-
-    .form-input {
-      width: 100%;
-      background: rgba(59,7,100,0.2);
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      padding: 14px 16px;
-      color: var(--text-white);
-      font-family: 'Raleway', sans-serif;
-      font-size: 0.95rem;
-      outline: none;
-      transition: all 0.3s ease;
-    }
-    .form-input::placeholder { color: rgba(196,181,253,0.4); }
-    .form-input:focus {
-      border-color: var(--purple-bright);
-      box-shadow: 0 0 0 3px rgba(168,85,247,0.15), 0 0 20px rgba(109,40,217,0.2);
-      background: rgba(59,7,100,0.35);
-    }
-
-    .btn-primary {
-      width: 100%;
-      padding: 16px;
-      border: none;
-      border-radius: 12px;
-      background: linear-gradient(135deg, var(--purple-mid) 0%, var(--purple-deep) 50%, #1d1b60 100%);
-      background-size: 200% auto;
-      color: var(--text-white);
-      font-family: 'Cinzel', serif;
-      font-size: 1rem;
-      font-weight: 700;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      position: relative;
-      overflow: hidden;
-      box-shadow: 0 4px 20px rgba(109,40,217,0.4);
-      border: 1px solid rgba(168,85,247,0.3);
-    }
-    .btn-primary::before {
-      content: '';
-      position: absolute;
-      top: 0; left: -100%;
-      width: 100%; height: 100%;
-      background: linear-gradient(90deg, transparent, rgba(245,158,11,0.2), transparent);
-      transition: left 0.5s ease;
-    }
-    .btn-primary:hover { background-position: right center; box-shadow: 0 6px 30px rgba(109,40,217,0.6); transform: translateY(-1px); }
-    .btn-primary:hover::before { left: 100%; }
-    .btn-primary:active { transform: translateY(0); }
-    .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
-
-    /* Resultado */
-    .result-box {
-      margin-top: 20px;
-      border-radius: 14px;
-      padding: 24px;
-      text-align: center;
-      display: none;
-      animation: fadeInUp 0.4s ease;
-    }
-    @keyframes fadeInUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-
-    .result-box.success {
-      background: linear-gradient(135deg, rgba(15,60,15,0.5), rgba(10,40,10,0.4));
-      border: 1px solid rgba(74,222,128,0.4);
-      box-shadow: 0 0 30px rgba(74,222,128,0.1);
-    }
-    .result-box.error {
-      background: linear-gradient(135deg, rgba(80,10,10,0.5), rgba(60,5,5,0.4));
-      border: 1px solid rgba(252,165,165,0.3);
-    }
-
-    .result-emoji { font-size: 2.5rem; margin-bottom: 10px; display: block; }
-
-    .code-display {
-      font-family: 'Cinzel', serif;
-      font-size: 2.5rem;
-      font-weight: 900;
-      letter-spacing: 8px;
-      color: var(--gold-light);
-      text-shadow: 0 0 20px rgba(245,158,11,0.6);
-      margin: 10px 0;
-      display: block;
-    }
-
-    .result-label {
-      font-size: 0.85rem;
-      color: var(--text-muted);
-      margin-bottom: 8px;
-    }
-    .result-platform {
-      font-size: 0.8rem;
-      color: var(--text-muted);
-      margin-top: 10px;
-      font-style: italic;
-    }
-    .copy-btn {
-      margin-top: 14px;
-      padding: 10px 28px;
-      border-radius: 8px;
-      border: 1px solid var(--border-gold);
-      background: rgba(245,158,11,0.1);
-      color: var(--gold);
-      font-family: 'Raleway', sans-serif;
-      font-size: 0.85rem;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.3s ease;
-      letter-spacing: 1px;
-    }
-    .copy-btn:hover { background: rgba(245,158,11,0.2); box-shadow: var(--glow-gold); }
-
-    .error-msg { color: #fca5a5; font-size: 0.9rem; line-height: 1.5; }
-    .error-title { color: #f87171; font-weight: 700; font-size: 1rem; margin-bottom: 8px; font-family: 'Cinzel', serif; }
-
-    /* Loading */
-    .spinner {
-      width: 22px; height: 22px;
-      border: 3px solid rgba(255,255,255,0.2);
-      border-top-color: var(--gold);
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-      display: inline-block;
-      vertical-align: middle;
-      margin-right: 8px;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    /* ── STEPS ── */
-    .steps-section {
-      background: linear-gradient(135deg, rgba(19,0,41,0.85), rgba(26,0,53,0.85));
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 28px;
-      margin-bottom: 28px;
-      backdrop-filter: blur(10px);
-    }
-    .steps-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-      gap: 16px;
-      margin-top: 20px;
-    }
-    .step-item {
-      text-align: center;
-      padding: 16px 10px;
-    }
-    .step-num {
-      width: 44px; height: 44px;
-      background: linear-gradient(135deg, var(--purple-mid), var(--purple-deep));
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      margin: 0 auto 12px;
-      font-family: 'Cinzel', serif;
-      font-weight: 700;
-      font-size: 1.1rem;
-      color: var(--gold-light);
-      box-shadow: 0 0 15px rgba(109,40,217,0.4);
-      border: 1px solid var(--border-gold);
-    }
-    .step-text { font-size: 0.82rem; color: var(--text-muted); line-height: 1.5; }
-
-    /* ── FOOTER ── */
-    footer {
-      text-align: center;
-      padding: 20px;
-      color: rgba(196,181,253,0.4);
-      font-size: 0.78rem;
-      font-weight: 300;
-      letter-spacing: 1px;
-    }
-    footer span { color: var(--gold); }
-
-    /* ── TOAST ── */
-    .toast {
-      position: fixed;
-      bottom: 30px; right: 30px;
-      background: rgba(19,0,41,0.95);
-      border: 1px solid var(--border-gold);
-      border-radius: 12px;
-      padding: 14px 20px;
-      color: var(--gold-light);
-      font-size: 0.88rem;
-      font-weight: 600;
-      box-shadow: var(--glow-gold);
-      z-index: 999;
-      transform: translateX(200px);
-      opacity: 0;
-      transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .toast.show { transform: translateX(0); opacity: 1; }
-
-    @media (max-width: 600px) {
-      .tabs { flex-direction: column; }
-      .platform-grid { gap: 14px; }
-      .steps-grid { grid-template-columns: 1fr 1fr; }
-      h1 { font-size: 1.8rem; }
-      .code-display { font-size: 2rem; letter-spacing: 5px; }
-    }
+      --bg-deep:#06000f; --bg-card:#130029; --bg-card2:#1a0035; --purple:#6d28d9; --purple2:#3b0764;
+      --gold:#f59e0b; --gold-light:#fcd34d; --white:#f5f0ff; --muted:#c4b5fd; --border:rgba(168,85,247,.25);
+      --border-gold:rgba(245,158,11,.35); --green:#4ade80; --red:#f87171; --blue:#60a5fa;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'Raleway',sans-serif;background:var(--bg-deep);color:var(--white);min-height:100vh;overflow-x:hidden}
+    canvas{position:fixed;inset:0;z-index:0;pointer-events:none}
+    .mist{position:fixed;border-radius:50%;filter:blur(120px);opacity:.12;z-index:0;pointer-events:none;animation:float 12s ease-in-out infinite alternate}
+    .mist-1{width:600px;height:600px;background:var(--purple);top:-150px;left:-150px}.mist-2{width:500px;height:500px;background:var(--gold);bottom:-100px;right:-100px;animation-delay:4s}
+    @keyframes float{from{transform:scale(1) translateY(0)}to{transform:scale(1.15) translateY(-30px)}}
+    .wrap{position:relative;z-index:1;max-width:1080px;margin:0 auto;padding:0 18px 60px}
+    header{text-align:center;padding:42px 16px 26px}.logo{width:88px;height:88px;margin:0 auto 16px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:40px;border:2px solid var(--border-gold);background:linear-gradient(135deg,var(--purple2),var(--purple));box-shadow:0 0 30px rgba(109,40,217,.35)}
+    h1{font-family:'Cinzel',serif;font-size:clamp(2rem,6vw,3.1rem);font-weight:900;letter-spacing:3px;text-transform:uppercase;background:linear-gradient(135deg,var(--gold-light),var(--gold),#a855f7,var(--gold-light));background-size:200% auto;-webkit-background-clip:text;-webkit-text-fill-color:transparent;animation:shimmer 4s linear infinite}
+    @keyframes shimmer{to{background-position:200% center}}
+    .subtitle{margin-top:10px;color:var(--muted)} .divider{width:220px;height:2px;margin:20px auto;background:linear-gradient(90deg,transparent,var(--gold),#a855f7,var(--gold),transparent)}
+    .card{background:linear-gradient(135deg,rgba(19,0,41,.92),rgba(26,0,53,.92));border:1px solid var(--border-gold);border-radius:20px;padding:28px 22px;margin-bottom:24px;box-shadow:0 8px 40px rgba(0,0,0,.45)}
+    .title{font-family:'Cinzel',serif;font-size:1rem;color:var(--gold);letter-spacing:3px;text-transform:uppercase;display:flex;align-items:center;gap:10px;margin-bottom:10px}.title:before,.title:after{content:'';flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--border-gold))}.title:before{background:linear-gradient(90deg,var(--border-gold),transparent)}
+    .subtitle2{text-align:center;color:var(--muted);font-size:.92rem;margin-bottom:22px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+    .platform,.product{background:rgba(59,7,100,.28);border:1px solid var(--border);border-radius:14px;padding:20px 16px;text-align:center;transition:.25s;position:relative;overflow:hidden}.platform{cursor:pointer}.platform:hover,.platform.active,.product:hover{transform:translateY(-3px);border-color:#a855f7;box-shadow:0 0 20px rgba(168,85,247,.25)}.platform.active{border-color:var(--gold);background:rgba(245,158,11,.08)}
+    .product-badge{display:inline-block;margin-bottom:10px;padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:700;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:var(--gold-light)}
+    .name{font-family:'Cinzel',serif;font-size:1rem;font-weight:700}.desc{font-size:.84rem;color:var(--muted);line-height:1.5;margin-top:6px}.price{font-family:'Cinzel',serif;color:var(--gold-light);font-size:1.45rem;margin:12px 0 8px}
+    .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:18px}.step{text-align:center;padding:16px 10px}.stepnum{width:44px;height:44px;margin:0 auto 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--purple),var(--purple2));border:1px solid var(--border-gold);font-family:'Cinzel',serif;color:var(--gold-light);font-weight:700}
+    .tabs{display:flex;gap:10px;margin-bottom:20px;background:rgba(0,0,0,.3);border-radius:12px;padding:4px}.tab{flex:1;padding:10px 8px;border:none;border-radius:10px;background:transparent;color:var(--muted);cursor:pointer;font-weight:700}.tab.active{background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff}
+    .badge{display:inline-flex;gap:8px;align-items:center;padding:6px 16px;border-radius:20px;background:rgba(109,40,217,.2);border:1px solid var(--border);color:#c084fc;margin-bottom:18px;font-size:.83rem;font-weight:600}
+    .form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}.group{margin-bottom:16px}.label{display:block;font-size:.83rem;color:var(--muted);margin-bottom:8px}.input{width:100%;background:rgba(59,7,100,.2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;color:#fff;outline:none}.input:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.15)}
+    .btn,.btn2{width:100%;padding:15px;border:none;border-radius:12px;background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff;font-family:'Cinzel',serif;font-weight:700;letter-spacing:1px;text-transform:uppercase;cursor:pointer;box-shadow:0 4px 20px rgba(109,40,217,.35)} .btn:hover,.btn2:hover{transform:translateY(-1px)} .btn:disabled,.btn2:disabled{opacity:.65;cursor:not-allowed}
+    .btn2{margin-top:12px}
+    .box{display:none;margin-top:18px;border-radius:14px;padding:22px;text-align:center}.success{display:block;background:linear-gradient(135deg,rgba(15,60,15,.5),rgba(10,40,10,.4));border:1px solid rgba(74,222,128,.4)}.error{display:block;background:linear-gradient(135deg,rgba(80,10,10,.5),rgba(60,5,5,.4));border:1px solid rgba(252,165,165,.3)}.info{display:block;background:linear-gradient(135deg,rgba(20,30,70,.4),rgba(10,20,45,.4));border:1px solid rgba(96,165,250,.3)}
+    .code{font-family:'Cinzel',serif;font-size:2.2rem;letter-spacing:7px;color:var(--gold-light);margin:10px 0}.muted{color:var(--muted);font-size:.85rem;line-height:1.6}.inline{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px}.mini{padding:10px 16px;border-radius:8px;border:1px solid var(--border-gold);background:rgba(245,158,11,.1);color:var(--gold);cursor:pointer;font-weight:700}
+    footer{text-align:center;padding:20px;color:rgba(196,181,253,.4);font-size:.78rem} footer span{color:var(--gold)}
+    .toast{position:fixed;right:24px;bottom:24px;background:rgba(19,0,41,.96);border:1px solid var(--border-gold);border-radius:12px;padding:14px 18px;color:var(--gold-light);transform:translateX(220px);opacity:0;transition:.35s;z-index:99}.toast.show{transform:translateX(0);opacity:1}
+    @media (max-width:700px){.tabs{flex-direction:column}.grid{grid-template-columns:1fr}.code{font-size:1.7rem;letter-spacing:4px}}
   </style>
 </head>
 <body>
-
-  <!-- Fundo -->
-  <canvas id="stars-canvas"></canvas>
-  <div class="mist mist-1"></div>
-  <div class="mist mist-2"></div>
-  <div class="mist mist-3"></div>
-
-  <div class="wrapper">
-
-    <!-- HEADER -->
+  <canvas id="stars"></canvas>
+  <div class="mist mist-1"></div><div class="mist mist-2"></div>
+  <div class="wrap">
     <header>
-      <div class="logo-icon">🧙‍♂️</div>
-      <h1>Central dos Códigos</h1>
-      <p class="subtitle">✦ Solicite e receba seus códigos de verificação ✦</p>
-      <div class="gold-divider"></div>
+      <div class="logo">🧙‍♂️</div>
+      <h1>Mestre Códigos</h1>
+      <p class="subtitle">✦ Solicite códigos e venda acessos com Pix automático ✦</p>
+      <div class="divider"></div>
     </header>
 
-    <!-- PLATAFORMAS -->
-    <section class="platforms-section">
-      <div class="section-title">✦ Plataformas Disponíveis ✦</div>
-      <p class="section-subtitle">Esta plataforma aceita códigos das seguintes plataformas:</p>
-      <div class="platform-grid">
-
-        <!-- ══════════════ GRUPO NETFLIX ══════════════ -->
-        <div class="platform-group">
-          <div class="platform-group-label netflix-group">🎬 Netflix</div>
-          <div class="platform-group-cards">
-            <div class="platform-card netflix-all-card" onclick="selectPlatform('netflix-all')" id="card-netflix-all">
-              <span class="platform-logo">🎬</span>
-              <div class="platform-name">Todos os Códigos Netflix</div>
-              <div class="platform-desc">Código · Login · Temporário · Residência · Senha</div>
-            </div>
-          </div>
+    <section class="card">
+      <div class="title">✦ Plataformas Disponíveis ✦</div>
+      <p class="subtitle2">Selecione a plataforma do código que você quer buscar</p>
+      <div class="grid">
+        <div class="platform active" id="card-netflix" onclick="selectPlatform('netflix')">
+          <div style="font-size:2.4rem">🎬</div><div class="name">Netflix</div><div class="desc">Código de acesso temporário</div>
         </div>
-
-        <!-- ══════════════ GRUPO DISNEY+ ══════════════ -->
-        <div class="platform-group">
-          <div class="platform-group-label disney-group">✨ Disney+</div>
-          <div class="platform-group-cards">
-            <div class="platform-card disney-all-card" onclick="selectPlatform('disney-all')" id="card-disney-all">
-              <span class="platform-logo">✨</span>
-              <div class="platform-name">Todos os Códigos Disney+</div>
-              <div class="platform-desc">Código de acesso · Residência Disney+</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ══════════════ OUTROS ══════════════ -->
-        <div class="platform-group">
-          <div class="platform-group-label outros-group">📦 Outras Plataformas</div>
-          <div class="platform-group-cards">
-            <div class="platform-card streaming-all-card" onclick="selectPlatform('streaming-all')" id="card-streaming-all">
-              <span class="platform-logo">🎞️</span>
-              <div class="platform-name">Max & Prime Video</div>
-              <div class="platform-desc">Max · Prime Video</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- ══════════════ GRUPO GLOBO ══════════════ -->
-        <div class="platform-group">
-          <div class="platform-group-label globo-group">📡 Globo</div>
-          <div class="platform-group-cards">
-            <div class="platform-card globo-all-card" onclick="selectPlatform('globo-all')" id="card-globo-all">
-              <span class="platform-logo">📡</span>
-              <div class="platform-name">Todos os Códigos Globo</div>
-              <div class="platform-desc">Bug Globo · Código Globo · Senha Globo</div>
-            </div>
-          </div>
-        </div>
-
-      </div>
-    </section>
-
-    <!-- COMO SOLICITAR -->
-    <section class="steps-section">
-      <div class="section-title">✦ Como Solicitar ✦</div>
-      <div class="steps-grid">
-        <div class="step-item">
-          <div class="step-num">1</div>
-          <div class="step-text">Selecione a plataforma desejada acima</div>
-        </div>
-        <div class="step-item">
-          <div class="step-num">2</div>
-          <div class="step-text">Digite seu email da conta</div>
-        </div>
-        <div class="step-item">
-          <div class="step-num">3</div>
-          <div class="step-text">Solicite o código no app ou site</div>
-        </div>
-        <div class="step-item">
-          <div class="step-num">4</div>
-          <div class="step-text">Clique em Buscar Código e aguarde</div>
+        <div class="platform" id="card-disney" onclick="selectPlatform('disney')">
+          <div style="font-size:2.4rem">✨</div><div class="name">Disney+</div><div class="desc">Código de acesso único</div>
         </div>
       </div>
     </section>
 
-    <!-- FORMULÁRIO -->
-    <section class="form-section">
-
-      <div id="selected-badge" class="selected-platform-badge netflix">
-        🎬 Netflix — Todos os Códigos
-      </div>
-
-      <div class="form-group">
-        <label class="form-label" for="email-input">✉ Seu Email da Conta</label>
-        <input
-          type="email"
-          id="email-input"
-          class="form-input"
-          placeholder="Digite seu email..."
-          onkeydown="if(event.key==='Enter') buscarCodigo()"
-        />
-      </div>
-
-      <button class="btn-primary" id="btn-buscar" onclick="buscarCodigo()">
-        ✦ Buscar Código
-      </button>
-
-      <!-- Resultado -->
-      <div class="result-box" id="result-box">
-        <!-- preenchido via JS -->
+    <section class="card">
+      <div class="title">✦ Como Solicitar ✦</div>
+      <div class="steps">
+        <div class="step"><div class="stepnum">1</div><div class="muted">Escolha a plataforma acima</div></div>
+        <div class="step"><div class="stepnum">2</div><div class="muted">Digite o email da conta</div></div>
+        <div class="step"><div class="stepnum">3</div><div class="muted">Solicite o código no app ou site</div></div>
+        <div class="step"><div class="stepnum">4</div><div class="muted">Clique em Buscar Código e aguarde</div></div>
       </div>
     </section>
 
+    <section class="card">
+      <div class="title">✦ Acessar Código ✦</div>
+      <div class="tabs">
+        <button class="tab active" id="tab-netflix" onclick="switchTab('netflix')">🎬 Código Netflix</button>
+        <button class="tab" id="tab-disney" onclick="switchTab('disney')">✨ Código Disney+</button>
+      </div>
+      <div class="badge" id="selected-badge">🎬 Netflix — Código de acesso temporário</div>
+      <div class="group">
+        <label class="label" for="email-input">✉ Seu Email da Conta</label>
+        <input class="input" type="email" id="email-input" placeholder="Digite seu email..." onkeydown="if(event.key==='Enter') buscarCodigo()">
+      </div>
+      <button class="btn" id="btn-buscar" onclick="buscarCodigo()">✦ Buscar Código</button>
+      <div class="box" id="result-box"></div>
+    </section>
+
+    <section class="card">
+      <div class="title">✦ Loja com Pix ✦</div>
+      <p class="subtitle2">Checkout integrado com InfinitePay e liberação automática após aprovação</p>
+      <div class="form-grid">
+        <div class="group"><label class="label">Nome do cliente</label><input class="input" id="customer-name" placeholder="Seu nome"></div>
+        <div class="group"><label class="label">Email do cliente</label><input class="input" id="customer-email" placeholder="seu@email.com"></div>
+        <div class="group"><label class="label">Telefone do cliente</label><input class="input" id="customer-phone" placeholder="+5511999999999"></div>
+      </div>
+      <div class="grid" id="products-grid"></div>
+      <div class="box" id="payment-box"></div>
+    </section>
   </div>
 
-  <!-- PIN Overlay — aparece após busca se resultado for redefinição de senha -->
-  <div class="pin-overlay" id="pin-overlay">
-    <div class="pin-modal-box">
-      <div class="pin-modal-icon">🔐</div>
-      <div class="pin-lock-title">Acesso Restrito</div>
-      <div class="pin-lock-sub">O link de redefinição de senha é protegido.<br>Informe o PIN de 4 dígitos para visualizar.</div>
-      <div class="pin-lock-inputs">
-        <input type="number" min="0" max="9" id="cl-pin-d1" oninput="clPinNext(this,'cl-pin-d2')" onkeydown="clPinKey(event,this,'')"/>
-        <input type="number" min="0" max="9" id="cl-pin-d2" oninput="clPinNext(this,'cl-pin-d3')" onkeydown="clPinKey(event,this,'cl-pin-d1')"/>
-        <input type="number" min="0" max="9" id="cl-pin-d3" oninput="clPinNext(this,'cl-pin-d4')" onkeydown="clPinKey(event,this,'cl-pin-d2')"/>
-        <input type="number" min="0" max="9" id="cl-pin-d4" oninput="clPinNext(this,'')"           onkeydown="clPinKey(event,this,'cl-pin-d3')"/>
-      </div>
-      <div class="pin-lock-err" id="cl-pin-err"></div>
-      <button class="pin-unlock-btn" id="pin-unlock-btn" onclick="unlockWithPin()">🔓 Verificar PIN</button>
-      <span class="pin-cancel-link" onclick="closePinOverlay()">Cancelar e voltar</span>
-    </div>
-  </div>
+  <footer>✦ Feito por: <span>Mestre Streaming</span> ✦</footer>
+  <div class="toast" id="toast">Copiado!</div>
 
-  <!-- Footer -->
-  <footer>
-    <p>✦ Feito por: <span>Mestre Streaming</span> ✦</p>
-  </footer>
-
-  <!-- Toast -->
-  <div class="toast" id="toast">✓ Copiado!</div>
-
-  <!-- SCRIPTS -->
   <script>
-    // ── ESTRELAS ──
-    const canvas = document.getElementById('stars-canvas');
-    const ctx = canvas.getContext('2d');
-    let stars = [];
+    const canvas = document.getElementById('stars'); const ctx = canvas.getContext('2d'); let stars=[];
+    function resizeCanvas(){canvas.width=innerWidth; canvas.height=innerHeight}
+    function createStars(){stars=[]; const count=Math.floor((canvas.width*canvas.height)/4000); for(let i=0;i<count;i++){stars.push({x:Math.random()*canvas.width,y:Math.random()*canvas.height,r:Math.random()*1.5+.3,a:Math.random(),s:Math.random()*.005+.002,d:Math.random()>.5?1:-1,g:Math.random()<.15})}}
+    function animate(){ctx.clearRect(0,0,canvas.width,canvas.height); stars.forEach(s=>{s.a+=s.s*s.d; if(s.a>=1||s.a<=0)s.d*=-1; ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fillStyle=s.g?`rgba(245,158,11,${s.a})`:`rgba(196,181,253,${s.a*.8})`; ctx.fill()}); requestAnimationFrame(animate)}
+    addEventListener('resize',()=>{resizeCanvas(); createStars()}); resizeCanvas(); createStars(); animate();
 
-    function resizeCanvas() {
-      canvas.width  = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
+    let currentPlatform='netflix';
+    let activeOrderNsu='';
+    let pollTimer=null;
+    const platformLabels={netflix:'🎬 Netflix — Código de acesso temporário',disney:'✨ Disney+ — Código de acesso único'};
 
-    function createStars() {
-      stars = [];
-      const count = Math.floor((canvas.width * canvas.height) / 4000);
-      for (let i = 0; i < count; i++) {
-        stars.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * canvas.height,
-          r: Math.random() * 1.5 + 0.3,
-          alpha: Math.random(),
-          speed: Math.random() * 0.005 + 0.002,
-          dir:   Math.random() > 0.5 ? 1 : -1,
-          gold:  Math.random() < 0.15
-        });
-      }
-    }
+    function toast(msg){const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500)}
+    function copyText(v){navigator.clipboard.writeText(v).then(()=>toast('✓ Copiado!'))}
+    function selectPlatform(p){currentPlatform=p; document.querySelectorAll('.platform').forEach(el=>el.classList.remove('active')); document.getElementById('card-'+p).classList.add('active'); switchTab(p)}
+    function switchTab(p){currentPlatform=p; document.querySelectorAll('.tab').forEach(el=>el.classList.remove('active')); document.getElementById('tab-'+p).classList.add('active'); document.getElementById('selected-badge').textContent=platformLabels[p]; document.querySelectorAll('.platform').forEach(el=>el.classList.remove('active')); document.getElementById('card-'+p).classList.add('active'); hideResult()}
+    function hideResult(){const box=document.getElementById('result-box'); box.className='box'; box.innerHTML=''}
 
-    function animateStars() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      stars.forEach(s => {
-        s.alpha += s.speed * s.dir;
-        if (s.alpha >= 1 || s.alpha <= 0) s.dir *= -1;
-        ctx.beginPath();
-        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
-        if (s.gold) {
-          ctx.fillStyle = `rgba(245,158,11,${s.alpha})`;
+    async function buscarCodigo(){
+      const email=document.getElementById('email-input').value.trim(); const btn=document.getElementById('btn-buscar');
+      if(!email) return showResult('error','⚠️','Código não localizado','Por favor, informe seu email.');
+      if(!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) return showResult('error','⚠️','Código não localizado','Email inválido. Verifique e tente novamente.');
+      btn.disabled=true; btn.textContent='Buscando...';
+      try{
+        const res=await fetch('/api/get-code',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email,platform:currentPlatform})});
+        const data=await res.json();
+        if(data.success && data.code){
+          const names={netflix:'Netflix',disney:'Disney+'};
+          const box=document.getElementById('result-box');
+          box.className='box success';
+          box.innerHTML=`<div style="font-size:2.2rem">✨</div><div class="muted">Código encontrado!</div><div class="code">${data.code}</div><div class="muted">Plataforma: ${names[currentPlatform]||currentPlatform}</div><div class="inline"><button class="mini" onclick="copyText('${data.code}')">📋 Copiar Código</button></div>`;
+        } else if(data.success && data.link){
+          showResult('success','🔗','Link encontrado',`<div class="link-output">${data.link}</div><div class="inline"><button class="mini" onclick="window.open('${data.link}','_blank')">Abrir Link</button><button class="mini" onclick="copyText('${data.link}')">Copiar Link</button></div>`);
         } else {
-          ctx.fillStyle = `rgba(196,181,253,${s.alpha * 0.8})`;
+          showResult('error','⚠️','Código não localizado',data.message||'Código não encontrado.');
         }
-        ctx.fill();
-      });
-      requestAnimationFrame(animateStars);
+      }catch(e){ showResult('error','⚠️','Erro de conexão','Tente novamente em instantes.'); }
+      finally{ btn.disabled=false; btn.textContent='✦ Buscar Código'; }
     }
 
-    window.addEventListener('resize', () => { resizeCanvas(); createStars(); });
-    resizeCanvas();
-    createStars();
-    animateStars();
+    function showResult(type,emoji,title,msgHtml){const box=document.getElementById('result-box'); box.className='box '+type; box.innerHTML=`<div style="font-size:2.2rem">${emoji}</div><div style="font-family:Cinzel,serif;font-weight:700;margin-bottom:8px">${title}</div><div class="muted">${msgHtml}</div>`}
+    function showPayment(type,emoji,title,html){const box=document.getElementById('payment-box'); box.className='box '+type; box.innerHTML=`<div style="font-size:2.2rem">${emoji}</div><div style="font-family:Cinzel,serif;font-weight:700;margin-bottom:8px">${title}</div><div class="muted">${html}</div>`}
 
-    // ── ESTADO ──
-    let currentPlatform = 'netflix-all';
-
-    const platformLabels = {
-      'netflix-all':   '🎬 Netflix — Todos os Códigos',
-      netflix: '🎬 Netflix — Código de acesso',
-      'disney-all':    '✨ Disney+ — Todos os Códigos',
-      disney:  '✨ Disney+ — Código de acesso',
-      'netflix-residence': '🏠 Residência Netflix — Link de atualização',
-      'password-reset':    '🔑 Redefinição de Senha Netflix — Link de redefinição',
-      'disney-residence':  '🏡 Residência Disney+ — Link de atualização',
-      'netflix-login':     '📱 Login Netflix — Código de início de sessão',
-      'netflix-temp':      '⏱️ Acesso Temporário Netflix — Link para receber código',
-      'max':               '🎞️ Max — Código único',
-      'prime-video':       '📺 Prime Video — Sign-in attempt',
-      'globo-all':         '📡 Globo — Todos os Códigos',
-      'streaming-all':     '🎞️ Max & Prime Video — Código',
-      'bug-globo':         '🛡️ Bug Globo — Etapa de segurança',
-      'codigo-globo':      '🔢 Código Globo — Conta Globo',
-      'senha-globo':       '🔐 Senha Globo — Recuperar senha'
-    };
-
-    // ── PIN DE BLOQUEIO — aparece APÓS busca, só se resultado for redefinição ──
-
-    function clPinNext(el, nextId) {
-      const v = el.value.toString().replace(/\D/g,'');
-      el.value = v.slice(-1);
-      if (v && nextId) document.getElementById(nextId).focus();
-      // Auto-verificar ao completar o 4º dígito
-      if (!nextId) {
-        setTimeout(() => {
-          const pin = getClPin();
-          if (pin.length === 4) unlockWithPin();
-        }, 80);
-      }
-    }
-
-    function clPinKey(e, el, prevId) {
-      if (e.key === 'Backspace' && !el.value && prevId) {
-        document.getElementById(prevId).focus();
-      }
-    }
-
-    function getClPin() {
-      return ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4']
-        .map(id => document.getElementById(id).value.replace(/\D/g,''))
-        .join('');
-    }
-
-    async function showPinOverlay() {
-      ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4'].forEach(id => {
-        const el = document.getElementById(id);
-        el.value = '';
-        el.classList.remove('pin-ok','pin-err-shake');
-      });
-      document.getElementById('cl-pin-err').textContent = '';
-      document.getElementById('pin-overlay').classList.add('show');
-      setTimeout(() => document.getElementById('cl-pin-d1').focus(), 150);
-    }
-
-    function closePinOverlay() {
-      document.getElementById('pin-overlay').classList.remove('show');
-    }
-
-    async function unlockWithPin() {
-      const pin = getClPin();
-      const errEl = document.getElementById('cl-pin-err');
-      const btn   = document.getElementById('pin-unlock-btn');
-      errEl.textContent = '';
-      if (pin.length !== 4) {
-        errEl.textContent = 'Digite os 4 dígitos do PIN.';
-        return;
-      }
-      btn.disabled = true; btn.textContent = 'Verificando...';
-      try {
-        const r = await fetch('/api/verify-reset-pin', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin })
+    async function loadProducts(){
+      try{
+        const res=await fetch('/api/store/products'); const data=await res.json();
+        const grid=document.getElementById('products-grid');
+        if(!data.success) throw new Error();
+        grid.innerHTML='';
+        data.products.forEach(p=>{
+          const div=document.createElement('div');
+          div.className='product';
+          div.innerHTML=`<div class="product-badge">${p.badge||'Produto digital'}</div><div class="name">${p.name}</div><div class="desc">${p.description}</div><div class="price">${p.price_label}</div><button class="btn2" onclick="comprar('${p.id}', this)">Comprar com Pix</button>`;
+          grid.appendChild(div);
         });
-        const d = await r.json();
-        if (d.success && d.unlocked && d.link) {
-          ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4'].forEach(id =>
-            document.getElementById(id).classList.add('pin-ok'));
-          const unlockedData = {
-            link: d.link,
-            platform: d.platform || 'password-reset',
-            type: d.type || 'link'
-          };
-          setTimeout(() => {
-            closePinOverlay();
-            showSuccess(unlockedData);
-          }, 400);
-        } else {
-          errEl.textContent = d.message || 'PIN incorreto. Tente novamente.';
-          const inputs = ['cl-pin-d1','cl-pin-d2','cl-pin-d3','cl-pin-d4'];
-          inputs.forEach(id => {
-            const el = document.getElementById(id);
-            el.classList.add('pin-err-shake');
-            el.value = '';
-            setTimeout(() => el.classList.remove('pin-err-shake'), 400);
-          });
-          setTimeout(() => document.getElementById('cl-pin-d1').focus(), 100);
-        }
-      } catch {
-        errEl.textContent = 'Erro de conexão. Tente novamente.';
-      } finally {
-        btn.disabled = false; btn.textContent = '🔓 Verificar PIN';
-      }
-    }
-    // ── FIM PIN ───────────────────────────────────────────────────────────────
-
-        function selectPlatform(p) {
-      // 1. Atualiza estado
-      currentPlatform = p;
-
-      // 2. Atualiza badge IMEDIATAMENTE
-      const badge = document.getElementById('selected-badge');
-      if (badge) {
-        badge.textContent = platformLabels[p] || p;
-        badge.className = 'selected-platform-badge ' + p;
-      }
-
-      // 3. Destaca card selecionado
-      document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
-      const cardEl = document.getElementById('card-' + p);
-      if (cardEl) cardEl.classList.add('active');
-
-      // 4. Esconde resultado anterior e fecha overlay PIN se estiver aberto
-      hideResult();
-      closePinOverlay();
-
-      // 5. Rola suavemente até o formulário
-      const formSection = document.querySelector('.form-section');
-      if (formSection) {
-        formSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
+      }catch(e){ document.getElementById('products-grid').innerHTML='<div class="product"><div class="name">Erro</div><div class="desc">Não foi possível carregar os produtos agora.</div></div>'; }
     }
 
-    function switchTab(p) {
-      selectPlatform(p);
-    }
-
-    function hideResult() {
-      const box = document.getElementById('result-box');
-      box.style.display = 'none';
-      box.className = 'result-box';
-    }
-
-    async function buscarCodigo() {
-      const emailVal = document.getElementById('email-input').value.trim();
-      const btn = document.getElementById('btn-buscar');
-      const box = document.getElementById('result-box');
-
-      if (!emailVal) {
-        showError('Por favor, informe seu email.');
-        return;
-      }
-      if (!emailVal.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) {
-        showError('Email inválido. Verifique e tente novamente.');
-        return;
-      }
-
-      btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Buscando...';
-      box.style.display = 'none';
-
-      try {
-        const res = await fetch('/api/get-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: emailVal, platform: currentPlatform })
+    async function comprar(productId, btn){
+      const customer_name=document.getElementById('customer-name').value.trim();
+      const customer_email=document.getElementById('customer-email').value.trim();
+      const customer_phone=document.getElementById('customer-phone').value.trim();
+      btn.disabled=true; const old=btn.textContent; btn.textContent='Criando checkout...';
+      try{
+        const res=await fetch('/api/store/create-checkout',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({product_id:productId, customer_name, customer_email, customer_phone})
         });
-        const data = await res.json();
+        const data=await res.json();
+        if(!data.success) throw new Error(data.message||'Falha ao criar checkout.');
+        activeOrderNsu=data.order_nsu;
+        showPayment('info','💳','Checkout criado',`Pedido: <b>${data.order_nsu}</b><br><br><div class="inline"><button class="mini" onclick="window.open('${data.checkout_url}','_blank')">Abrir Pagamento</button><button class="mini" onclick="copyText('${data.checkout_url}')">Copiar Link</button></div><br>Aguarde a confirmação automática após o pagamento.`);
+        startPolling(data.order_nsu);
+      }catch(e){ showPayment('error','⚠️','Falha ao criar checkout', e.message || 'Não foi possível gerar o pagamento.'); }
+      finally{ btn.disabled=false; btn.textContent=old; }
+    }
 
-        if (data.success) {
-          if (data.pin_required && data.platform === 'password-reset') {
-            showPinOverlay();
-          } else if (data.code || data.link) {
-            showSuccess(data);
-          } else {
-            showError(data.message || 'Código não encontrado.');
+    function startPolling(orderNsu){
+      if(pollTimer) clearInterval(pollTimer);
+      pollTimer=setInterval(async()=>{
+        try{
+          const res=await fetch('/api/store/order-status/'+encodeURIComponent(orderNsu));
+          const data=await res.json();
+          if(data.success && data.status==='paid'){
+            clearInterval(pollTimer);
+            showPaid(data.product_name, data.delivery_url, data.receipt_url || '');
           }
+        }catch(e){}
+      },5000);
+    }
+
+    function showPaid(productName, deliveryUrl, receiptUrl){
+      let actions=`<div class="inline"><button class="mini" onclick="window.open('${deliveryUrl}','_blank')">Abrir Acesso</button><button class="mini" onclick="copyText('${deliveryUrl}')">Copiar Link</button></div>`;
+      if(receiptUrl){ actions += `<div class="inline"><button class="mini" onclick="window.open('${receiptUrl}','_blank')">Ver Comprovante</button></div>` }
+      showPayment('success','✅','Pagamento aprovado',`Produto: <b>${productName||'Acesso digital'}</b><br><br>${actions}`)
+    }
+
+    async function verifyReturnParams(){
+      const url=new URL(window.location.href);
+      const order_nsu=url.searchParams.get('order_nsu') || '';
+      const slug=url.searchParams.get('slug') || '';
+      const transaction_nsu=url.searchParams.get('transaction_nsu') || '';
+      const receipt_url=url.searchParams.get('receipt_url') || '';
+      const capture_method=url.searchParams.get('capture_method') || '';
+      if(!order_nsu) return;
+      showPayment('info','⏳','Verificando pagamento','Aguarde enquanto confirmamos o retorno da InfinitePay...');
+      try{
+        const res=await fetch('/api/store/verify-return',{
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({order_nsu,slug,transaction_nsu,receipt_url,capture_method})
+        });
+        const data=await res.json();
+        if(data.success && data.paid){
+          showPaid(data.product_name, data.delivery_url, data.receipt_url || '');
+        } else if(data.success) {
+          showPayment('info','⏳','Pagamento em análise', data.message || 'Aguardando confirmação do pagamento.');
+          startPolling(order_nsu);
         } else {
-          showError(data.message || 'Código não encontrado.');
+          showPayment('error','⚠️','Falha na verificação', data.message || 'Não foi possível confirmar agora.');
         }
-      } catch (err) {
-        showError('Erro de conexão com o servidor. Tente novamente em instantes.');
-      } finally {
-        btn.disabled = false;
-        btn.innerHTML = '✦ Buscar Código';
-      }
+      }catch(e){ showPayment('error','⚠️','Erro', 'Não foi possível confirmar o retorno agora.'); }
     }
 
-    function showSuccess(data) {
-      const box = document.getElementById('result-box');
-      const names = {
-        netflix: 'Netflix',
-        'disney-all': 'Todos os Códigos Disney+',
-        disney: 'Disney+',
-        'netflix-residence': 'Residência Netflix',
-        'password-reset': 'Redefinição de Senha Netflix',
-        'disney-residence': 'Residência Disney+',
-        'netflix-login': 'Login Netflix',
-        'netflix-temp': 'Acesso Temporário Netflix',
-        'max': 'Max',
-        'prime-video': 'Prime Video',
-        'streaming-all': 'Max & Prime Video',
-        'globo-all': 'Todos os Códigos Globo',
-        'bug-globo': 'Bug Globo',
-        'codigo-globo': 'Código Globo',
-        'senha-globo': 'Senha Globo'
-      };
-      box.className = 'result-box success';
-
-      if (data.type === 'link' && data.link && data.platform === 'password-reset') {
-        box.innerHTML = `
-          <span class="result-emoji">🔑</span>
-          <div class="result-label">Link de redefinição encontrado!</div>
-          <div class="result-platform">Redefinição de Senha Netflix</div>
-          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
-             style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#065f46,#047857);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
-            🔗 Abrir Link de Redefinição
-          </a>
-          <br/>
-          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
-        `;
-      } else if (data.type === 'link' && data.link && data.platform === 'disney-residence') {
-        box.innerHTML = `
-          <span class="result-emoji">🏡</span>
-          <div class="result-label">Link de atualização encontrado!</div>
-          <div class="result-platform">Residência Disney+</div>
-          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
-             style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
-            🔗 Abrir Link de Atualização Disney+
-          </a>
-          <br/>
-          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
-        `;
-      } else if (data.type === 'link' && data.link && data.platform === 'netflix-temp') {
-        box.innerHTML = `
-          <span class="result-emoji">⏱️</span>
-          <div class="result-label">Link encontrado!</div>
-          <div class="result-platform">Solicitação de Acesso / Acesso Temporário Netflix</div>
-
-          <div style="
-            background: rgba(217,119,6,0.08);
-            border: 1px solid rgba(217,119,6,0.35);
-            border-radius: 10px;
-            padding: 14px 18px;
-            margin: 14px 0 10px;
-            text-align: left;
-          ">
-            <p style="margin:0 0 6px;font-size:0.8rem;font-weight:700;color:#fcd34d;letter-spacing:0.05em;">
-              📌 Como usar este link:
-            </p>
-            <p style="margin:0;font-size:0.78rem;color:#fde68a;line-height:1.5;">
-              Clique no botão abaixo para abrir a página da Netflix. Se for <strong style='color:#fff;'>Nova solicitação de acesso</strong>, aprove a solicitação; se for <strong style='color:#fff;'>Acesso temporário</strong>, clique em <strong style='color:#fff;'>"Receber código"</strong>.
-            </p>
-          </div>
-
-          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
-             style="display:inline-block;margin:8px 0 8px;padding:14px 28px;background:linear-gradient(135deg,#92400e,#d97706);color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem;letter-spacing:0.05em;box-shadow:0 4px 16px rgba(217,119,6,0.4);">
-            🔓 Abrir Solicitação / Receber Código
-          </a>
-          <br/>
-          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
-        `;
-      } else if (data.type === 'link' && data.link && data.platform === 'senha-globo') {
-        box.innerHTML = `
-          <span class="result-emoji">🔐</span>
-          <div class="result-label">Link de recuperação encontrado!</div>
-          <div class="result-platform">Senha Globo</div>
-          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
-             style="display:inline-block;margin:14px 0 8px;padding:12px 24px;background:linear-gradient(135deg,#0f766e,#115e59);color:#fff;border-radius:8px;text-decoration:none;font-weight:700;font-size:0.95rem;letter-spacing:0.05em;">
-            🔗 Abrir Recuperação de Senha
-          </a>
-          <br/>
-          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
-        `;
-      } else if (data.type === 'link' && data.link) {
-        box.innerHTML = `
-          <span class="result-emoji">🏠</span>
-          <div class="result-label">Link de atualização encontrado!</div>
-          <div class="result-platform">Residência Netflix</div>
-
-          <div style="
-            background: rgba(220,38,38,0.08);
-            border: 1px solid rgba(220,38,38,0.35);
-            border-radius: 10px;
-            padding: 14px 18px;
-            margin: 14px 0 10px;
-            text-align: left;
-          ">
-            <p style="margin:0 0 6px;font-size:0.8rem;font-weight:700;color:#fca5a5;letter-spacing:0.05em;">
-              ⚠️ IMPORTANTE: Como atualizar sua residência Netflix
-            </p>
-            <p style="margin:0;font-size:0.78rem;color:#fcd5d5;line-height:1.5;">
-              Clique no botão abaixo e, na página da Netflix que abrir, clique em <strong style='color:#fff;'>"Sim, fui eu"</strong> para confirmar a atualização da sua residência.
-            </p>
-          </div>
-
-          <a href="${data.link}" target="_blank" rel="noopener noreferrer"
-             style="display:inline-block;margin:8px 0 8px;padding:14px 28px;background:linear-gradient(135deg,#dc2626,#991b1b);color:#fff;border-radius:10px;text-decoration:none;font-weight:700;font-size:1rem;letter-spacing:0.05em;box-shadow:0 4px 16px rgba(220,38,38,0.4);">
-            ✅ Sim, fui eu — Atualizar Residência
-          </a>
-          <br/>
-          <button class="copy-btn" onclick="copyCode('${data.link}')">📋 Copiar Link</button>
-        `;
-      } else {
-        const code = data.code || '';
-        box.innerHTML = `
-          <span class="result-emoji">✨</span>
-          <div class="result-label">Código encontrado!</div>
-          <span class="code-display">${code}</span>
-          <div class="result-platform">Plataforma: ${names[data.platform] || data.platform}</div>
-          <button class="copy-btn" onclick="copyCode('${code}')">📋 Copiar Código</button>
-        `;
-      }
-      box.style.display = 'block';
-    }
-
-    function showError(msg) {
-      const box = document.getElementById('result-box');
-      box.className = 'result-box error';
-      box.innerHTML = `
-        <span class="result-emoji">⚠️</span>
-        <div class="error-title">Código não localizado</div>
-        <div class="error-msg">${msg}</div>
-      `;
-      box.style.display = 'block';
-    }
-
-    function copyCode(code) {
-      navigator.clipboard.writeText(code).then(() => {
-        showToast('✓ Código copiado!');
-      });
-    }
-
-    function showToast(msg) {
-      const t = document.getElementById('toast');
-      t.textContent = msg;
-      t.classList.add('show');
-      setTimeout(() => t.classList.remove('show'), 2500);
-    }
+    loadProducts(); verifyReturnParams();
   </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/v8c78df7c7c0f484497ecbca7046644da1771523124516" integrity="sha512-8DS7rgIrAmghBFwoOTujcf6D9rXvH8xm8JQ1Ja01h9QX8EzXldiszufYa4IFfKdLUKTTrnSFXLDkUEOTrZQ8Qg==" data-cf-beacon='{"version":"2024.11.0","token":"4edd5f8ec12a48cfa682ab8261b80a79","server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>
