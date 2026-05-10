@@ -29,6 +29,8 @@
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
     .platform,.product{background:rgba(59,7,100,.28);border:1px solid var(--border);border-radius:14px;padding:20px 16px;text-align:center;transition:.25s;position:relative;overflow:hidden}.platform{cursor:pointer}.platform:hover,.platform.active,.product:hover{transform:translateY(-3px);border-color:#a855f7;box-shadow:0 0 20px rgba(168,85,247,.25)}.platform.active{border-color:var(--gold);background:rgba(245,158,11,.08)}
     .product-badge{display:inline-block;margin-bottom:10px;padding:6px 10px;border-radius:999px;font-size:.72rem;font-weight:700;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.25);color:var(--gold-light)}
+    .product-logo-wrap{height:72px;display:flex;align-items:center;justify-content:center;margin:4px 0 14px}
+    .product-logo{max-width:170px;max-height:56px;object-fit:contain;filter:drop-shadow(0 6px 18px rgba(0,0,0,.35))}
     .name{font-family:'Cinzel',serif;font-size:1rem;font-weight:700}.desc{font-size:.84rem;color:var(--muted);line-height:1.5;margin-top:6px}.price{font-family:'Cinzel',serif;color:var(--gold-light);font-size:1.45rem;margin:12px 0 8px}
     .steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-top:18px}.step{text-align:center;padding:16px 10px}.stepnum{width:44px;height:44px;margin:0 auto 12px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,var(--purple),var(--purple2));border:1px solid var(--border-gold);font-family:'Cinzel',serif;color:var(--gold-light);font-weight:700}
     .tabs{display:flex;gap:10px;margin-bottom:20px;background:rgba(0,0,0,.3);border-radius:12px;padding:4px}.tab{flex:1;padding:10px 8px;border:none;border-radius:10px;background:transparent;color:var(--muted);cursor:pointer;font-weight:700}.tab.active{background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff}
@@ -160,7 +162,7 @@
         data.products.forEach(p=>{
           const div=document.createElement('div');
           div.className='product';
-          div.innerHTML=`<div class="product-badge">${p.badge||'Produto digital'}</div><div class="name">${p.name}</div><div class="desc">${p.description}</div><div class="price">${p.price_label}</div><button class="btn2" onclick="comprar('${p.id}', this)">Comprar com Pix</button>`;
+          div.innerHTML=`<div class="product-badge">${p.badge||'Produto digital'}</div>${p.image_url ? `<div class="product-logo-wrap"><img class="product-logo" src="${p.image_url}" alt="${p.name}"></div>` : ''}<div class="name">${p.name}</div><div class="desc">${p.description}</div><div class="price">${p.price_label}</div><button class="btn2" onclick="comprar('${p.id}', this)">Comprar com Pix</button>`;
           grid.appendChild(div);
         });
       }catch(e){ document.getElementById('products-grid').innerHTML='<div class="product"><div class="name">Erro</div><div class="desc">Não foi possível carregar os produtos agora.</div></div>'; }

@@ -34,20 +34,22 @@ INFINITEPAY_WEBHOOK_URL = os.environ.get('INFINITEPAY_WEBHOOK_URL', f'{BASE_URL}
 
 DEFAULT_PRODUCTS = [
     {
-        'id': 'acesso-premium',
-        'name': 'Acesso Premium',
-        'description': 'Liberação digital automática após pagamento aprovado.',
-        'price_cents': 1990,
-        'delivery_url': os.environ.get('DELIVERY_URL_PREMIUM', 'https://SEU-LINK-AQUI-1'),
-        'badge': 'Entrega automática'
+        'id': 'netflix-premium',
+        'name': 'Netflix Premium',
+        'description': 'Acesso Netflix com liberação automática após pagamento aprovado.',
+        'price_cents': 3500,
+        'delivery_url': os.environ.get('DELIVERY_URL_NETFLIX_PREMIUM', os.environ.get('DELIVERY_URL_PREMIUM', 'https://SEU-LINK-NETFLIX-AQUI')),
+        'badge': 'Netflix • liberação automática',
+        'image_url': 'https://sspark.genspark.ai/cfimages?u1=vxnlFCUBJ1MdeiGsBChh3m2AgkQKsj8okqVtFS9OAIcvAa0w8jEtgPicUyvjkHkmTrGinrFoAKxCKNkdzIMUHoDBwyMgXSxF6KwERAM%2BpFC4CDDIfU4%3D&u2=BLC7%2FgtFE4awllH4&width=2560'
     },
     {
-        'id': 'plano-vip',
-        'name': 'Plano VIP',
-        'description': 'Acesso liberado automaticamente após a confirmação do pagamento.',
-        'price_cents': 2990,
-        'delivery_url': os.environ.get('DELIVERY_URL_VIP', 'https://SEU-LINK-AQUI-2'),
-        'badge': 'Pix + liberação'
+        'id': 'disney-premium',
+        'name': 'Disney Premium',
+        'description': 'Acesso Disney+ com liberação automática após a confirmação do pagamento.',
+        'price_cents': 2500,
+        'delivery_url': os.environ.get('DELIVERY_URL_DISNEY_PREMIUM', os.environ.get('DELIVERY_URL_VIP', 'https://SEU-LINK-DISNEY-AQUI')),
+        'badge': 'Disney+ • liberação automática',
+        'image_url': 'https://sspark.genspark.ai/cfimages?u1=geWt%2B8PWaG7%2BshOH1RmMyJOXyuTsP3nvUQfb4tYndylZX%2FAfSG%2BQRo4d5paq5Rw30bJ8nCmOPt1F9c63jWEXKgq3mD6JKe9DKW%2FhxasRqcC9xM8ototOzLILQkkbF2InfFpuDGlOKRq5fnsmbT51pr6hCbhC0R5KD10%3D&u2=V7E27TOU7vW46V12&width=2560'
     }
 ]
 
@@ -732,6 +734,7 @@ def api_store_products():
             'name': p['name'],
             'description': p['description'],
             'badge': p.get('badge', ''),
+            'image_url': p.get('image_url', ''),
             'price_cents': p['price_cents'],
             'price_label': brl_from_cents(p['price_cents'])
         })
