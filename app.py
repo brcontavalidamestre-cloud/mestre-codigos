@@ -22,6 +22,7 @@ app.permanent_session_lifetime = timedelta(hours=8)
 DATA_DIR = '/data' if os.path.isdir('/data') else '/tmp'
 USERS_FILE = os.environ.get('USERS_FILE', os.path.join(DATA_DIR, 'users.json'))
 ORDERS_FILE = os.environ.get('ORDERS_FILE', os.path.join(DATA_DIR, 'orders_infinitepay.json'))
+CREDENTIALS_FILE = os.environ.get('CREDENTIALS_FILE', os.path.join(DATA_DIR, 'credentials.json'))
 
 railway_public_domain = os.environ.get('RAILWAY_PUBLIC_DOMAIN', '').strip()
 default_base_url = f"https://{railway_public_domain}" if railway_public_domain else 'http://localhost:8080'
@@ -146,6 +147,42 @@ def save_orders(orders):
     os.makedirs(os.path.dirname(ORDERS_FILE), exist_ok=True)
     with open(ORDERS_FILE, 'w', encoding='utf-8') as f:
         json.dump(orders, f, indent=2, ensure_ascii=False)
+
+
+def load_credentials():
+    if os.path.exists(CREDENTIALS_FILE):
+        try:
+            with open(CREDENTIALS_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, dict):
+                    return data
+        except Exception:
+            pass
+    return {}
+
+
+def save_credentials(data):
+    os.makedirs(os.path.dirname(CREDENTIALS_FILE), exist_ok=True)
+    with open(CREDENTIALS_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=2, ensure_ascii=False)
+
+
+def assign_credential(product_id):
+    creds = load_credentials()
+    items = creds.get(product_id, [])
+    for item in items:
+        if not item.get('used'):
+            item['used'] = True
+            item['used_at'] = now_iso()
+            creds[product_id] = items
+            save_credentials(creds)
+            return {
+                'id': item.get('id', ''),
+                'email': item.get('email', ''),
+                'password': item.get('password', ''),
+                'note': item.get('note', '')
+            }
+    return None
 
 
 def get_product_by_id(product_id):
@@ -460,6 +497,10 @@ def mark_order_paid(order_nsu, extra=None):
             order['receipt_url'] = extra['receipt_url']
         if extra.get('capture_method'):
             order['capture_method'] = extra['capture_method']
+    if not order.get('assigned_account'):
+        account = assign_credential(order.get('product_id', ''))
+        if account:
+            order['assigned_account'] = account
     orders[order_nsu] = order
     save_orders(orders)
     return order
@@ -690,6 +731,85 @@ def api_change_password(username):
     return jsonify({'success': True, 'message': 'Senha alterada com sucesso.'})
 
 
+@app.route('/api/admin/credentials', methods=['GET'])
+@admin_required
+def api_list_credentials():
+    creds = load_credentials()
+    products_meta = []
+    for p in DEFAULT_PRODUCTS:
+        items = creds.get(p['id'], [])
+        available = sum(1 for it in items if not it.get('used'))
+        products_meta.append({
+            'id': p['id'],
+            'name': p['name'],
+            'price_label': brl_from_cents(p['price_cents']),
+            'total': len(items),
+            'available': available,
+            'used': len(items) - available,
+            'items': items
+        })
+    return jsonify({'success': True, 'products': products_meta})
+
+
+@app.route('/api/admin/credentials', methods=['POST'])
+@admin_required
+def api_create_credential():
+    data = request.get_json(silent=True) or {}
+    product_id = str(data.get('product_id', '')).strip()
+    email = str(data.get('email', '')).strip()
+    password = str(data.get('password', '')).strip()
+    note = str(data.get('note', '')).strip()
+    if not product_id or not get_product_by_id(product_id):
+        return jsonify({'success': False, 'message': 'Produto inválido.'}), 400
+    if not email or not password:
+        return jsonify({'success': False, 'message': 'Email e senha são obrigatórios.'}), 400
+    creds = load_credentials()
+    items = creds.get(product_id, [])
+    items.append({
+        'id': uuid.uuid4().hex[:10],
+        'email': email,
+        'password': password,
+        'note': note,
+        'used': False,
+        'created_at': now_iso()
+    })
+    creds[product_id] = items
+    save_credentials(creds)
+    return jsonify({'success': True, 'message': 'Acesso cadastrado com sucesso.'})
+
+
+@app.route('/api/admin/credentials/<product_id>/<credential_id>', methods=['DELETE'])
+@admin_required
+def api_delete_credential(product_id, credential_id):
+    creds = load_credentials()
+    items = creds.get(product_id, [])
+    new_items = [it for it in items if it.get('id') != credential_id]
+    if len(new_items) == len(items):
+        return jsonify({'success': False, 'message': 'Acesso não encontrado.'}), 404
+    creds[product_id] = new_items
+    save_credentials(creds)
+    return jsonify({'success': True, 'message': 'Acesso removido.'})
+
+
+@app.route('/api/admin/credentials/<product_id>/<credential_id>/reset', methods=['POST'])
+@admin_required
+def api_reset_credential(product_id, credential_id):
+    creds = load_credentials()
+    items = creds.get(product_id, [])
+    found = False
+    for it in items:
+        if it.get('id') == credential_id:
+            it['used'] = False
+            it.pop('used_at', None)
+            found = True
+            break
+    if not found:
+        return jsonify({'success': False, 'message': 'Acesso não encontrado.'}), 404
+    creds[product_id] = items
+    save_credentials(creds)
+    return jsonify({'success': True, 'message': 'Acesso liberado novamente.'})
+
+
 @app.route('/api/get-code', methods=['POST'])
 @login_required
 def get_code():
@@ -798,12 +918,19 @@ def api_store_verify_return():
         orders[order_nsu] = order
         save_orders(orders)
     if order.get('status') == 'paid':
+        if not order.get('assigned_account'):
+            account = assign_credential(order.get('product_id', ''))
+            if account:
+                order['assigned_account'] = account
+                orders[order_nsu] = order
+                save_orders(orders)
         return jsonify({
             'success': True,
             'paid': True,
             'delivery_url': order.get('delivery_url'),
             'product_name': order.get('product_name'),
-            'receipt_url': order.get('receipt_url', '')
+            'receipt_url': order.get('receipt_url', ''),
+            'assigned_account': order.get('assigned_account')
         })
     slug_to_use = slug or order.get('slug', '')
     transaction_to_use = transaction_nsu or order.get('transaction_nsu', '')
@@ -823,7 +950,8 @@ def api_store_verify_return():
                 'paid': True,
                 'delivery_url': updated.get('delivery_url'),
                 'product_name': updated.get('product_name'),
-                'receipt_url': updated.get('receipt_url', '')
+                'receipt_url': updated.get('receipt_url', ''),
+                'assigned_account': updated.get('assigned_account')
             })
         return jsonify({'success': True, 'paid': False, 'message': 'Pagamento ainda não confirmado.'})
     except Exception as e:
@@ -843,7 +971,8 @@ def api_store_order_status(order_nsu):
         'status': order.get('status', 'pending'),
         'product_name': order.get('product_name'),
         'delivery_url': order.get('delivery_url', '') if order.get('status') == 'paid' else '',
-        'receipt_url': order.get('receipt_url', '')
+        'receipt_url': order.get('receipt_url', ''),
+        'assigned_account': order.get('assigned_account') if order.get('status') == 'paid' else None
     })
 
 

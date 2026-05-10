@@ -7,12 +7,33 @@
   <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Raleway:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     body{margin:0;background:#06000f;color:#fff;font-family:Raleway,sans-serif;padding:24px}
-    .wrap{max-width:980px;margin:0 auto}.card{background:linear-gradient(135deg,rgba(19,0,41,.96),rgba(26,0,53,.96));border:1px solid rgba(245,158,11,.35);border-radius:20px;padding:24px;margin-bottom:18px;box-shadow:0 10px 40px rgba(0,0,0,.45)}
+    .wrap{max-width:1080px;margin:0 auto}.card{background:linear-gradient(135deg,rgba(19,0,41,.96),rgba(26,0,53,.96));border:1px solid rgba(245,158,11,.35);border-radius:20px;padding:24px;margin-bottom:18px;box-shadow:0 10px 40px rgba(0,0,0,.45)}
     h1{margin:0 0 10px;font-family:Cinzel,serif;font-size:2rem;background:linear-gradient(135deg,#fcd34d,#f59e0b,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    p{color:#c4b5fd} .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.input,select{width:100%;padding:13px 14px;border-radius:12px;border:1px solid rgba(168,85,247,.25);background:rgba(59,7,100,.2);color:#fff;outline:none}
-    .btn{padding:13px 16px;border:none;border-radius:12px;background:linear-gradient(135deg,#6d28d9,#3b0764);color:#fff;font-weight:700;cursor:pointer}.btn.red{background:linear-gradient(135deg,#b91c1c,#7f1d1d)} .btn.gold{background:linear-gradient(135deg,#f59e0b,#b45309)}
-    table{width:100%;border-collapse:collapse;margin-top:16px} th,td{padding:12px 10px;border-bottom:1px solid rgba(168,85,247,.18);text-align:left} th{color:#fcd34d} .msg{display:none;margin-top:12px;padding:12px;border-radius:12px}.ok{display:block;background:rgba(20,83,45,.35);border:1px solid rgba(74,222,128,.35);color:#bbf7d0}.err{display:block;background:rgba(127,29,29,.35);border:1px solid rgba(248,113,113,.35);color:#fecaca}
+    h3{margin:0 0 12px;font-family:Cinzel,serif;color:#fcd34d;letter-spacing:1px}
+    p{color:#c4b5fd}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
+    .input,select{width:100%;padding:13px 14px;border-radius:12px;border:1px solid rgba(168,85,247,.25);background:rgba(59,7,100,.2);color:#fff;outline:none}
+    .btn{padding:13px 16px;border:none;border-radius:12px;background:linear-gradient(135deg,#6d28d9,#3b0764);color:#fff;font-weight:700;cursor:pointer}
+    .btn.red{background:linear-gradient(135deg,#b91c1c,#7f1d1d)}.btn.gold{background:linear-gradient(135deg,#f59e0b,#b45309)}.btn.green{background:linear-gradient(135deg,#15803d,#14532d)}
+    .btn.small{padding:8px 12px;font-size:.82rem;border-radius:10px}
+    table{width:100%;border-collapse:collapse;margin-top:16px}th,td{padding:12px 10px;border-bottom:1px solid rgba(168,85,247,.18);text-align:left;font-size:.92rem}th{color:#fcd34d}
+    .msg{display:none;margin-top:12px;padding:12px;border-radius:12px}.ok{display:block;background:rgba(20,83,45,.35);border:1px solid rgba(74,222,128,.35);color:#bbf7d0}.err{display:block;background:rgba(127,29,29,.35);border:1px solid rgba(248,113,113,.35);color:#fecaca}
     .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+    .product-box{background:rgba(59,7,100,.18);border:1px solid rgba(168,85,247,.25);border-radius:14px;padding:18px;margin-top:14px}
+    .product-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px}
+    .product-name{font-family:Cinzel,serif;color:#fcd34d;font-size:1.1rem}
+    .stats{display:flex;gap:8px;flex-wrap:wrap}
+    .stat{padding:6px 10px;border-radius:999px;font-size:.78rem;border:1px solid rgba(245,158,11,.25);background:rgba(245,158,11,.08);color:#fcd34d}
+    .stat.green{border-color:rgba(74,222,128,.35);background:rgba(20,83,45,.25);color:#bbf7d0}
+    .stat.red{border-color:rgba(248,113,113,.35);background:rgba(127,29,29,.25);color:#fecaca}
+    .empty{padding:14px;text-align:center;color:#c4b5fd;border:1px dashed rgba(168,85,247,.3);border-radius:10px;margin-top:10px}
+    .badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:.72rem;font-weight:700}
+    .badge.free{background:rgba(20,83,45,.4);color:#bbf7d0;border:1px solid rgba(74,222,128,.35)}
+    .badge.used{background:rgba(127,29,29,.4);color:#fecaca;border:1px solid rgba(248,113,113,.35)}
+    .row-actions{display:flex;gap:6px;flex-wrap:wrap}
+    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+    .tab{padding:10px 14px;border-radius:10px;border:1px solid rgba(168,85,247,.25);background:rgba(59,7,100,.2);color:#c4b5fd;cursor:pointer;font-weight:700}
+    .tab.active{background:linear-gradient(135deg,#6d28d9,#3b0764);color:#fff;border-color:rgba(245,158,11,.35)}
+    .section{display:none}.section.active{display:block}
   </style>
 </head>
 <body>
@@ -21,41 +42,77 @@
       <div class="top">
         <div>
           <h1>Painel Admin</h1>
-          <p>Gerencie usuários do sistema.</p>
+          <p>Gerencie usuários e os acessos digitais entregues após o pagamento.</p>
         </div>
         <button class="btn gold" onclick="logout()">Sair</button>
       </div>
-    </div>
-
-    <div class="card">
-      <h3>Criar usuário</h3>
-      <div class="grid">
-        <input class="input" id="name" placeholder="Nome">
-        <input class="input" id="username" placeholder="Usuário">
-        <input class="input" id="password" placeholder="Senha">
-        <select id="role"><option value="client">Cliente</option><option value="admin">Admin</option></select>
+      <div class="tabs" style="margin-top:14px">
+        <button class="tab active" id="tab-users" onclick="switchSection('users')">👤 Usuários</button>
+        <button class="tab" id="tab-creds" onclick="switchSection('creds')">🔐 Acessos da loja</button>
       </div>
-      <div style="margin-top:12px"><button class="btn" onclick="createUser()">Criar usuário</button></div>
-      <div class="msg" id="msg"></div>
     </div>
 
-    <div class="card">
-      <h3>Usuários</h3>
-      <table>
-        <thead><tr><th>Usuário</th><th>Nome</th><th>Perfil</th><th>Ações</th></tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
+    <div class="section active" id="section-users">
+      <div class="card">
+        <h3>Criar usuário</h3>
+        <div class="grid">
+          <input class="input" id="name" placeholder="Nome">
+          <input class="input" id="username" placeholder="Usuário">
+          <input class="input" id="password" placeholder="Senha">
+          <select id="role"><option value="client">Cliente</option><option value="admin">Admin</option></select>
+        </div>
+        <div style="margin-top:12px"><button class="btn" onclick="createUser()">Criar usuário</button></div>
+        <div class="msg" id="msg"></div>
+      </div>
+
+      <div class="card">
+        <h3>Usuários</h3>
+        <table>
+          <thead><tr><th>Usuário</th><th>Nome</th><th>Perfil</th><th>Ações</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section" id="section-creds">
+      <div class="card">
+        <h3>Cadastrar novo acesso</h3>
+        <p style="margin:0 0 12px">Cada acesso fica em estoque. Quando um cliente paga via Pix, o sistema entrega automaticamente um acesso disponível e o marca como usado.</p>
+        <div class="grid">
+          <select id="cred-product"></select>
+          <input class="input" id="cred-email" placeholder="Email da conta">
+          <input class="input" id="cred-password" placeholder="Senha da conta">
+          <input class="input" id="cred-note" placeholder="Observação (opcional)">
+        </div>
+        <div style="margin-top:12px"><button class="btn green" onclick="createCredential()">Salvar acesso</button></div>
+        <div class="msg" id="cred-msg"></div>
+      </div>
+
+      <div class="card">
+        <h3>Estoque de acessos</h3>
+        <p style="margin:0 0 8px">Disponíveis = serão entregues nas próximas vendas. Usados = já foram entregues a um cliente.</p>
+        <div id="creds-list"></div>
+      </div>
     </div>
   </div>
   <script>
-    function show(type,text){const el=document.getElementById('msg'); el.className='msg '+type; el.textContent=text}
+    function show(elId,type,text){const el=document.getElementById(elId); el.className='msg '+type; el.textContent=text; setTimeout(()=>{el.className='msg'}, 4000)}
+
+    function switchSection(name){
+      document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+      document.getElementById('tab-'+name).classList.add('active');
+      document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+      document.getElementById('section-'+(name==='users'?'users':'creds')).classList.add('active');
+      if(name==='creds') loadCredentials();
+    }
+
     async function loadUsers(){
       const res=await fetch('/api/admin/users'); const data=await res.json();
       if(!data.success){location.href='/'; return}
       const tbody=document.getElementById('tbody'); tbody.innerHTML='';
       data.users.forEach(u=>{
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${u.username}</td><td>${u.name||''}</td><td>${u.role}</td><td><button class="btn red" onclick="removeUser('${u.username}')">Excluir</button></td>`;
+        tr.innerHTML=`<td>${u.username}</td><td>${u.name||''}</td><td>${u.role}</td><td><button class="btn red small" onclick="removeUser('${u.username}')">Excluir</button></td>`;
         tbody.appendChild(tr);
       });
     }
@@ -66,14 +123,90 @@
       const role=document.getElementById('role').value;
       const res=await fetch('/api/admin/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,username,password,role})});
       const data=await res.json();
-      if(data.success){show('ok',data.message||'Usuário criado.'); document.getElementById('name').value=''; document.getElementById('username').value=''; document.getElementById('password').value=''; loadUsers();}
-      else show('err',data.message||'Falha ao criar usuário.');
+      if(data.success){show('msg','ok',data.message||'Usuário criado.'); document.getElementById('name').value=''; document.getElementById('username').value=''; document.getElementById('password').value=''; loadUsers();}
+      else show('msg','err',data.message||'Falha ao criar usuário.');
     }
     async function removeUser(username){
       if(!confirm('Excluir '+username+'?')) return;
       const res=await fetch('/api/admin/users/'+encodeURIComponent(username),{method:'DELETE'}); const data=await res.json();
-      if(data.success){show('ok',data.message||'Usuário removido.'); loadUsers();} else show('err',data.message||'Falha ao remover.');
+      if(data.success){show('msg','ok',data.message||'Usuário removido.'); loadUsers();} else show('msg','err',data.message||'Falha ao remover.');
     }
+
+    async function loadCredentials(){
+      const res=await fetch('/api/admin/credentials'); const data=await res.json();
+      if(!data.success){show('cred-msg','err','Não foi possível carregar.'); return}
+      const sel=document.getElementById('cred-product');
+      const current=sel.value;
+      sel.innerHTML='';
+      data.products.forEach(p=>{
+        const opt=document.createElement('option'); opt.value=p.id; opt.textContent=`${p.name} (${p.price_label})`;
+        sel.appendChild(opt);
+      });
+      if(current) sel.value=current;
+      const list=document.getElementById('creds-list'); list.innerHTML='';
+      data.products.forEach(p=>{
+        const box=document.createElement('div'); box.className='product-box';
+        let html=`<div class="product-head"><div class="product-name">${p.name} <span style="color:#c4b5fd;font-weight:400;font-size:.85rem">• ${p.price_label}</span></div>
+          <div class="stats">
+            <span class="stat">Total: ${p.total}</span>
+            <span class="stat green">Disponíveis: ${p.available}</span>
+            <span class="stat red">Usados: ${p.used}</span>
+          </div></div>`;
+        if(!p.items.length){
+          html+='<div class="empty">Nenhum acesso cadastrado para este produto ainda.</div>';
+        } else {
+          html+=`<table><thead><tr><th>Email</th><th>Senha</th><th>Status</th><th>Observação</th><th>Ações</th></tr></thead><tbody>`;
+          p.items.forEach(it=>{
+            const status = it.used
+              ? `<span class="badge used">Usado</span>`
+              : `<span class="badge free">Disponível</span>`;
+            const reset = it.used
+              ? `<button class="btn gold small" onclick="resetCredential('${p.id}','${it.id}')">Liberar</button>`
+              : '';
+            html+=`<tr>
+              <td>${it.email||''}</td>
+              <td><code>${it.password||''}</code></td>
+              <td>${status}</td>
+              <td>${it.note||''}</td>
+              <td><div class="row-actions">${reset}<button class="btn red small" onclick="deleteCredential('${p.id}','${it.id}')">Excluir</button></div></td>
+            </tr>`;
+          });
+          html+='</tbody></table>';
+        }
+        box.innerHTML=html; list.appendChild(box);
+      });
+    }
+    async function createCredential(){
+      const product_id=document.getElementById('cred-product').value;
+      const email=document.getElementById('cred-email').value.trim();
+      const password=document.getElementById('cred-password').value.trim();
+      const note=document.getElementById('cred-note').value.trim();
+      if(!product_id||!email||!password){ show('cred-msg','err','Produto, email e senha são obrigatórios.'); return; }
+      const res=await fetch('/api/admin/credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id,email,password,note})});
+      const data=await res.json();
+      if(data.success){
+        show('cred-msg','ok',data.message||'Acesso cadastrado.');
+        document.getElementById('cred-email').value='';
+        document.getElementById('cred-password').value='';
+        document.getElementById('cred-note').value='';
+        loadCredentials();
+      } else show('cred-msg','err',data.message||'Falha ao cadastrar.');
+    }
+    async function deleteCredential(productId, credId){
+      if(!confirm('Excluir este acesso?')) return;
+      const res=await fetch('/api/admin/credentials/'+encodeURIComponent(productId)+'/'+encodeURIComponent(credId),{method:'DELETE'});
+      const data=await res.json();
+      if(data.success){show('cred-msg','ok',data.message||'Removido.'); loadCredentials();}
+      else show('cred-msg','err',data.message||'Falha ao remover.');
+    }
+    async function resetCredential(productId, credId){
+      if(!confirm('Liberar este acesso novamente para venda?')) return;
+      const res=await fetch('/api/admin/credentials/'+encodeURIComponent(productId)+'/'+encodeURIComponent(credId)+'/reset',{method:'POST'});
+      const data=await res.json();
+      if(data.success){show('cred-msg','ok',data.message||'Liberado.'); loadCredentials();}
+      else show('cred-msg','err',data.message||'Falha.');
+    }
+
     async function logout(){ await fetch('/api/auth/logout',{method:'POST'}); location.href='/login'; }
     loadUsers();
   </script>
