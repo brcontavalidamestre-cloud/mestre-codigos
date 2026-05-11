@@ -578,8 +578,8 @@ def search_code(user_email, platform):
             if root and root not in seen_dom:
                 seen_dom.add(root)
                 primary_domains.append(root)
-        # limita o número de buscas IMAP para no máximo 6 domínios principais
-        primary_domains = primary_domains[:6]
+        # limita o número de buscas IMAP para no máximo 10 domínios principais
+        primary_domains = primary_domains[:10]
         subj_kws = config['subject_keywords']
         result_type = config.get('type', 'code')
         all_ids = []
@@ -594,22 +594,42 @@ def search_code(user_email, platform):
                             all_ids.append(eid)
             except Exception:
                 continue
+        # Fallback específico para max-prime: também buscar por assunto-chave caso
+        # o FROM não casou (alguns provedores reescrevem o remetente).
+        if platform == 'max-prime':
+            for kw in ['código único', 'codigo unico', 'Temporário:', 'Temporario:', 'one-time code', 'access code']:
+                try:
+                    status, msgs = mail.search(None, 'SUBJECT', kw)
+                    if status == 'OK' and msgs and msgs[0]:
+                        for eid in msgs[0].split():
+                            if eid not in seen:
+                                seen.add(eid)
+                                all_ids.append(eid)
+                except Exception:
+                    continue
         if not all_ids:
             mail.logout()
             return None, None, 'Nenhum email da plataforma encontrado.'
-        recent_ids = all_ids[-60:]
+        recent_ids = all_ids[-300:]
         recent_ids.reverse()
         matched_ids = []
         for eid in recent_ids:
             try:
-                status, data = mail.fetch(eid, '(BODY[HEADER.FIELDS (SUBJECT)])')
+                status, data = mail.fetch(eid, '(BODY[HEADER.FIELDS (SUBJECT FROM)])')
                 if status != 'OK':
                     continue
                 hdr = email.message_from_bytes(data[0][1])
                 subj = decode_str(hdr.get('Subject', ''))
+                frm = decode_str(hdr.get('From', '')).lower()
+                # Para max-prime, validamos também a marca no FROM, evitando matches
+                # falsos em outros emails.
+                if platform == 'max-prime':
+                    brand_ok = any(b in frm for b in ['hbomax', 'hbo max', 'max.com', 'warner', 'amazon', 'primevideo', 'prime video'])
+                    if not brand_ok:
+                        continue
                 if subject_matches(subj, subj_kws):
                     matched_ids.append(eid)
-                    if len(matched_ids) >= 20:
+                    if len(matched_ids) >= 30:
                         break
             except Exception:
                 continue
