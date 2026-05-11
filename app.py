@@ -597,7 +597,20 @@ def search_code(user_email, platform):
         # Fallback específico para max-prime: também buscar por assunto-chave caso
         # o FROM não casou (alguns provedores reescrevem o remetente).
         if platform == 'max-prime':
-            for kw in ['código único', 'codigo unico', 'Temporário:', 'Temporario:', 'one-time code', 'access code']:
+            # Buscas ASCII (sem acentos) que o IMAP do Hostinger aceita sem precisar de UTF-8
+            for kw in [
+                'Temporario',
+                'Temporary',
+                'codigo unico',
+                'codigo de acesso',
+                'one-time code',
+                'one time code',
+                'access code',
+                'your code',
+                'verification code',
+                'HBO Max',
+                'hbomax'
+            ]:
                 try:
                     status, msgs = mail.search(None, 'SUBJECT', kw)
                     if status == 'OK' and msgs and msgs[0]:
@@ -607,10 +620,59 @@ def search_code(user_email, platform):
                                 all_ids.append(eid)
                 except Exception:
                     continue
+            # Buscas em UTF-8 para capturar acentos como em 'Temporário' e 'código único'
+            try:
+                mail.literal = None
+                for kw_utf8 in ['Temporário', 'código único', 'código de acesso', 'código']:
+                    try:
+                        encoded = kw_utf8.encode('utf-8')
+                        status, msgs = mail.search('UTF-8', 'SUBJECT', '"' + kw_utf8 + '"')
+                        if status != 'OK':
+                            # Fallback usando o protocolo IMAP "literal"
+                            tag = mail._new_tag().decode()
+                            cmd = f'{tag} SEARCH CHARSET UTF-8 SUBJECT {{{len(encoded)}}}\r\n'
+                            try:
+                                mail.send(cmd.encode())
+                                mail.send(encoded + b'\r\n')
+                                resp = mail.readline()
+                                ids = []
+                                while resp and not resp.startswith(tag.encode()):
+                                    if resp.startswith(b'* SEARCH'):
+                                        parts = resp.decode(errors='ignore').strip().split()[2:]
+                                        ids.extend(p.encode() for p in parts if p.isdigit())
+                                    resp = mail.readline()
+                                for eid in ids:
+                                    if eid not in seen:
+                                        seen.add(eid)
+                                        all_ids.append(eid)
+                            except Exception:
+                                pass
+                        else:
+                            if msgs and msgs[0]:
+                                for eid in msgs[0].split():
+                                    if eid not in seen:
+                                        seen.add(eid)
+                                        all_ids.append(eid)
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+            # Último recurso: pegar TODAS as mensagens recentes (últimas 800) e filtrar por assunto local
+            try:
+                status, msgs = mail.search(None, 'ALL')
+                if status == 'OK' and msgs and msgs[0]:
+                    all_msg_ids = msgs[0].split()
+                    recent_all = all_msg_ids[-800:]
+                    for eid in recent_all:
+                        if eid not in seen:
+                            seen.add(eid)
+                            all_ids.append(eid)
+            except Exception:
+                pass
         if not all_ids:
             mail.logout()
             return None, None, 'Nenhum email da plataforma encontrado.'
-        recent_ids = all_ids[-300:]
+        recent_ids = all_ids[-800:]
         recent_ids.reverse()
         matched_ids = []
         for eid in recent_ids:
@@ -621,15 +683,23 @@ def search_code(user_email, platform):
                 hdr = email.message_from_bytes(data[0][1])
                 subj = decode_str(hdr.get('Subject', ''))
                 frm = decode_str(hdr.get('From', '')).lower()
-                # Para max-prime, validamos também a marca no FROM, evitando matches
-                # falsos em outros emails.
+                # Para max-prime, aceitamos o email se a marca aparece no FROM
+                # OU se o assunto contém um termo bem específico (ex.: código único).
                 if platform == 'max-prime':
-                    brand_ok = any(b in frm for b in ['hbomax', 'hbo max', 'max.com', 'warner', 'amazon', 'primevideo', 'prime video'])
-                    if not brand_ok:
+                    brand_ok = any(b in frm for b in [
+                        'hbomax', 'hbo max', 'max.com', 'warner', 'amazon',
+                        'primevideo', 'prime video', 'hbo', 'wbd.com'
+                    ])
+                    subj_norm = normalize(subj).lower()
+                    strong_subject = any(s in subj_norm for s in [
+                        'codigo unico', 'temporario', 'one-time code', 'one time code',
+                        'access code', 'codigo de acesso', 'verification code'
+                    ])
+                    if not (brand_ok or strong_subject):
                         continue
                 if subject_matches(subj, subj_kws):
                     matched_ids.append(eid)
-                    if len(matched_ids) >= 30:
+                    if len(matched_ids) >= 50:
                         break
             except Exception:
                 continue
