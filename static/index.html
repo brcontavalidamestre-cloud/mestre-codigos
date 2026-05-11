@@ -285,17 +285,23 @@
 
     function showPaid(productName, deliveryUrl, receiptUrl, account){
       let body = `Produto: <b>${productName||'Acesso digital'}</b><br><br>`;
+      let combinedText = '';
       if(account && (account.email || account.password)){
-        body += `<div style="text-align:left;background:rgba(0,0,0,.25);border:1px solid rgba(74,222,128,.35);border-radius:12px;padding:14px;margin:8px auto;max-width:420px">`+
-          `<div style="color:#bbf7d0;font-weight:700;margin-bottom:6px">Seu acesso liberado:</div>`+
-          (account.email?`<div><b>Email:</b> <code>${account.email}</code> <button class="mini" style="margin-left:6px" onclick="copyText('${account.email}')">Copiar</button></div>`:'')+
-          (account.password?`<div style="margin-top:6px"><b>Senha:</b> <code>${account.password}</code> <button class="mini" style="margin-left:6px" onclick="copyText('${account.password}')">Copiar</button></div>`:'')+
-          (account.note?`<div style="margin-top:6px;color:#c4b5fd">${account.note}</div>`:'')+
+        combinedText = `Acesso ${productName||''}%0AEmail: ${account.email||''}%0ASenha: ${account.password||''}`;
+        body += `<div style="text-align:left;background:rgba(0,0,0,.25);border:1px solid rgba(74,222,128,.35);border-radius:12px;padding:14px;margin:8px auto;max-width:460px">`+
+          `<div style="color:#bbf7d0;font-weight:700;margin-bottom:8px">✨ Seu acesso liberado</div>`+
+          (account.email?`<div style="margin-bottom:8px"><b>Email:</b> <code>${account.email}</code><br><button class="mini" style="margin-top:4px" onclick="copyText('${account.email}')">📋 Copiar email</button></div>`:'')+
+          (account.password?`<div style="margin-bottom:8px"><b>Senha:</b> <code>${account.password}</code><br><button class="mini" style="margin-top:4px" onclick="copyText('${account.password}')">📋 Copiar senha</button></div>`:'')+
+          (account.note?`<div style="margin-top:6px;color:#c4b5fd"><b>Observação:</b> ${account.note}</div>`:'')+
+          `<div class="inline" style="margin-top:10px">`+
+            `<button class="mini" onclick="copyText('Email: ${account.email||''} | Senha: ${account.password||''}')">📋 Copiar tudo</button>`+
+            `<button class="mini" onclick="window.open('https://wa.me/?text=${combinedText}','_blank')">💬 Enviar via WhatsApp</button>`+
+          `</div>`+
         `</div>`;
       } else if(deliveryUrl){
-        body += `<div class="inline"><button class="mini" onclick="window.open('${deliveryUrl}','_blank')">Abrir Acesso</button><button class="mini" onclick="copyText('${deliveryUrl}')">Copiar Link</button></div>`;
+        body += `<div class="inline"><button class="mini" onclick="window.open('${deliveryUrl}','_blank')">Abrir Acesso</button><button class="mini" onclick="copyText('${deliveryUrl}')">Copiar Link</button><button class="mini" onclick="window.open('https://wa.me/?text=${encodeURIComponent('Seu acesso: '+deliveryUrl)}','_blank')">💬 WhatsApp</button></div>`;
       } else {
-        body += `<div class="muted">Pagamento confirmado. Em instantes seu acesso será entregue. Caso não apareça, contate o suporte.</div>`;
+        body += `<div class="muted">Pagamento confirmado. Em instantes seu acesso será entregue. Caso não apareça, contate o suporte pelo WhatsApp.</div>`;
       }
       if(receiptUrl){ body += `<div class="inline" style="margin-top:10px"><button class="mini" onclick="window.open('${receiptUrl}','_blank')">Ver Comprovante</button></div>` }
       showPayment('success','✅','Pagamento aprovado', body);
