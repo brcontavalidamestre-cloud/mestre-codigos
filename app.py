@@ -531,11 +531,24 @@ def search_code(user_email, platform):
         mail.select('INBOX')
         from_kws = config.get('from_keywords') or [config.get('from_keyword', '')]
         from_kws = [k for k in from_kws if k]
+        # Reduzir a um conjunto pequeno de "domínios-raiz" para evitar dezenas de buscas IMAP
+        primary_domains = []
+        seen_dom = set()
+        for fk in from_kws:
+            fk_clean = fk.lower().strip()
+            # extrai domínio raiz tipo hbomax.com, max.com, amazon.com, etc.
+            m_dom = re.search(r'([a-z0-9-]+\.[a-z]{2,})$', fk_clean)
+            root = m_dom.group(1) if m_dom else fk_clean
+            if root and root not in seen_dom:
+                seen_dom.add(root)
+                primary_domains.append(root)
+        # limita o número de buscas IMAP para no máximo 6 domínios principais
+        primary_domains = primary_domains[:6]
         subj_kws = config['subject_keywords']
         result_type = config.get('type', 'code')
         all_ids = []
         seen = set()
-        for fk in from_kws:
+        for fk in primary_domains:
             try:
                 status, msgs = mail.search(None, 'FROM', fk)
                 if status == 'OK' and msgs and msgs[0]:
@@ -548,7 +561,7 @@ def search_code(user_email, platform):
         if not all_ids:
             mail.logout()
             return None, None, 'Nenhum email da plataforma encontrado.'
-        recent_ids = all_ids[-150:]
+        recent_ids = all_ids[-60:]
         recent_ids.reverse()
         matched_ids = []
         for eid in recent_ids:
@@ -560,6 +573,8 @@ def search_code(user_email, platform):
                 subj = decode_str(hdr.get('Subject', ''))
                 if subject_matches(subj, subj_kws):
                     matched_ids.append(eid)
+                    if len(matched_ids) >= 20:
+                        break
             except Exception:
                 continue
         if not matched_ids:
