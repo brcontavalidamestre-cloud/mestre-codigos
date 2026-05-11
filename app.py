@@ -805,6 +805,9 @@ def api_delete_user(username):
     return jsonify({'success': True, 'message': 'Usuário removido.'})
 
 
+ADMIN_RESET_PIN = os.environ.get('ADMIN_RESET_PIN', '1995')
+
+
 @app.route('/api/admin/users/<username>/password', methods=['PUT'])
 @admin_required
 def api_change_password(username):
@@ -812,6 +815,9 @@ def api_change_password(username):
     data = request.get_json(silent=True)
     if not data:
         return jsonify({'success': False, 'message': 'Dados inválidos.'}), 400
+    pin = str(data.get('pin', '')).strip()
+    if pin != ADMIN_RESET_PIN:
+        return jsonify({'success': False, 'message': 'PIN incorreto. Acesso negado.'}), 403
     new_password = data.get('password', '').strip()
     if len(new_password) < 4:
         return jsonify({'success': False, 'message': 'Senha deve ter pelo menos 4 caracteres.'}), 400

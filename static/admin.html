@@ -193,7 +193,7 @@
       const tbody=document.getElementById('tbody'); tbody.innerHTML='';
       data.users.forEach(u=>{
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td data-label="Usuário">${u.username}</td><td data-label="Nome">${u.name||''}</td><td data-label="Perfil">${u.role}</td><td data-label="Ações"><button class="btn red small" onclick="removeUser('${u.username}')">Excluir</button></td>`;
+        tr.innerHTML=`<td data-label="Usuário">${u.username}</td><td data-label="Nome">${u.name||''}</td><td data-label="Perfil">${u.role}</td><td data-label="Ações"><div class="row-actions"><button class="btn gold small" onclick="resetUserPassword('${u.username}')">🔑 Redefinir senha</button><button class="btn red small" onclick="removeUser('${u.username}')">Excluir</button></div></td>`;
         tbody.appendChild(tr);
       });
     }
@@ -211,6 +211,21 @@
       if(!confirm('Excluir '+username+'?')) return;
       const res=await fetch('/api/admin/users/'+encodeURIComponent(username),{method:'DELETE'}); const data=await res.json();
       if(data.success){show('msg','ok',data.message||'Usuário removido.'); loadUsers();} else show('msg','err',data.message||'Falha ao remover.');
+    }
+
+    async function resetUserPassword(username){
+      const pin = prompt('🔒 Para redefinir a senha de "'+username+'", informe o PIN de administração:');
+      if(pin===null) return;
+      const newPwd = prompt('Digite a nova senha para "'+username+'" (mínimo 4 caracteres):');
+      if(newPwd===null) return;
+      if((newPwd||'').trim().length < 4){ show('msg','err','Senha deve ter pelo menos 4 caracteres.'); return; }
+      const res = await fetch('/api/admin/users/'+encodeURIComponent(username)+'/password', {
+        method:'PUT', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({pin: (pin||'').trim(), password: newPwd.trim()})
+      });
+      const data = await res.json();
+      if(data.success){ show('msg','ok','✅ Senha de '+username+' redefinida com sucesso.'); }
+      else { show('msg','err', data.message || 'Falha ao redefinir senha.'); }
     }
 
     /* CREDENTIALS */
