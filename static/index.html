@@ -73,6 +73,8 @@
     .menu-btn:hover{transform:translateY(-1px);border-color:#a855f7}
     .menu-btn.active{background:linear-gradient(135deg,var(--purple),var(--purple2));color:#fff;border-color:var(--border-gold);box-shadow:0 4px 16px rgba(109,40,217,.3)}
     .view{display:none}.view.active{display:block}
+    .logout-btn{padding:9px 16px;border-radius:10px;border:1px solid var(--border-gold);background:rgba(245,158,11,.12);color:var(--gold-light);font-family:'Cinzel',serif;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;font-size:.74rem;cursor:pointer;transition:.2s}
+    .logout-btn:hover{background:rgba(245,158,11,.22);transform:translateY(-1px);box-shadow:0 4px 14px rgba(245,158,11,.25)}
     @media (max-width:600px){
       .platform-row{flex-direction:column;align-items:stretch}
       .platform-row .info{text-align:center}
@@ -88,6 +90,9 @@
   <canvas id="stars"></canvas>
   <div class="mist mist-1"></div><div class="mist mist-2"></div>
   <div class="wrap">
+    <div class="top-bar" style="display:flex;justify-content:flex-end;padding:14px 4px 0">
+      <button class="logout-btn" onclick="logout()" title="Sair">🚪 Sair</button>
+    </div>
     <header>
       <div class="logo">🧙‍♂️</div>
       <h1>Mestre Códigos</h1>
@@ -345,6 +350,13 @@
           showPayment('error','⚠️','Falha na verificação', data.message || 'Não foi possível confirmar agora.');
         }
       }catch(e){ showPayment('error','⚠️','Erro', 'Não foi possível confirmar o retorno agora.'); }
+    }
+
+    async function logout(){
+      if(!confirm('Deseja realmente sair?')) return;
+      try{ sessionStorage.removeItem('loja_unlocked'); }catch(e){}
+      try{ await fetch('/api/auth/logout',{method:'POST'}); }catch(e){}
+      location.href='/login';
     }
 
     (function initFromHash(){
