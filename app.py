@@ -151,9 +151,54 @@ PLATFORM_CONFIG = {
         'type': 'code'
     },
     'max-prime': {
-        'from_keyword': 'max.com',
-        'from_keywords': ['max.com', 'hbomax', 'warnermedia', 'amazon.com', 'amazon.com.br', 'primevideo', 'amazonses.com', 'amazon'],
-        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'código', 'codigo', 'verificação', 'verificacao', 'verification', 'sign in', 'sign-in', 'signin', 'entrar', 'one-time', 'one time', 'OTP', 'OTP', 'login', 'acesso', 'amazon', 'prime video', 'max'],
+        'from_keyword': 'hbomax.com',
+        'from_keywords': [
+            'alerts.hbomax.com',
+            'hbomax.com',
+            'no-reply@alerts.hbomax.com',
+            'hbomax',
+            'max.com',
+            'warnermedia',
+            'amazon.com',
+            'amazon.com.br',
+            'primevideo',
+            'primevideo.com',
+            'amazonses.com',
+            'amazon'
+        ],
+        'subject_keywords': [
+            'Aqui está seu código único',
+            'aqui esta seu codigo unico',
+            'seu código único',
+            'seu codigo unico',
+            'código único',
+            'codigo unico',
+            'Temporário',
+            'Temporario',
+            'digo de acesso',
+            'codigo de acesso',
+            'código de acesso',
+            'código',
+            'codigo',
+            'verificação',
+            'verificacao',
+            'verification',
+            'one-time code',
+            'one time code',
+            'one-time',
+            'one time',
+            'OTP',
+            'sign in',
+            'sign-in',
+            'signin',
+            'entrar',
+            'login',
+            'acesso',
+            'amazon',
+            'prime video',
+            'max',
+            'hbo max'
+        ],
         'name': 'Max / Prime Video',
         'type': 'code'
     },
@@ -323,9 +368,11 @@ def extract_code_from_html(html_body):
     clean = re.sub(r'<[^>]+>', ' ', html_body)
     clean = re.sub(r'\s+', ' ', clean)
     patterns_text = [
-        r'c[oó]digo\s*(?:de acesso)?\s*[:\-]?\s*([A-Z0-9]{4,8})',
+        r'c[oó]digo\s*(?:único|unico|de acesso)?\s*[:\-]?\s*([A-Z0-9]{4,8})',
+        r'(?:seu|aqui está)\s+c[oó]digo\s+(?:único|unico)[^0-9]{0,40}([0-9]{4,8})',
         r'access\s*code\s*[:\-]?\s*([A-Z0-9]{4,8})',
-        r'\b([0-9]{4,8})\b(?=\s*(?:é seu|é o seu|para entrar|para acessar))',
+        r'one[- ]time\s+code\s*[:\-]?\s*([A-Z0-9]{4,8})',
+        r'\b([0-9]{4,8})\b(?=\s*(?:é seu|é o seu|para entrar|para acessar|expirar|expirará|valid))',
         r'\b([0-9]{6})\b',
     ]
     for pat in patterns_text:
