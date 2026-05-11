@@ -507,12 +507,48 @@ def extract_link(html_body, platform):
 
 
 def email_matches_user(msg, html_body, user_email):
-    user_lower = user_email.lower()
-    if user_lower in html_body.lower():
-        return True
-    for header in ['To', 'Delivered-To', 'X-Original-To']:
-        if user_lower in decode_str(msg.get(header, '')).lower():
+    user_lower = (user_email or '').lower().strip()
+    if not user_lower:
+        return False
+    # 1) Procurar em todos os cabeçalhos relevantes (TO, CC, BCC, encaminhamento, etc.)
+    headers_to_check = [
+        'To', 'Delivered-To', 'X-Original-To', 'X-Forwarded-To', 'X-Delivered-To',
+        'Envelope-To', 'X-Envelope-To', 'X-Forwarded-For',
+        'Cc', 'Bcc', 'Reply-To', 'Return-Path', 'X-Original-Recipient',
+        'X-Received-To', 'X-Recipient', 'X-Account-Key', 'Received'
+    ]
+    for header in headers_to_check:
+        try:
+            values = msg.get_all(header) or []
+        except Exception:
+            values = [msg.get(header, '')]
+        for v in values:
+            try:
+                if user_lower in decode_str(v or '').lower():
+                    return True
+            except Exception:
+                continue
+    # 2) Procurar no corpo HTML/texto do email (caso o destinatário apareça no corpo)
+    try:
+        if user_lower in (html_body or '').lower():
             return True
+    except Exception:
+        pass
+    # 3) Procurar no email "raw" inteiro (cabeçalhos completos + corpo) como último recurso
+    try:
+        raw = msg.as_string()
+        if user_lower in raw.lower():
+            return True
+    except Exception:
+        pass
+    # 4) Procurar pela parte local do email (antes do @) no corpo, útil quando o
+    # provedor reescreve o destinatário mas o nome original aparece no conteúdo.
+    try:
+        local_part = user_lower.split('@')[0]
+        if local_part and len(local_part) >= 4 and local_part in (html_body or '').lower():
+            return True
+    except Exception:
+        pass
     return False
 
 
