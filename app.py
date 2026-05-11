@@ -949,6 +949,71 @@ def api_list_users():
     return jsonify({'success': True, 'users': result})
 
 
+@app.route('/api/admin/debug-emails', methods=['POST'])
+@admin_required
+def api_debug_emails():
+    data = request.get_json(silent=True) or {}
+    platform = str(data.get('platform', 'max-prime')).strip()
+    limit = int(data.get('limit', 5))
+    config = PLATFORM_CONFIG.get(platform)
+    if not config:
+        return jsonify({'success': False, 'message': 'Plataforma inválida.'}), 400
+    try:
+        mail = connect_imap()
+        mail.select('INBOX')
+        from_kws = config.get('from_keywords') or [config.get('from_keyword', '')]
+        primary_domains = []
+        seen_dom = set()
+        for fk in from_kws:
+            fk_clean = (fk or '').lower().strip()
+            m_dom = re.search(r'([a-z0-9-]+\.[a-z]{2,})$', fk_clean)
+            root = m_dom.group(1) if m_dom else fk_clean
+            if root and root not in seen_dom:
+                seen_dom.add(root)
+                primary_domains.append(root)
+        primary_domains = primary_domains[:6]
+        all_ids = []
+        seen = set()
+        for fk in primary_domains:
+            try:
+                status, msgs = mail.search(None, 'FROM', fk)
+                if status == 'OK' and msgs and msgs[0]:
+                    for eid in msgs[0].split():
+                        if eid not in seen:
+                            seen.add(eid)
+                            all_ids.append(eid)
+            except Exception:
+                continue
+        recent_ids = all_ids[-limit:][::-1]
+        results = []
+        for eid in recent_ids:
+            try:
+                status, dat = mail.fetch(eid, '(RFC822)')
+                if status != 'OK':
+                    continue
+                msg = email.message_from_bytes(dat[0][1])
+                info = {
+                    'subject': decode_str(msg.get('Subject', '')),
+                    'from': decode_str(msg.get('From', '')),
+                    'to': decode_str(msg.get('To', '')),
+                    'delivered_to': decode_str(msg.get('Delivered-To', '')),
+                    'x_original_to': decode_str(msg.get('X-Original-To', '')),
+                    'return_path': decode_str(msg.get('Return-Path', '')),
+                    'envelope_to': decode_str(msg.get('Envelope-To', '')),
+                    'all_headers': {}
+                }
+                for k, v in msg.items():
+                    if k.lower() not in ('subject','from','to','delivered-to','x-original-to','return-path','envelope-to'):
+                        info['all_headers'][k] = decode_str(v)[:300]
+                results.append(info)
+            except Exception as e:
+                results.append({'error': str(e)})
+        mail.logout()
+        return jsonify({'success': True, 'count': len(results), 'emails': results})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'Erro: {e}'}), 500
+
+
 @app.route('/api/admin/users', methods=['POST'])
 @admin_required
 def api_create_user():
