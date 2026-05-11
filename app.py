@@ -599,12 +599,21 @@ def infinitepay_create_link(product, customer_name='', customer_email='', custom
             {
                 'quantity': 1,
                 'price': int(product['price_cents']),
-                'description': product['name']
+                'description': product['name'],
+                'digital': True,
+                'is_digital': True,
+                'requires_shipping': False
             }
         ],
         'order_nsu': order_nsu,
         'redirect_url': INFINITEPAY_REDIRECT_URL,
-        'webhook_url': INFINITEPAY_WEBHOOK_URL
+        'webhook_url': INFINITEPAY_WEBHOOK_URL,
+        'requires_shipping': False,
+        'shipping_required': False,
+        'collect_shipping_address': False,
+        'collect_address': False,
+        'product_type': 'digital',
+        'delivery_type': 'digital'
     }
     if customer_name or customer_email or customer_phone:
         payload['customer'] = {}
