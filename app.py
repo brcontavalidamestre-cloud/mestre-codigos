@@ -51,6 +51,33 @@ DEFAULT_PRODUCTS = [
         'delivery_url': os.environ.get('DELIVERY_URL_DISNEY_PREMIUM', os.environ.get('DELIVERY_URL_VIP', 'https://SEU-LINK-DISNEY-AQUI')),
         'badge': 'Disney+ • liberação automática',
         'image_url': 'https://sspark.genspark.ai/cfimages?u1=geWt%2B8PWaG7%2BshOH1RmMyJOXyuTsP3nvUQfb4tYndylZX%2FAfSG%2BQRo4d5paq5Rw30bJ8nCmOPt1F9c63jWEXKgq3mD6JKe9DKW%2FhxasRqcC9xM8ototOzLILQkkbF2InfFpuDGlOKRq5fnsmbT51pr6hCbhC0R5KD10%3D&u2=V7E27TOU7vW46V12&width=2560'
+    },
+    {
+        'id': 'globoplay-premium',
+        'name': 'Globoplay+ Premium',
+        'description': 'Acesso Globoplay+ com liberação automática após pagamento aprovado.',
+        'price_cents': 2000,
+        'delivery_url': os.environ.get('DELIVERY_URL_GLOBOPLAY_PREMIUM', 'https://SEU-LINK-GLOBOPLAY-AQUI'),
+        'badge': 'Globoplay+ • liberação automática',
+        'image_url': 'https://sspark.genspark.ai/cfimages?u1=5k2r128UkeiQ0yNXbJ6zvnBh4yZOE8mpDAbKwfSQXXtWixMMq8hfndVS0uCSvbta8zP8M8p9adxF8rI97KNVBBc9qpXMi7wkl3zNEHxnJz84VmHHCivG368%3D&u2=bgQAieUGp0BUyZTO&width=2560'
+    },
+    {
+        'id': 'max-premium',
+        'name': 'Max Premium',
+        'description': 'Acesso Max com liberação automática após a confirmação do pagamento.',
+        'price_cents': 2500,
+        'delivery_url': os.environ.get('DELIVERY_URL_MAX_PREMIUM', 'https://SEU-LINK-MAX-AQUI'),
+        'badge': 'Max • liberação automática',
+        'image_url': 'data:image/svg+xml;utf8,' + "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 240 80'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%23a855f7'/><stop offset='1' stop-color='%23f59e0b'/></linearGradient></defs><text x='50%25' y='62%25' text-anchor='middle' font-family='Cinzel,serif' font-size='62' font-weight='900' fill='url(%23g)' letter-spacing='6'>MAX</text></svg>"
+    },
+    {
+        'id': 'prime-premium',
+        'name': 'Prime Video Premium',
+        'description': 'Acesso Prime Video com liberação automática após o pagamento.',
+        'price_cents': 2500,
+        'delivery_url': os.environ.get('DELIVERY_URL_PRIME_PREMIUM', 'https://SEU-LINK-PRIME-AQUI'),
+        'badge': 'Prime Video • liberação automática',
+        'image_url': 'https://sspark.genspark.ai/cfimages?u1=57NtBlzfdfJ9gqMpfheT%2FXCE5iWC6V%2F2P0OE9%2BPdkBGk%2Fvl7bb%2Bqye7Vxj2w6Bqpb0p2iaVCd7gbvcSQn1Jn8%2BYgvqd8MVSbbNIoJ468UebMVBVyV2nXAxbOmZ%2BassaI296cc8AK3MAQJRFS1n9JVH8U%2FCkM30Y7JzW8FYXTFMAPMeqltVWR3TVWPPs%3D&u2=qWXChtCB2Xmw7gdS&width=2560'
     }
 ]
 
