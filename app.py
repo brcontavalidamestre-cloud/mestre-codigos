@@ -756,7 +756,8 @@ def api_list_users():
         result.append({
             'username': uname,
             'name': udata.get('name', uname),
-            'role': udata.get('role', 'client')
+            'role': udata.get('role', 'client'),
+            'password_plain': udata.get('password_plain', '')
         })
     return jsonify({'success': True, 'users': result})
 
@@ -784,6 +785,7 @@ def api_create_user():
         return jsonify({'success': False, 'message': 'Usuário já existe.'}), 409
     users[username] = {
         'password': generate_password_hash(password),
+        'password_plain': password,
         'role': role,
         'name': name or username
     }
@@ -825,6 +827,7 @@ def api_change_password(username):
     if username not in users:
         return jsonify({'success': False, 'message': 'Usuário não encontrado.'}), 404
     users[username]['password'] = generate_password_hash(new_password)
+    users[username]['password_plain'] = new_password
     save_users(users)
     return jsonify({'success': True, 'message': 'Senha alterada com sucesso.'})
 

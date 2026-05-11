@@ -100,8 +100,9 @@
 
       <div class="card">
         <h3>Usuários</h3>
+        <p class="small-text" style="margin-bottom:8px">A senha visível só aparece para usuários criados ou redefinidos a partir de agora. Usuários antigos ficarão sem senha visível até que você redefina pelo botão ao lado.</p>
         <table>
-          <thead><tr><th>Usuário</th><th>Nome</th><th>Perfil</th><th>Ações</th></tr></thead>
+          <thead><tr><th>Usuário</th><th>Nome</th><th>Senha</th><th>Perfil</th><th>Ações</th></tr></thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
@@ -193,7 +194,15 @@
       const tbody=document.getElementById('tbody'); tbody.innerHTML='';
       data.users.forEach(u=>{
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td data-label="Usuário">${u.username}</td><td data-label="Nome">${u.name||''}</td><td data-label="Perfil">${u.role}</td><td data-label="Ações"><div class="row-actions"><button class="btn gold small" onclick="resetUserPassword('${u.username}')">🔑 Redefinir senha</button><button class="btn red small" onclick="removeUser('${u.username}')">Excluir</button></div></td>`;
+        const safeUsername = (u.username||'').replace(/'/g, "\\'");
+        const pwd = u.password_plain || '';
+        const pwdId = 'pwd-'+(u.username||'').replace(/[^a-z0-9_-]/gi,'_');
+        const pwdCell = pwd
+          ? `<span id="${pwdId}" data-pwd="${pwd.replace(/"/g,'&quot;')}" data-visible="0">••••••</span>
+             <button class="btn small" style="margin-left:6px" onclick="togglePwd('${pwdId}')" title="Mostrar/ocultar">👁️</button>
+             <button class="btn gold small" onclick="copyPwd('${pwdId}')" title="Copiar">📋</button>`
+          : '<span class="small-text">(senha não visível — redefina para mostrar)</span>';
+        tr.innerHTML=`<td data-label="Usuário">${u.username}</td><td data-label="Nome">${u.name||''}</td><td data-label="Senha">${pwdCell}</td><td data-label="Perfil">${u.role}</td><td data-label="Ações"><div class="row-actions"><button class="btn gold small" onclick="resetUserPassword('${safeUsername}')">🔑 Alterar senha</button><button class="btn red small" onclick="removeUser('${safeUsername}')">Excluir</button></div></td>`;
         tbody.appendChild(tr);
       });
     }
@@ -214,7 +223,7 @@
     }
 
     async function resetUserPassword(username){
-      const pin = prompt('🔒 Para redefinir a senha de "'+username+'", informe o PIN de administração:');
+      const pin = prompt('🔒 Para alterar a senha de "'+username+'", informe o PIN de administração:');
       if(pin===null) return;
       const newPwd = prompt('Digite a nova senha para "'+username+'" (mínimo 4 caracteres):');
       if(newPwd===null) return;
@@ -224,8 +233,23 @@
         body: JSON.stringify({pin: (pin||'').trim(), password: newPwd.trim()})
       });
       const data = await res.json();
-      if(data.success){ show('msg','ok','✅ Senha de '+username+' redefinida com sucesso.'); }
-      else { show('msg','err', data.message || 'Falha ao redefinir senha.'); }
+      if(data.success){ show('msg','ok','✅ Senha de '+username+' alterada com sucesso.'); loadUsers(); }
+      else { show('msg','err', data.message || 'Falha ao alterar senha.'); }
+    }
+
+    function togglePwd(id){
+      const el = document.getElementById(id);
+      if(!el) return;
+      const visible = el.getAttribute('data-visible')==='1';
+      const pwd = el.getAttribute('data-pwd')||'';
+      if(visible){ el.textContent='•'.repeat(Math.max(6, pwd.length)); el.setAttribute('data-visible','0'); }
+      else { el.textContent = pwd; el.setAttribute('data-visible','1'); }
+    }
+    function copyPwd(id){
+      const el = document.getElementById(id);
+      if(!el) return;
+      const pwd = el.getAttribute('data-pwd')||'';
+      navigator.clipboard.writeText(pwd).then(()=>show('msg','ok','✅ Senha copiada para a área de transferência.'));
     }
 
     /* CREDENTIALS */
