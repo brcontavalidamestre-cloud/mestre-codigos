@@ -185,7 +185,20 @@
     function toast(msg){const t=document.getElementById('toast'); t.textContent=msg; t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500)}
     function copyText(v){navigator.clipboard.writeText(v).then(()=>toast('✓ Copiado!'))}
 
+    const LOJA_PASSWORD = '1995';
+    let lojaUnlocked = sessionStorage.getItem('loja_unlocked') === '1';
+
     function switchView(name){
+      if(name==='loja' && !lojaUnlocked){
+        const pwd = prompt('🔒 Acesso restrito\n\nDigite a senha para acessar a Loja com Pix:');
+        if(pwd===null) return;
+        if(pwd.trim() !== LOJA_PASSWORD){
+          alert('❌ Senha incorreta. Acesso negado.');
+          return;
+        }
+        lojaUnlocked = true;
+        try{ sessionStorage.setItem('loja_unlocked','1'); }catch(e){}
+      }
       document.querySelectorAll('.menu-btn').forEach(b=>b.classList.remove('active'));
       document.getElementById('menu-'+name).classList.add('active');
       document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -336,7 +349,10 @@
 
     (function initFromHash(){
       const h=(location.hash||'').replace('#','');
-      if(h==='loja') switchView('loja');
+      if(h==='loja'){
+        if(lojaUnlocked){ switchView('loja'); }
+        else { /* aguarda usuário clicar no menu para pedir a senha */ }
+      }
     })();
 
     loadProducts(); verifyReturnParams();
