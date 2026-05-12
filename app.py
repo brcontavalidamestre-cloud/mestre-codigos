@@ -191,15 +191,32 @@ def save_products(products):
 
 def load_stock():
     """Estoque de acessos: { product_id: [ {id, email, password, note, used, used_at, delivered_to} ] }"""
-    return _read_json_file(STOCK_FILE, {})
+    data = _read_json_file(STOCK_FILE, {})
+    if not isinstance(data, dict):
+        data = {}
+    return data
 
 def save_stock(stock):
+    if not isinstance(stock, dict):
+        stock = {}
     return _write_json_file(STOCK_FILE, stock)
 
 def load_orders():
-    return _read_json_file(ORDERS_FILE, [])
+    data = _read_json_file(ORDERS_FILE, [])
+    # Robustez: se alguém gravou como dict, normaliza para lista
+    if isinstance(data, dict):
+        # tenta converter valores em lista
+        try:
+            data = list(data.values()) if data else []
+        except Exception:
+            data = []
+    if not isinstance(data, list):
+        data = []
+    return data
 
 def save_orders(orders):
+    if not isinstance(orders, list):
+        orders = []
     return _write_json_file(ORDERS_FILE, orders)
 
 def get_next_stock_item(product_id):
