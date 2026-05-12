@@ -118,8 +118,12 @@ PLATFORM_CONFIG = {
     },
     'disney': {
         'from_keyword': 'disneyplus.com',
-        'from_keywords': ['disneyplus.com', 'disney.com', 'disney'],
+        'from_keywords': ['disneyplus.com', 'disney.com', 'mydisney.com', 'disney', 'boxfi.uk', 'hamham.uk', 'disney10', 'disneynova'],
         'subject_keywords': [
+            'código de acesso único',
+            'codigo de acesso unico',
+            'código único',
+            'codigo unico',
             'digo de acesso',
             'codigo de acesso',
             'código de acesso',
@@ -130,6 +134,8 @@ PLATFORM_CONFIG = {
             'verificação',
             'verificacao',
             'verification',
+            'Identificamos um novo login',
+            'novo login',
             'Quer atualizar sua Residencia do Disney+',
             'atualizar sua Residencia do Disney',
             'Residencia do Disney',
@@ -138,7 +144,9 @@ PLATFORM_CONFIG = {
             'residencia',
             'update your Disney+ Home',
             'Disney+ Home',
-            'household'
+            'household',
+            'MyDisney',
+            'mydisney'
         ],
         'name': 'Disney+',
         'type': 'auto'
