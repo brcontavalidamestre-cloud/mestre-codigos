@@ -2034,10 +2034,11 @@ def efi_check_pix_status(txid):
 def mark_order_paid_and_deliver(order_id):
     """Marca pedido como pago e entrega o próximo acesso do estoque."""
     orders = load_orders()
-    order  = next((o for o in orders if o["id"] == order_id), None)
-    if not order or order["status"] != "pending":
+    # Filtra apenas dicts válidos antes de procurar
+    order  = next((o for o in orders if isinstance(o, dict) and o.get("id") == order_id), None)
+    if not order or order.get("status") != "pending":
         return order
-    stock_item = get_next_stock_item(order["product_id"])
+    stock_item = get_next_stock_item(order.get("product_id"))
     order["status"]  = "paid"
     order["paid_at"] = int(time.time())
     if stock_item:
@@ -2046,9 +2047,9 @@ def mark_order_paid_and_deliver(order_id):
         order["delivered_note"]     = stock_item.get("note")
         # marca o item como entregue ao cliente
         st = load_stock()
-        for it in st.get(order["product_id"], []):
-            if it.get("id") == stock_item.get("id"):
-                it["delivered_to"] = order["customer_email"]
+        for it in st.get(order.get("product_id"), []):
+            if isinstance(it, dict) and it.get("id") == stock_item.get("id"):
+                it["delivered_to"] = order.get("customer_email")
                 it["order_id"]     = order_id
                 break
         save_stock(st)
