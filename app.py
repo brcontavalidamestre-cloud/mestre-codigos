@@ -1760,6 +1760,15 @@ def api_loja_produtos():
 
 @app.route("/api/loja/checkout", methods=["POST"])
 def api_loja_checkout():
+    try:
+        return _do_checkout()
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        print(f"[checkout] erro fatal: {e}\n{tb}")
+        return jsonify({"success": False, "message": f"Erro interno: {e}"}), 500
+
+def _do_checkout():
     if not session.get("loja_unlocked"):
         return jsonify({"success": False, "message": "Acesso à loja bloqueado. Informe a senha."}), 403
     data = request.get_json(silent=True) or {}
