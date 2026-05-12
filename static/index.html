@@ -129,6 +129,82 @@
     .view { display: none; }
     .view.active { display: block; }
 
+    .loja-subtab {
+      background: var(--bg-card2);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      padding: 10px 18px;
+      border-radius: 10px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .loja-subtab:hover { border-color: var(--gold); color: var(--gold-light); }
+    .loja-subtab.active {
+      background: linear-gradient(135deg, var(--purple-mid), var(--purple-deep));
+      color: var(--gold-light);
+      border-color: var(--gold);
+      box-shadow: 0 0 15px rgba(245,158,11,0.3);
+    }
+
+    .hist-card {
+      background: linear-gradient(135deg, rgba(19,0,41,0.92), rgba(26,0,53,0.92));
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 18px 20px;
+      margin-bottom: 12px;
+      box-shadow: 0 4px 18px rgba(0,0,0,0.3);
+    }
+    .hist-card.paid { border-color: #4ade80; box-shadow: 0 0 18px rgba(74,222,128,0.18); }
+    .hist-card.pending { border-color: #fbbf24; }
+    .hist-header { display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+    .hist-title { font-family:'Cinzel',serif; color:var(--gold-light); font-size:1rem; letter-spacing:1.2px; }
+    .hist-meta { font-size:0.74rem; color:var(--text-muted); margin-top:3px; }
+    .hist-status { font-size:0.78rem; padding:5px 12px; border-radius:14px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; }
+    .hist-status.paid { background:rgba(74,222,128,0.18); color:#4ade80; border:1px solid #4ade80; }
+    .hist-status.pending { background:rgba(251,191,36,0.18); color:#fbbf24; border:1px solid #fbbf24; }
+    .hist-credentials {
+      background: var(--bg-card);
+      border: 1px dashed var(--border-gold);
+      border-radius: 10px;
+      padding: 12px;
+      margin-top: 8px;
+    }
+    .hist-cred-row {
+      display:flex; justify-content:space-between; align-items:center;
+      gap:10px; margin:6px 0;
+    }
+    .hist-cred-row .lbl { font-size:0.7rem; color:var(--text-muted); letter-spacing:1px; }
+    .hist-cred-row .val { font-family:monospace; color:var(--gold-light); font-size:0.9rem; flex:1; word-break:break-all; }
+    .hist-cred-row button {
+      background: var(--gold);
+      color: #1a0a2e;
+      border: none;
+      padding: 6px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.72rem;
+    }
+    .hist-pix-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+    .hist-pix-actions button {
+      flex: 1;
+      min-width: 130px;
+      padding: 9px 12px;
+      border-radius: 8px;
+      border: none;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-family: 'Cinzel', serif;
+      letter-spacing: 0.8px;
+    }
+    .btn-pix-copy { background:#7e22ce; color:#fff; }
+    .btn-pix-recheck { background:#10b981; color:#fff; }
+    .btn-pix-show-qr { background:#374151; color:#fff; }
+
     .loja-lock {
       background: linear-gradient(135deg, rgba(19,0,41,0.95), rgba(26,0,53,0.95));
       border: 1px solid var(--border-gold);
@@ -1133,7 +1209,34 @@
         <div class="section-title">✦ Loja com Pix Automático ✦</div>
         <p class="section-subtitle">Compre seu acesso — entrega automática após confirmação do pagamento</p>
       </section>
-      <div class="products-grid" id="products-grid"></div>
+
+      <!-- Sub-menu interno da loja -->
+      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:12px 0 18px;">
+        <button id="btn-loja-produtos" class="loja-subtab active" onclick="showLojaTab('produtos')">🛍️ Produtos</button>
+        <button id="btn-loja-historico" class="loja-subtab" onclick="showLojaTab('historico')">📜 Minhas Compras</button>
+      </div>
+
+      <div id="loja-tab-produtos">
+        <div class="products-grid" id="products-grid"></div>
+      </div>
+
+      <div id="loja-tab-historico" style="display:none">
+        <section class="platforms-section" style="padding:22px 24px;">
+          <div class="section-title" style="margin-bottom:8px">✦ Histórico de Compras ✦</div>
+          <p class="section-subtitle" style="margin-bottom:14px">Informe o email usado nas suas compras para visualizar todos os pedidos e acessos.</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <input type="email" id="hist-email" placeholder="seu@email.com"
+              style="flex:1;min-width:200px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-white);font-size:0.95rem"
+              onkeydown="if(event.key==='Enter') buscarHistorico()"/>
+            <button onclick="buscarHistorico()" id="hist-btn"
+              style="background:linear-gradient(135deg,var(--gold),var(--gold-light));color:#1a0a2e;border:none;padding:12px 22px;border-radius:10px;font-family:'Cinzel',serif;font-weight:700;letter-spacing:1.2px;cursor:pointer;font-size:0.85rem">
+              🔍 Buscar
+            </button>
+          </div>
+          <div id="hist-info" style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)"></div>
+        </section>
+        <div id="hist-results" style="margin-top:12px"></div>
+      </div>
     </div>
 
   </div>
@@ -1699,6 +1802,8 @@
       const name  = document.getElementById('co-name').value.trim();
       const email = document.getElementById('co-email').value.trim();
       const phone = document.getElementById('co-phone').value.trim();
+      // Guarda email para pre-preencher histórico depois
+      try { if (email) localStorage.setItem('mestre_last_buyer_email', email.toLowerCase()); } catch(e){}
       if (!name || !email) { showToast('Preencha nome e email'); return; }
       const btn = document.getElementById('btn-pay');
       btn.disabled = true; btn.textContent = 'Gerando...';
@@ -1847,6 +1952,161 @@
     function copyVal(v) {
       navigator.clipboard.writeText(v);
       showToast('✓ Copiado!');
+    }
+
+    // ─────────────────────────────────────────
+    // SUB-ABAS DA LOJA (PRODUTOS / HISTÓRICO)
+    // ─────────────────────────────────────────
+    function showLojaTab(name) {
+      document.querySelectorAll('.loja-subtab').forEach(b => b.classList.remove('active'));
+      document.getElementById('btn-loja-' + name).classList.add('active');
+      document.getElementById('loja-tab-produtos').style.display  = (name === 'produtos')  ? 'block' : 'none';
+      document.getElementById('loja-tab-historico').style.display = (name === 'historico') ? 'block' : 'none';
+      if (name === 'historico') {
+        // tenta pre-preencher com o email do ultimo checkout (se houver no localStorage)
+        try {
+          const last = localStorage.getItem('mestre_last_buyer_email') || '';
+          if (last && !document.getElementById('hist-email').value) {
+            document.getElementById('hist-email').value = last;
+            buscarHistorico();
+          }
+        } catch(e){}
+      }
+    }
+
+    async function buscarHistorico() {
+      const email = document.getElementById('hist-email').value.trim().toLowerCase();
+      const info  = document.getElementById('hist-info');
+      const res   = document.getElementById('hist-results');
+      const btn   = document.getElementById('hist-btn');
+      if (!email) { info.textContent = 'Digite o email para buscar.'; return; }
+      btn.disabled = true; btn.textContent = 'Buscando...';
+      info.textContent = '⏳ Consultando seus pedidos...';
+      res.innerHTML = '';
+      try {
+        const r = await fetch('/api/loja/meus-pedidos', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ email })
+        });
+        const j = await r.json();
+        if (!j.success) {
+          info.textContent = '❌ ' + (j.message || 'Erro ao buscar.');
+          return;
+        }
+        try { localStorage.setItem('mestre_last_buyer_email', email); } catch(e){}
+        if (!j.orders || !j.orders.length) {
+          info.textContent = 'Nenhuma compra encontrada para este email.';
+          return;
+        }
+        info.textContent = `✓ ${j.total} compra(s) encontrada(s)`;
+        res.innerHTML = j.orders.map(o => renderHistOrder(o)).join('');
+      } catch(e) {
+        info.textContent = '❌ Erro de conexão.';
+      } finally {
+        btn.disabled = false; btn.textContent = '🔍 Buscar';
+      }
+    }
+
+    function renderHistOrder(o) {
+      const dt = o.created_at ? new Date(o.created_at*1000).toLocaleString('pt-BR') : '—';
+      const dtPaid = o.paid_at ? new Date(o.paid_at*1000).toLocaleString('pt-BR') : null;
+      const isPaid = o.status === 'paid';
+      const cls   = isPaid ? 'paid' : 'pending';
+      const lbl   = isPaid ? '✓ Pago' : '⏳ Aguardando pagamento';
+      const valor = Number(o.price).toFixed(2).replace('.', ',');
+
+      let body = '';
+      if (isPaid && o.delivered_email && o.delivered_password) {
+        body = `
+          <div class="hist-credentials">
+            <div style="font-size:0.78rem;color:#4ade80;font-weight:700;margin-bottom:6px">✓ Seu acesso liberado:</div>
+            <div class="hist-cred-row">
+              <div style="flex:1">
+                <div class="lbl">EMAIL</div>
+                <div class="val">${escapeHtml(o.delivered_email)}</div>
+              </div>
+              <button onclick="copyVal(${JSON.stringify(o.delivered_email)})">📋 Copiar</button>
+            </div>
+            <div class="hist-cred-row">
+              <div style="flex:1">
+                <div class="lbl">SENHA</div>
+                <div class="val">${escapeHtml(o.delivered_password)}</div>
+              </div>
+              <button onclick="copyVal(${JSON.stringify(o.delivered_password)})">📋 Copiar</button>
+            </div>
+            ${o.delivered_note ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px">📌 ${escapeHtml(o.delivered_note)}</div>` : ''}
+            <button onclick="copyVal(${JSON.stringify('Email: ' + o.delivered_email + '\nSenha: ' + o.delivered_password)})"
+              style="width:100%;margin-top:10px;background:var(--purple-mid);color:#fff;border:none;padding:9px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.82rem;letter-spacing:1px">
+              📋 Copiar Email + Senha
+            </button>
+          </div>
+        `;
+      } else if (isPaid) {
+        body = `<div style="background:rgba(245,158,11,0.12);padding:10px;border-radius:8px;color:var(--gold-light);font-size:0.85rem">
+          ✓ Pagamento confirmado. ${o.delivered_note || 'Aguarde a entrega manual ou contate o suporte.'}
+        </div>`;
+      } else {
+        const expired = o.pix_expires_at && (Date.now()/1000 > o.pix_expires_at);
+        if (expired) {
+          body = `<div style="background:rgba(248,113,113,0.12);padding:10px;border-radius:8px;color:#f87171;font-size:0.85rem">
+            ⏰ Este Pix expirou. Faça uma nova compra na aba Produtos.
+          </div>`;
+        } else {
+          body = `
+            <div class="hist-pix-actions">
+              ${o.pix_copia_cola ? `<button class="btn-pix-copy" onclick="copyVal(${JSON.stringify(o.pix_copia_cola)})">📋 Copiar Pix</button>` : ''}
+              <button class="btn-pix-recheck" onclick="recheckHist('${o.order_id}')">🔄 Já paguei</button>
+              ${o.pix_qrcode ? `<button class="btn-pix-show-qr" onclick="showQrModal(${JSON.stringify(o.pix_qrcode)})">📱 Ver QR Code</button>` : ''}
+            </div>
+          `;
+        }
+      }
+
+      return `
+        <div class="hist-card ${cls}">
+          <div class="hist-header">
+            <div style="flex:1">
+              <div class="hist-title">${escapeHtml(o.product_name || '')} — R$ ${valor}</div>
+              <div class="hist-meta">Pedido: <code style="color:var(--gold-light)">${o.order_id}</code></div>
+              <div class="hist-meta">Criado em: ${dt}${dtPaid ? ' • Pago em: ' + dtPaid : ''}</div>
+            </div>
+            <span class="hist-status ${cls}">${lbl}</span>
+          </div>
+          ${body}
+        </div>
+      `;
+    }
+
+    async function recheckHist(orderId) {
+      showToast('⏳ Verificando pagamento...');
+      try {
+        const r = await fetch('/api/loja/force-check/' + orderId, { method:'POST' });
+        const j = await r.json();
+        if (j.success && (j.paid || (j.order && j.order.status === 'paid'))) {
+          showToast('✓ Pagamento confirmado!');
+          buscarHistorico();
+        } else {
+          showToast('⏳ Pagamento ainda não detectado. Aguarde alguns segundos.');
+        }
+      } catch(e) { showToast('Erro de conexão'); }
+    }
+
+    function showQrModal(qrSrc) {
+      const m = document.createElement('div');
+      m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;cursor:pointer';
+      m.onclick = () => m.remove();
+      m.innerHTML = `<img src="${qrSrc}" style="max-width:90vw;max-height:80vh;background:#fff;padding:10px;border-radius:12px;border:2px solid var(--gold)"/>`;
+      document.body.appendChild(m);
+    }
+
+    function escapeHtml(s) {
+      if (s == null) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
     }
 
     // Iniciação do hash (#loja abre direto a loja)

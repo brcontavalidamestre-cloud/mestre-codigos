@@ -1868,6 +1868,67 @@ def _do_checkout():
         "pix_warning": order.get("pix_warning")
     })
 
+@app.route("/api/loja/meus-pedidos", methods=["POST"])
+def api_loja_meus_pedidos():
+    """Histórico de compras do cliente — busca todos os pedidos por email."""
+    try:
+        data = request.get_json(silent=True) or {}
+        email = str(data.get("email", "")).strip().lower()
+        if not email:
+            return jsonify({"success": False, "message": "Informe o email usado na compra."}), 400
+
+        orders = load_orders()
+        my_orders = [
+            o for o in orders
+            if isinstance(o, dict)
+            and (o.get("customer_email", "") or "").lower() == email
+        ]
+        my_orders.sort(key=lambda o: o.get("created_at", 0) or 0, reverse=True)
+
+        # Para cada pedido pendente com txid, faz check ativo na Efi
+        # (mas apenas se foi criado nas últimas 2 horas para não sobrecarregar)
+        now = int(time.time())
+        for o in my_orders[:20]:
+            if (o.get("status") == "pending"
+                    and o.get("pix_txid")
+                    and (now - (o.get("created_at") or 0)) < 7200):
+                try:
+                    check = efi_check_pix_status(o["pix_txid"])
+                    if check.get("paid"):
+                        updated = mark_order_paid_and_deliver(o["id"])
+                        if updated:
+                            o.update(updated)
+                except Exception:
+                    pass
+
+        # Monta resposta enxuta (só o que o cliente precisa ver)
+        result = []
+        for o in my_orders[:50]:
+            result.append({
+                "order_id":           o.get("id"),
+                "product_name":       o.get("product_name"),
+                "price":              o.get("price"),
+                "status":             o.get("status"),
+                "created_at":         o.get("created_at"),
+                "paid_at":            o.get("paid_at"),
+                "delivered_email":    o.get("delivered_email"),
+                "delivered_password": o.get("delivered_password"),
+                "delivered_note":     o.get("delivered_note"),
+                "pix_copia_cola":     o.get("pix_copia_cola") if o.get("status") == "pending" else None,
+                "pix_qrcode":         o.get("pix_qrcode") if o.get("status") == "pending" else None,
+                "pix_expires_at":     o.get("pix_expires_at")
+            })
+        return jsonify({
+            "success": True,
+            "email": email,
+            "total": len(my_orders),
+            "orders": result
+        })
+    except Exception as e:
+        import traceback
+        print(f"[meus-pedidos] erro: {e}\n{traceback.format_exc()}")
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
+
 @app.route("/api/loja/order-status/<order_id>", methods=["GET"])
 def api_loja_order_status(order_id):
     try:
