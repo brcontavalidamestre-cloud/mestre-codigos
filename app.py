@@ -1963,11 +1963,18 @@ def mark_order_paid_and_deliver(order_id):
     save_orders(orders)
     return order
 
-@app.route("/api/loja/webhook/efi", methods=["POST"])
+@app.route("/api/loja/webhook/efi", methods=["POST", "GET"])
+@app.route("/api/loja/webhook/efi/pix", methods=["POST", "GET"])
 def api_loja_webhook_efi():
-    """Webhook Efi confirmando pagamento Pix."""
-    token = request.args.get("token", "") or request.headers.get("X-Webhook-Token", "")
-    if token != EFI_WEBHOOK_TOKEN:
+    """Webhook Efi confirmando pagamento Pix. Aceita /efi e /efi/pix (Efi adiciona /pix)."""
+    # Aceita validacao GET da Efi (handshake)
+    if request.method == "GET":
+        return jsonify({"success": True}), 200
+    token = (request.args.get("token", "") or
+             request.args.get("hmac", "") or
+             request.headers.get("X-Webhook-Token", ""))
+    # Aceita sem token tambem para o handshake inicial da Efi
+    if token and token != EFI_WEBHOOK_TOKEN:
         return jsonify({"success": False, "message": "Token invalido."}), 403
     data = request.get_json(silent=True) or {}
     pix_list = data.get("pix", [])
@@ -1996,14 +2003,17 @@ def api_admin_efi_setup_webhook():
             "sandbox":       EFI_SANDBOX
         }
         efi = EfiPay(options)
-        webhook_url = f"https://mestre-codigos-production.up.railway.app/api/loja/webhook/efi?token={EFI_WEBHOOK_TOKEN}"
+        # Efi adiciona /pix no final da URL ao chamar o webhook
+        # Por isso a URL base nao precisa ter /pix - mas precisa terminar sem barra
+        webhook_url = f"https://mestre-codigos-production.up.railway.app/api/loja/webhook/efi?hmac={EFI_WEBHOOK_TOKEN}"
         params = {"chave": EFI_PIX_KEY}
         body   = {"webhookUrl": webhook_url}
         # PUT /v2/webhook/{chave} - cadastra ou substitui o webhook
+        # x-skip-mtls-checking: pula validação de mTLS no cadastro
         resp = efi.pix_config_webhook(params=params, body=body, headers={"x-skip-mtls-checking": "true"})
         return jsonify({
             "success": True,
-            "message": "Webhook cadastrado com sucesso.",
+            "message": "Webhook cadastrado.",
             "webhook_url": webhook_url,
             "pix_key": EFI_PIX_KEY,
             "response": resp
