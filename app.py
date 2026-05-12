@@ -613,6 +613,26 @@ def get_html_body(msg):
     return html or plain
 
 def extract_code_from_html(html_body):
+    # Lista de números que NUNCA devem ser retornados como código (rodapé, ano, endereço, etc.)
+    BLACKLIST = {
+        "1026", "10026", "230",  # Endereço HBO Max: 230 Park Avenue South, NY 10026
+        "2024", "2025", "2026", "2027",  # Anos
+        "1999", "2000", "2001", "2002", "2003", "2004", "2005",
+        "2006", "2007", "2008", "2009", "2010", "2011", "2012",
+        "2013", "2014", "2015", "2016", "2017", "2018", "2019",
+        "2020", "2021", "2022", "2023",
+        "100", "200", "300", "400", "500", "800", "900", "1000",  # Números redondos
+    }
+
+    def is_valid_code(c):
+        if not c or not c.isdigit():
+            return False
+        if c in BLACKLIST:
+            return False
+        if len(c) < 4 or len(c) > 8:
+            return False
+        return True
+
     # 1. Dígitos separados por espaço/nbsp dentro de span/td estilizado (ex: "0 4 6 4")
     m = re.search(
         r"letter-spacing[^>]{0,200}>\s*((?:[0-9]\s*){4,8})<",
@@ -620,17 +640,17 @@ def extract_code_from_html(html_body):
     )
     if m:
         code = re.sub(r"\s+", "", m.group(1)).strip()
-        if code.isdigit() and 4 <= len(code) <= 8:
+        if is_valid_code(code):
             return code
 
-    # 2. Dígitos em fonte grande (só numérico)
+    # 2. Dígitos em fonte grande (só numérico) — código do Max/HBO normalmente em font-size grande
     m = re.search(
         r"font-size\s*:\s*(?:[3-9]\d|[12]\d\d)px[^>]*>\s*((?:[0-9]\s*){4,8})\s*<",
         html_body, re.IGNORECASE
     )
     if m:
         code = re.sub(r"\s+", "", m.group(1)).strip()
-        if code.isdigit():
+        if is_valid_code(code):
             return code
 
     # 3. Qualquer elemento com letter-spacing que contenha SOMENTE dígitos
@@ -639,22 +659,72 @@ def extract_code_from_html(html_body):
         html_body, re.IGNORECASE | re.DOTALL
     ):
         candidate = re.sub(r"[\s\u00a0]+", "", m.group(1)).strip()
-        if candidate.isdigit() and 4 <= len(candidate) <= 8:
+        if is_valid_code(candidate):
             return candidate
 
-    # 4. Texto limpo — padrões semânticos
+    # 3.5. Padrão específico HBO Max: "Seu código único" seguido de número 6 dígitos
+    m = re.search(
+        r"seu\s*c[o\u00f3]digo\s*[\u00fau]nico[^0-9]{0,200}([0-9]{6})",
+        html_body, re.IGNORECASE | re.DOTALL
+    )
+    if m and is_valid_code(m.group(1)):
+        return m.group(1)
+
+    m = re.search(
+        r"your\s*unique\s*code[^0-9]{0,200}([0-9]{6})",
+        html_body, re.IGNORECASE | re.DOTALL
+    )
+    if m and is_valid_code(m.group(1)):
+        return m.group(1)
+
+    m = re.search(
+        r"tu\s*c[o\u00f3]digo\s*[\u00fau]nico[^0-9]{0,200}([0-9]{6})",
+        html_body, re.IGNORECASE | re.DOTALL
+    )
+    if m and is_valid_code(m.group(1)):
+        return m.group(1)
+
+    # 4. Texto limpo — padrões semânticos (PRIORIDADE: 6 dígitos > 5 > 4)
     clean = re.sub(r"<[^>]+>", " ", html_body)
     clean = re.sub(r"\s+", " ", clean)
+
+    # 4a. Códigos de 6 dígitos com contexto semântico forte
+    patterns_6 = [
+        r"c[o\u00f3]digo\s*[\u00fau]nico[^0-9]{0,100}([0-9]{6})",
+        r"c[o\u00f3]digo\s*(?:de acesso|tempor[a\u00e1]rio)?\s*[:\-]?\s*([0-9]{6})",
+        r"access\s*code\s*[:\-]?\s*([0-9]{6})",
+        r"unique\s*code\s*[:\-]?\s*([0-9]{6})",
+        r"verification\s*code\s*[:\-]?\s*([0-9]{6})",
+        r"c[o\u00f3]digo\s*de\s*verifica[c\u00e7][a\u00e3]o\s*[:\-]?\s*([0-9]{6})",
+        r"one[- ]time\s*(?:password|code)\s*[:\-]?\s*([0-9]{6})",
+        r"OTP\s*[:\-]?\s*([0-9]{6})",
+    ]
+    for pat in patterns_6:
+        m = re.search(pat, clean, re.IGNORECASE)
+        if m and is_valid_code(m.group(1)):
+            return m.group(1)
+
+    # 4b. Códigos de 4-8 dígitos com contexto semântico
     patterns_text = [
-        r"c[o\u00f3]digo\s*(?:de acesso)?\s*[:\-]?\s*([0-9]{4,8})",
+        r"c[o\u00f3]digo\s*(?:de acesso|tempor[a\u00e1]rio|[\u00fau]nico)?\s*[:\-]?\s*([0-9]{4,8})",
         r"access\s*code\s*[:\-]?\s*([0-9]{4,8})",
-        r"\b([0-9]{4,8})\b(?=\s*(?:é seu|é o seu|para entrar|para acessar|es tu|es el))",
-        r"\b([0-9]{4})\b",
+        r"\b([0-9]{4,8})\b(?=\s*(?:\u00e9 seu|\u00e9 o seu|para entrar|para acessar|es tu|es el))",
     ]
     for pat in patterns_text:
         m = re.search(pat, clean, re.IGNORECASE)
-        if m:
-            return m.group(1).strip()
+        if m and is_valid_code(m.group(1)):
+            return m.group(1)
+
+    # 4c. Fallback final: qualquer 6 dígitos isolado que NÃO esteja na blacklist
+    for m in re.finditer(r"\b([0-9]{6})\b", clean):
+        if is_valid_code(m.group(1)):
+            return m.group(1)
+
+    # 4d. Fallback ainda mais permissivo: 4 dígitos isolados (último recurso)
+    for m in re.finditer(r"\b([0-9]{4})\b", clean):
+        if is_valid_code(m.group(1)):
+            return m.group(1)
+
     return None
 
 def extract_link(html_body, platform):
