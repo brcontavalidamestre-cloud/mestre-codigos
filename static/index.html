@@ -1724,6 +1724,7 @@
             html += `<button class="pix-copy-btn" onclick="copyPix('${j.pix_copia_cola.replace(/'/g, "\\'")}')">📋 Copiar código Pix</button>`;
           }
           html += `<div class="pix-waiting" id="pix-waiting">⏳ Aguardando pagamento...</div>`;
+          html += `<button id="btn-force-check" onclick="forceCheckOrder()" style="margin-top:14px;background:#10b981;color:#fff;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.85rem;letter-spacing:1px">🔄 Já paguei - verificar agora</button>`;
         } else if (j.pix_warning) {
           html += `<div style="background:rgba(245,158,11,0.15);border:1px solid var(--gold);padding:14px;border-radius:10px;color:var(--gold-light);font-size:0.88rem">
             ⚠️ ${j.pix_warning}<br><br>
@@ -1743,18 +1744,68 @@
       showToast('✓ Código Pix copiado!');
     }
 
+    let currentOrderId = null;
+    let pollCount = 0;
+
+    async function checkOrderOnce(orderId) {
+      try {
+        const r = await fetch('/api/loja/order-status/' + orderId);
+        const j = await r.json();
+        if (j.success && j.status === 'paid') {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          showPaid(j);
+          return true;
+        }
+      } catch(e) {}
+      return false;
+    }
+
+    async function forceCheckOrder() {
+      if (!currentOrderId) return;
+      const btn = document.getElementById('btn-force-check');
+      if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
+      try {
+        const r = await fetch('/api/loja/force-check/' + currentOrderId, { method: 'POST' });
+        const j = await r.json();
+        if (j.success && (j.paid || (j.order && j.order.status === 'paid'))) {
+          if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          // Normaliza resposta para showPaid
+          const o = j.order || {};
+          showPaid({
+            product_name: o.product_name,
+            delivered_email: o.delivered_email,
+            delivered_password: o.delivered_password,
+            delivered_note: o.delivered_note
+          });
+        } else {
+          showToast('⏳ Pagamento ainda não confirmado pela Efi. Aguarde alguns segundos e tente de novo.');
+          if (btn) { btn.disabled = false; btn.textContent = '🔄 Já paguei - verificar agora'; }
+        }
+      } catch(e) {
+        showToast('Erro ao verificar');
+        if (btn) { btn.disabled = false; btn.textContent = '🔄 Já paguei - verificar agora'; }
+      }
+    }
+
     function startPolling(orderId) {
+      currentOrderId = orderId;
+      pollCount = 0;
       if (pollTimer) clearInterval(pollTimer);
+      // Polling agressivo: a cada 3s nos primeiros 2min, depois a cada 6s
       pollTimer = setInterval(async () => {
-        try {
-          const r = await fetch('/api/loja/order-status/' + orderId);
-          const j = await r.json();
-          if (j.success && j.status === 'paid') {
-            clearInterval(pollTimer); pollTimer = null;
-            showPaid(j);
-          }
-        } catch(e) {}
-      }, 4000);
+        pollCount++;
+        const found = await checkOrderOnce(orderId);
+        if (found) return;
+        // Apos 40 tentativas (~2min), reduz frequencia
+        if (pollCount === 40) {
+          clearInterval(pollTimer);
+          pollTimer = setInterval(async () => {
+            await checkOrderOnce(orderId);
+          }, 6000);
+        }
+      }, 3000);
+      // Verifica imediatamente tambem
+      checkOrderOnce(orderId);
     }
 
     function showPaid(data) {
