@@ -144,7 +144,7 @@ ORDERS_FILE         = os.environ.get("ORDERS_FILE", os.path.join(_data_dir, "ord
 # Credenciais Efi (Gerencianet) - configurar via Railway
 EFI_CLIENT_ID       = os.environ.get("EFI_CLIENT_ID", "")
 EFI_CLIENT_SECRET   = os.environ.get("EFI_CLIENT_SECRET", "")
-EFI_CERT_PATH       = os.environ.get("EFI_CERT_PATH", "")  # caminho do .p12/.pem no Railway
+EFI_CERT_PATH       = os.environ.get("EFI_CERT_PATH", "/app/certs/producao-916938-mestre.p12")  # caminho do .p12/.pem
 EFI_PIX_KEY         = os.environ.get("EFI_PIX_KEY", "")    # chave Pix da loja
 EFI_SANDBOX         = os.environ.get("EFI_SANDBOX", "false").lower() == "true"
 EFI_WEBHOOK_TOKEN   = os.environ.get("EFI_WEBHOOK_TOKEN", "mestre-codigos-webhook")
