@@ -1384,6 +1384,30 @@ def search_code_unified(user_email, platform_list):
                         if matched:
                             break
 
+                # NOVO: Busca tambem por FROM = email do usuario (Fw: encaminhados)
+                # Caso o cliente encaminhe o email original para a caixa do sistema,
+                # o remetente sera o proprio email do usuario, nao o da Netflix.
+                if user_email and "@" in user_email:
+                    try:
+                        extra = _batch_search_mailbox(
+                            mail, "INBOX", user_email, plat_configs, seen_ids,
+                            use_date_filter=True, since_date=since_2d)
+                        if not extra:
+                            extra = _batch_search_mailbox(
+                                mail, "INBOX", user_email, plat_configs, seen_ids,
+                                use_date_filter=False)
+                        # Tambem busca pelo dominio do usuario (ex: @exxwa.org)
+                        if not extra:
+                            user_domain = user_email.split("@")[1] if "@" in user_email else ""
+                            if user_domain and len(user_domain) >= 3:
+                                extra = _batch_search_mailbox(
+                                    mail, "INBOX", user_domain, plat_configs, seen_ids,
+                                    use_date_filter=True, since_date=since_2d)
+                        if extra:
+                            matched.extend(extra)
+                    except Exception:
+                        pass
+
                 for mb, plat_key, eid in matched:
                     code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
                     if code or link:
