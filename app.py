@@ -1809,8 +1809,13 @@ def api_loja_checkout():
         "pix_copia_cola": None,
     }
 
-    # Tenta gerar Pix via Efi (se configurado)
-    pix_data = efi_create_pix_charge(order)
+    # Tenta gerar Pix via Efi (se configurado) - protegido contra exception
+    try:
+        pix_data = efi_create_pix_charge(order)
+    except Exception as e:
+        print(f"[checkout] excecao em efi_create_pix_charge: {e}")
+        pix_data = {"success": False, "message": f"Erro Efi: {e}"}
+
     if pix_data.get("success"):
         order["pix_txid"]      = pix_data.get("txid")
         order["pix_qrcode"]    = pix_data.get("qrcode_image")
@@ -1869,17 +1874,21 @@ def efi_create_pix_charge(order):
     if not efi_is_configured():
         return {
             "success": False,
-            "message": "Gateway Efi não configurado. Configure EFI_CLIENT_ID, EFI_CLIENT_SECRET, EFI_PIX_KEY e EFI_CERT_PATH no Railway."
+            "message": "Gateway Efi não configurado."
+        }
+    # Verifica se certificado existe
+    if not os.path.exists(EFI_CERT_PATH):
+        return {
+            "success": False,
+            "message": f"Certificado não encontrado: {EFI_CERT_PATH}"
         }
     try:
-        # SDK Efi (gerencianet) seria importado aqui se instalado
-        # import requests via SDK - implementação real após usuário enviar certificado
         try:
             from efipay import EfiPay
-        except ImportError:
+        except ImportError as e:
             return {
                 "success": False,
-                "message": "SDK Efi não instalado. Aguardando configuração final."
+                "message": f"SDK Efi não instalado: {e}"
             }
 
         options = {
@@ -1893,20 +1902,32 @@ def efi_create_pix_charge(order):
         body = {
             "calendario": {"expiracao": 3600},
             "devedor": {
-                "nome": order["customer_name"][:200] or "Cliente"
+                "nome": (order["customer_name"] or "Cliente")[:200]
             },
-            "valor": {"original": f"{order['price']:.2f}"},
+            "valor": {"original": f"{float(order['price']):.2f}"},
             "chave": EFI_PIX_KEY,
             "solicitacaoPagador": f"{order['product_name']} - {order['id']}"[:140]
         }
         resp = efi.pix_create_immediate_charge(body=body)
+        print(f"[efi] resposta criar cobranca: {resp}")
+
+        if not isinstance(resp, dict):
+            return {"success": False, "message": f"Resposta inválida da Efi: {resp}"}
+
+        if resp.get("nome") or resp.get("erro"):
+            return {"success": False, "message": f"Efi rejeitou cobranca: {resp.get('mensagem') or resp.get('erro')}"}
+
         txid = resp.get("txid")
-        loc  = resp.get("loc", {}).get("id")
+        loc  = (resp.get("loc") or {}).get("id")
 
         if not loc:
-            return {"success": False, "message": "Resposta inválida da Efi."}
+            return {"success": False, "message": f"Sem 'loc.id' na resposta Efi: {resp}"}
 
-        qr = efi.pix_generate_qrcode(params={"id": loc})
+        try:
+            qr = efi.pix_generate_qrcode(params={"id": loc})
+        except Exception as e:
+            return {"success": False, "message": f"Erro ao gerar QR Code: {e}"}
+
         return {
             "success": True,
             "txid": txid,
@@ -1915,7 +1936,8 @@ def efi_create_pix_charge(order):
             "expires_at":   int(time.time()) + 3600
         }
     except Exception as e:
-        print(f"[efi] erro ao criar cobranca: {e}")
+        import traceback
+        print(f"[efi] erro ao criar cobranca: {e}\n{traceback.format_exc()}")
         return {"success": False, "message": f"Erro Efi: {e}"}
 
 def efi_check_pix_status(txid):
