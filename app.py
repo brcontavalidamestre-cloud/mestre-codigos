@@ -1870,26 +1870,66 @@ def _do_checkout():
 
 @app.route("/api/loja/order-status/<order_id>", methods=["GET"])
 def api_loja_order_status(order_id):
-    orders = load_orders()
-    order  = next((o for o in orders if o["id"] == order_id), None)
-    if not order:
-        return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
+    try:
+        orders = load_orders()
+        order  = next((o for o in orders if isinstance(o, dict) and o.get("id") == order_id), None)
+        if not order:
+            return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
 
-    # Se ainda pendente e tem txid Efi, consulta status no Efi
-    if order["status"] == "pending" and order.get("pix_txid"):
+        debug_info = {}
+        # Se ainda pendente e tem txid Efi, consulta status no Efi
+        if order.get("status") == "pending" and order.get("pix_txid"):
+            check = efi_check_pix_status(order["pix_txid"])
+            debug_info["efi_check"] = {
+                "status": check.get("status"),
+                "paid": check.get("paid"),
+                "reason": check.get("reason")
+            }
+            if check.get("paid"):
+                order = mark_order_paid_and_deliver(order_id)
+
+        return jsonify({
+            "success": True,
+            "order_id": order["id"],
+            "status": order.get("status"),
+            "product_name": order.get("product_name"),
+            "delivered_email":    order.get("delivered_email"),
+            "delivered_password": order.get("delivered_password"),
+            "delivered_note":     order.get("delivered_note"),
+            "debug": debug_info
+        })
+    except Exception as e:
+        import traceback
+        print(f"[order-status] erro: {e}\n{traceback.format_exc()}")
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
+
+@app.route("/api/loja/force-check/<order_id>", methods=["POST"])
+def api_loja_force_check(order_id):
+    """Força a verificação de pagamento de um pedido via Efi (útil quando o webhook falha)."""
+    try:
+        orders = load_orders()
+        order  = next((o for o in orders if isinstance(o, dict) and o.get("id") == order_id), None)
+        if not order:
+            return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
+        if order.get("status") == "paid":
+            return jsonify({"success": True, "already_paid": True, "order": order})
+        if not order.get("pix_txid"):
+            return jsonify({"success": False, "message": "Pedido sem txid."})
         check = efi_check_pix_status(order["pix_txid"])
         if check.get("paid"):
             order = mark_order_paid_and_deliver(order_id)
-
-    return jsonify({
-        "success": True,
-        "order_id": order["id"],
-        "status": order["status"],
-        "product_name": order["product_name"],
-        "delivered_email":    order.get("delivered_email"),
-        "delivered_password": order.get("delivered_password"),
-        "delivered_note":     order.get("delivered_note")
-    })
+            return jsonify({"success": True, "paid": True, "order": order})
+        return jsonify({
+            "success": True,
+            "paid": False,
+            "efi_status": check.get("status"),
+            "reason": check.get("reason"),
+            "raw": check.get("raw")
+        })
+    except Exception as e:
+        import traceback
+        print(f"[force-check] erro: {e}\n{traceback.format_exc()}")
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
 
 # ─── EFI PIX HELPERS ────────────────────────────────────────────────────────────────
 def efi_is_configured():
@@ -1966,8 +2006,9 @@ def efi_create_pix_charge(order):
         return {"success": False, "message": f"Erro Efi: {e}"}
 
 def efi_check_pix_status(txid):
+    """Consulta Efi e retorna {paid: bool, status: str, raw: dict}."""
     if not efi_is_configured() or not txid:
-        return {"paid": False}
+        return {"paid": False, "reason": "no_config_or_txid"}
     try:
         from efipay import EfiPay
         options = {
@@ -1978,11 +2019,17 @@ def efi_check_pix_status(txid):
         }
         efi  = EfiPay(options)
         resp = efi.pix_detail_charge(params={"txid": txid})
+        if not isinstance(resp, dict):
+            return {"paid": False, "reason": "resposta_nao_dict", "raw": str(resp)}
         status = (resp.get("status") or "").upper()
-        return {"paid": status == "CONCLUIDA", "status": status}
+        # Considera paga se status concluida OU se ja tem array 'pix' com valor recebido
+        is_paid = (status == "CONCLUIDA") or bool(resp.get("pix"))
+        print(f"[efi] txid={txid} status={status} pix_array_len={len(resp.get('pix') or [])} paid={is_paid}")
+        return {"paid": is_paid, "status": status, "raw": resp}
     except Exception as e:
-        print(f"[efi] erro ao consultar txid {txid}: {e}")
-        return {"paid": False}
+        import traceback
+        print(f"[efi] erro ao consultar txid {txid}: {e}\n{traceback.format_exc()}")
+        return {"paid": False, "reason": str(e)}
 
 def mark_order_paid_and_deliver(order_id):
     """Marca pedido como pago e entrega o próximo acesso do estoque."""
@@ -2203,9 +2250,16 @@ def api_admin_reset_stock(product_id, item_id):
 @app.route("/api/admin/loja/pedidos", methods=["GET"])
 @admin_required
 def api_admin_list_orders():
-    orders = load_orders()
-    orders_sorted = sorted(orders, key=lambda o: o.get("created_at", 0), reverse=True)
-    return jsonify({"success": True, "orders": orders_sorted[:200]})
+    try:
+        orders = load_orders()
+        # Filtra apenas dicts válidos (defesa contra dados antigos corrompidos)
+        clean = [o for o in orders if isinstance(o, dict) and o.get("id")]
+        clean_sorted = sorted(clean, key=lambda o: o.get("created_at", 0) or 0, reverse=True)
+        return jsonify({"success": True, "orders": clean_sorted[:200]})
+    except Exception as e:
+        import traceback
+        print(f"[admin/pedidos] erro: {e}\n{traceback.format_exc()}")
+        return jsonify({"success": False, "message": f"Erro: {e}", "orders": []})
 
 @app.route("/api/health", methods=["GET"])
 def health():
