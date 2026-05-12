@@ -89,131 +89,47 @@ EMAIL_PASS = os.environ.get('EMAIL_PASS', 'Mcodigo10@')
 PLATFORM_CONFIG = {
     'netflix': {
         'from_keyword': 'netflix.com',
-        'from_keywords': ['netflix.com', 'account.netflix.com', 'members.netflix.com', 'info@netflix.com'],
+        'from_keywords': ['netflix.com'],
         'subject_keywords': [
-            # Código de acesso (PT-BR, PT-PT, EN, ES)
-            'Netflix: seu código de acesso',
-            'Netflix seu código de acesso',
-            'Seu código de acesso temporário',
-            'seu codigo de acesso temporario',
-            'Tu código de acceso temporal',
-            'tu codigo de acceso temporal',
-            'Netflix: código de início de sessão',
-            'Netflix: código de inicio de sesión',
-            'código de início de sessão',
-            'codigo de inicio de sesion',
             'digo de acesso',
             'codigo de acesso',
             'código de acesso',
-            'código de acceso',
-            'codigo de acceso',
-            'seu código',
-            'seu codigo',
-            'tu código',
-            'tu codigo',
             'código',
             'codigo',
             'access code',
-            'one-time code',
-            'one-time password',
-            'verification code',
-            # Novo aparelho / dispositivo
-            'Um novo aparelho está usando sua conta',
-            'um novo aparelho',
-            'Un nuevo dispositivo está usando tu cuenta',
-            'un nuevo dispositivo',
-            'novo aparelho',
-            'nuevo dispositivo',
-            'new device',
-            'a new device',
-            # Residência / Hogar / Household
-            'Importante: Como atualizar sua residência',
-            'Importante: Cómo actualizar tu Hogar',
-            'como atualizar sua residência',
-            'como actualizar tu hogar',
-            'atualizar sua residência',
-            'actualizar tu hogar',
-            'sua residência Netflix foi confirmada',
-            'Confirmação: sua residência',
             'atualizar',
             'atualizar resid',
             'residência',
             'residencia',
             'household',
             'update your household',
-            'hogar',
-            # Redefinição de senha (todas as línguas)
             'Complete a solicitacao de redefinicao de senha',
-            'Complete a solicitação de redefinição de senha',
-            'redefinição de senha',
             'redefinicao de senha',
-            'pedido de redefinição da palavra-passe',
-            'redefinição da palavra-passe',
             'redefini',
             'Completa tu solicitud de restablecimiento de contrasena',
             'restablecimiento de contrasena',
-            'restablecimiento',
             'reset password',
             'password reset',
             'reset ang password',
-            'Tapusin ang request mong i-reset ang password',
-            # Outros
-            'Sua senha foi atualizada',
-            'PIN do perfil',
-            'Atualize sua forma de pagamento',
-            'sua assinatura'
+            'Tapusin ang request mong i-reset ang password'
         ],
         'name': 'Netflix',
         'type': 'auto'
     },
     'disney': {
         'from_keyword': 'disneyplus.com',
-        'from_keywords': ['disneyplus.com', 'disney.com', 'mydisney.com', 'disney', 'mail.disneyplus.com', 'mail.disney.com', 'boxfi.uk'],
+        'from_keywords': ['disneyplus.com', 'disney.com', 'disney'],
         'subject_keywords': [
-            # Código de acesso único (Disney+ e MyDisney)
-            'Seu código de acesso único para o Disney+',
-            'Seu código de acesso único para o Disney',
-            'Seu código de acesso único para o MyDisney',
-            'seu codigo de acesso unico para o disney',
-            'seu codigo de acesso unico para o mydisney',
-            'código de acesso único para o Disney',
-            'código de acesso único para o MyDisney',
-            'codigo de acesso unico para o disney',
-            'codigo de acesso unico para o mydisney',
-            'código de acesso único',
-            'codigo de acesso unico',
-            'seu código de acesso',
-            'seu codigo de acesso',
-            'código único para o Disney',
-            'codigo unico para o disney',
-            'código único',
-            'codigo unico',
-            # Código genérico
             'digo de acesso',
             'codigo de acesso',
             'código de acesso',
             'código',
             'codigo',
             'access code',
-            'your access code',
-            'your one-time access code',
-            'one-time access code',
             'one-time',
-            'one time',
-            'one-time code',
             'verificação',
             'verificacao',
             'verification',
-            'verification code',
-            'código de verificação',
-            'codigo de verificacao',
-            # Novo login / dispositivo
-            'Identificamos um novo login',
-            'identificamos um novo login',
-            'novo login',
-            'new login',
-            'new device',
-            # Residência
             'Quer atualizar sua Residencia do Disney+',
             'atualizar sua Residencia do Disney',
             'Residencia do Disney',
@@ -222,16 +138,7 @@ PLATFORM_CONFIG = {
             'residencia',
             'update your Disney+ Home',
             'Disney+ Home',
-            'household',
-            # MyDisney conta
-            'Sua conta MyDisney foi atualizada',
-            'Your MyDisney account has been updated',
-            'conta MyDisney foi atualizada',
-            'mydisney account',
-            'mydisney',
-            'Boas-vindas ao MyDisney',
-            'Conclua sua assinatura do Disney+',
-            'Complete your Disney+ Subscription'
+            'household'
         ],
         'name': 'Disney+',
         'type': 'auto'
@@ -244,143 +151,9 @@ PLATFORM_CONFIG = {
         'type': 'code'
     },
     'max-prime': {
-        'from_keyword': 'hbomax.com',
-        'from_keywords': [
-            # HBO Max / Max - remetentes oficiais e variantes
-            'alerts.hbomax.com',
-            'no-reply@alerts.hbomax.com',
-            'noreply@alerts.hbomax.com',
-            'alerts@hbomax.com',
-            'hbomax.com',
-            'hbo max',
-            'hbomax',
-            'hbo.com',
-            'mail.hbomax.com',
-            'email.hbomax.com',
-            'updates.hbomax.com',
-            'news.hbomax.com',
-            'support.hbomax.com',
-            'no-reply@max.com',
-            'noreply@max.com',
-            'mail@max.com',
-            'alerts@max.com',
-            'max.com',
-            'mail.max.com',
-            'email.max.com',
-            'updates.max.com',
-            'news.max.com',
-            'support.max.com',
-            'streammax.com',
-            'play.max.com',
-            # Warner / WarnerMedia
-            'warnermedia',
-            'wbd.com',
-            'warnerbros.com',
-            'discovery.com',
-            'discoveryplus.com',
-            # Amazon / Prime Video
-            'primevideo.com',
-            'primevideo',
-            'amazon.com',
-            'amazon.com.br',
-            'amazon.co.uk',
-            'amazonses.com',
-            'marketplace.amazon.com',
-            'noreply@primevideo.com',
-            'no-reply@primevideo.com',
-            'auto-confirm@amazon.com',
-            'account-update@amazon.com',
-            'no-reply@amazon.com',
-            'noreply@amazon.com',
-            'amazon'
-        ],
-        'subject_keywords': [
-            # Variantes do email mostrado no print
-            'Aqui está seu código único',
-            'aqui esta seu codigo unico',
-            'aqui está o seu código único',
-            'Temporário:',
-            'Temporario:',
-            'Temporário',
-            'Temporario',
-            # Código único
-            'seu código único',
-            'seu codigo unico',
-            'o seu código',
-            'código único',
-            'codigo unico',
-            'código de uso único',
-            'código de utilização única',
-            # Código de acesso e variantes PT/EN/ES
-            'digo de acesso',
-            'codigo de acesso',
-            'código de acesso',
-            'código de verificação',
-            'codigo de verificacao',
-            'código de segurança',
-            'codigo de seguranca',
-            'código de confirmação',
-            'codigo de confirmacao',
-            'código de login',
-            'codigo de login',
-            'código de entrada',
-            'codigo de entrada',
-            'código temporário',
-            'codigo temporario',
-            'seu código',
-            'seu codigo',
-            'código',
-            'codigo',
-            'access code',
-            'your code',
-            'login code',
-            'security code',
-            'confirmation code',
-            'temporary code',
-            'codigo de inicio de sesion',
-            'código de inicio de sesión',
-            'restablecimiento',
-            # Verificação / OTP / sign-in
-            'verificação',
-            'verificacao',
-            'verificacion',
-            'verification',
-            'verify your',
-            'verifying',
-            'one-time code',
-            'one time code',
-            'one-time password',
-            'one time password',
-            'one-time',
-            'one time',
-            'OTP',
-            'sign in',
-            'sign-in',
-            'signin',
-            'sign in attempt',
-            'sign-in attempt',
-            'tentativa de login',
-            'tentativa de acesso',
-            'iniciar sesión',
-            'iniciar sesion',
-            'entrar',
-            'entrar na conta',
-            'login',
-            'acesso',
-            'autenticar',
-            'autenticacao',
-            'autenticação',
-            'authenticate',
-            'authentication',
-            # Marca
-            'amazon',
-            'prime video',
-            'prime',
-            'max',
-            'hbo max',
-            'hbo',
-            'warner'
-        ],
+        'from_keyword': 'max.com',
+        'from_keywords': ['max.com', 'hbomax', 'warnermedia', 'amazon.com', 'amazon.com.br', 'primevideo', 'amazonses.com', 'amazon'],
+        'subject_keywords': ['digo de acesso', 'codigo de acesso', 'código', 'codigo', 'verificação', 'verificacao', 'verification', 'sign in', 'sign-in', 'signin', 'entrar', 'one-time', 'one time', 'OTP', 'OTP', 'login', 'acesso', 'amazon', 'prime video', 'max'],
         'name': 'Max / Prime Video',
         'type': 'code'
     },
@@ -660,24 +433,11 @@ def search_code(user_email, platform):
         mail.select('INBOX')
         from_kws = config.get('from_keywords') or [config.get('from_keyword', '')]
         from_kws = [k for k in from_kws if k]
-        # Reduzir a um conjunto pequeno de "domínios-raiz" para evitar dezenas de buscas IMAP
-        primary_domains = []
-        seen_dom = set()
-        for fk in from_kws:
-            fk_clean = fk.lower().strip()
-            # extrai domínio raiz tipo hbomax.com, max.com, amazon.com, etc.
-            m_dom = re.search(r'([a-z0-9-]+\.[a-z]{2,})$', fk_clean)
-            root = m_dom.group(1) if m_dom else fk_clean
-            if root and root not in seen_dom:
-                seen_dom.add(root)
-                primary_domains.append(root)
-        # limita o número de buscas IMAP para no máximo 10 domínios principais
-        primary_domains = primary_domains[:10]
         subj_kws = config['subject_keywords']
         result_type = config.get('type', 'code')
         all_ids = []
         seen = set()
-        for fk in primary_domains:
+        for fk in from_kws:
             try:
                 status, msgs = mail.search(None, 'FROM', fk)
                 if status == 'OK' and msgs and msgs[0]:
@@ -687,113 +447,21 @@ def search_code(user_email, platform):
                             all_ids.append(eid)
             except Exception:
                 continue
-        # Fallback específico para max-prime: também buscar por assunto-chave caso
-        # o FROM não casou (alguns provedores reescrevem o remetente).
-        if platform == 'max-prime':
-            # Buscas ASCII (sem acentos) que o IMAP do Hostinger aceita sem precisar de UTF-8
-            for kw in [
-                'Temporario',
-                'Temporary',
-                'codigo unico',
-                'codigo de acesso',
-                'one-time code',
-                'one time code',
-                'access code',
-                'your code',
-                'verification code',
-                'HBO Max',
-                'hbomax'
-            ]:
-                try:
-                    status, msgs = mail.search(None, 'SUBJECT', kw)
-                    if status == 'OK' and msgs and msgs[0]:
-                        for eid in msgs[0].split():
-                            if eid not in seen:
-                                seen.add(eid)
-                                all_ids.append(eid)
-                except Exception:
-                    continue
-            # Buscas em UTF-8 para capturar acentos como em 'Temporário' e 'código único'
-            try:
-                mail.literal = None
-                for kw_utf8 in ['Temporário', 'código único', 'código de acesso', 'código']:
-                    try:
-                        encoded = kw_utf8.encode('utf-8')
-                        status, msgs = mail.search('UTF-8', 'SUBJECT', '"' + kw_utf8 + '"')
-                        if status != 'OK':
-                            # Fallback usando o protocolo IMAP "literal"
-                            tag = mail._new_tag().decode()
-                            cmd = f'{tag} SEARCH CHARSET UTF-8 SUBJECT {{{len(encoded)}}}\r\n'
-                            try:
-                                mail.send(cmd.encode())
-                                mail.send(encoded + b'\r\n')
-                                resp = mail.readline()
-                                ids = []
-                                while resp and not resp.startswith(tag.encode()):
-                                    if resp.startswith(b'* SEARCH'):
-                                        parts = resp.decode(errors='ignore').strip().split()[2:]
-                                        ids.extend(p.encode() for p in parts if p.isdigit())
-                                    resp = mail.readline()
-                                for eid in ids:
-                                    if eid not in seen:
-                                        seen.add(eid)
-                                        all_ids.append(eid)
-                            except Exception:
-                                pass
-                        else:
-                            if msgs and msgs[0]:
-                                for eid in msgs[0].split():
-                                    if eid not in seen:
-                                        seen.add(eid)
-                                        all_ids.append(eid)
-                    except Exception:
-                        continue
-            except Exception:
-                pass
-            # Último recurso: pegar TODAS as mensagens recentes (últimas 800) e filtrar por assunto local
-            try:
-                status, msgs = mail.search(None, 'ALL')
-                if status == 'OK' and msgs and msgs[0]:
-                    all_msg_ids = msgs[0].split()
-                    recent_all = all_msg_ids[-800:]
-                    for eid in recent_all:
-                        if eid not in seen:
-                            seen.add(eid)
-                            all_ids.append(eid)
-            except Exception:
-                pass
         if not all_ids:
             mail.logout()
             return None, None, 'Nenhum email da plataforma encontrado.'
-        recent_ids = all_ids[-800:]
+        recent_ids = all_ids[-150:]
         recent_ids.reverse()
         matched_ids = []
         for eid in recent_ids:
             try:
-                status, data = mail.fetch(eid, '(BODY[HEADER.FIELDS (SUBJECT FROM)])')
+                status, data = mail.fetch(eid, '(BODY[HEADER.FIELDS (SUBJECT)])')
                 if status != 'OK':
                     continue
                 hdr = email.message_from_bytes(data[0][1])
                 subj = decode_str(hdr.get('Subject', ''))
-                frm = decode_str(hdr.get('From', '')).lower()
-                # Para max-prime, aceitamos o email se a marca aparece no FROM
-                # OU se o assunto contém um termo bem específico (ex.: código único).
-                if platform == 'max-prime':
-                    brand_ok = any(b in frm for b in [
-                        'hbomax', 'hbo max', 'max.com', 'warner', 'amazon',
-                        'primevideo', 'prime video', 'hbo', 'wbd.com'
-                    ])
-                    subj_norm = normalize(subj).lower()
-                    strong_subject = any(s in subj_norm for s in [
-                        'codigo unico', 'temporario', 'one-time code', 'one time code',
-                        'access code', 'codigo de acesso', 'verification code'
-                    ])
-                    if not (brand_ok or strong_subject):
-                        continue
                 if subject_matches(subj, subj_kws):
                     matched_ids.append(eid)
-                    if len(matched_ids) >= 50:
-                        break
             except Exception:
                 continue
         if not matched_ids:
