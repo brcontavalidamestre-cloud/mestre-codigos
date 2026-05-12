@@ -882,13 +882,33 @@ def extract_link(html_body, platform):
     return None
 def email_matches_user(msg, html_body, user_email):
     user_lower = user_email.lower()
+    user_lower = user_lower.strip()
 
     # 1. Verifica no corpo HTML já extraído
     if user_lower in html_body.lower():
         return True
 
+    # 1.5 Verifica sem quoted-printable (=40 vira @ em emails encaminhados)
+    try:
+        import quopri
+        decoded_html = quopri.decodestring(html_body.encode("utf-8", errors="ignore")).decode("utf-8", errors="ignore").lower()
+        if user_lower in decoded_html:
+            return True
+        # Tambem testa removendo todas as tags HTML (caso o email esteja entre <a> ou outras tags)
+        plain_from_html = re.sub(r"<[^>]+>", " ", decoded_html)
+        plain_from_html = re.sub(r"\s+", " ", plain_from_html).strip()
+        if user_lower in plain_from_html:
+            return True
+        # Tambem testa sem hifens/pontos que podem estar codificados (=2E -> .)
+        unescaped = (decoded_html.replace("=2e", ".").replace("=2E", ".")
+                                .replace("=40", "@").replace("=3d", "="))
+        if user_lower in unescaped:
+            return True
+    except Exception:
+        pass
+
     # 2. Verifica nos headers principais
-    for header in ["To", "Delivered-To", "X-Original-To", "X-Forwarded-To"]:
+    for header in ["To", "Delivered-To", "X-Original-To", "X-Forwarded-To", "Cc", "Bcc", "Reply-To"]:
         if user_lower in decode_str(msg.get(header, "")).lower():
             return True
 
@@ -904,11 +924,43 @@ def email_matches_user(msg, html_body, user_email):
                     if payload:
                         charset = part.get_content_charset() or "utf-8"
                         try:
-                            text = payload.decode(charset, errors="ignore")
-                            if user_lower in text.lower():
+                            text = payload.decode(charset, errors="ignore").lower()
+                            if user_lower in text:
                                 return True
+                            # Tambem testa removendo tags HTML e quoted-printable
+                            plain = re.sub(r"<[^>]+>", " ", text)
+                            plain = re.sub(r"\s+", " ", plain).strip()
+                            if user_lower in plain:
+                                return True
+                            try:
+                                import quopri
+                                qp_decoded = quopri.decodestring(text.encode("utf-8", errors="ignore")).decode("utf-8", errors="ignore").lower()
+                                if user_lower in qp_decoded:
+                                    return True
+                                qp_plain = re.sub(r"<[^>]+>", " ", qp_decoded)
+                                qp_plain = re.sub(r"\s+", " ", qp_plain).strip()
+                                if user_lower in qp_plain:
+                                    return True
+                            except Exception:
+                                pass
                         except Exception:
                             pass
+        else:
+            # Email não multipart — tambem decodifica payload simples
+            payload = msg.get_payload(decode=True)
+            if payload:
+                charset = msg.get_content_charset() or "utf-8"
+                try:
+                    text = payload.decode(charset, errors="ignore").lower()
+                    if user_lower in text:
+                        return True
+                    plain = re.sub(r"<[^>]+>", " ", text)
+                    plain = re.sub(r"\s+", " ", plain).strip()
+                    if user_lower in plain:
+                        return True
+                except Exception:
+                    pass
+
     except Exception:
         pass
 
@@ -917,6 +969,14 @@ def email_matches_user(msg, html_body, user_email):
         raw_str = msg.as_bytes().decode("utf-8", errors="ignore").lower()
         if user_lower in raw_str:
             return True
+        # Tambem aplica quoted-printable nos bytes brutos
+        try:
+            import quopri
+            raw_qp = quopri.decodestring(msg.as_bytes()).decode("utf-8", errors="ignore").lower()
+            if user_lower in raw_qp:
+                return True
+        except Exception:
+            pass
     except Exception:
         pass
 
