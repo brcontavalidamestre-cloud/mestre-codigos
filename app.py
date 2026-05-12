@@ -1925,11 +1925,10 @@ def efi_create_pix_charge(order):
         }
         efi = EfiPay(options)
 
+        # Devedor exige CPF/CNPJ na Efi — como não coletamos CPF do cliente, não enviamos devedor.
+        # A Efi aceita cobrança Pix sem devedor (campo opcional).
         body = {
             "calendario": {"expiracao": 3600},
-            "devedor": {
-                "nome": (order["customer_name"] or "Cliente")[:200]
-            },
             "valor": {"original": f"{float(order['price']):.2f}"},
             "chave": EFI_PIX_KEY,
             "solicitacaoPagador": f"{order['product_name']} - {order['id']}"[:140]
