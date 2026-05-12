@@ -356,6 +356,82 @@
       </div>
     </div>
 
+    <!-- ============ LOJA: PRODUTOS ============ -->
+    <div class="panel" style="margin-top:30px;">
+      <div class="phdr">
+        <div class="ptit">🛒 Loja — Produtos</div>
+        <button class="btn-ref" onclick="loadLojaProdutos()">🔄 Atualizar</button>
+      </div>
+      <div class="sinfo" style="margin-bottom:10px;">Edite nome, preço e descrição de cada produto exibido na loja.</div>
+      <div id="loja-prod-list" style="display:grid;gap:14px;"></div>
+    </div>
+
+    <!-- ============ LOJA: ESTOQUE DE ACESSOS ============ -->
+    <div class="panel" style="margin-top:20px;">
+      <div class="phdr">
+        <div class="ptit">🔑 Estoque de Acessos</div>
+        <div class="srow">
+          <select class="sin" id="stk-prod-sel" onchange="loadStock()" style="padding:9px 14px;"></select>
+          <button class="btn-ref" onclick="loadStock()">🔄</button>
+        </div>
+      </div>
+      <div class="sinfo" style="margin-bottom:10px;">Cadastre email + senha que serão entregues automaticamente ao cliente após o Pix.</div>
+      <form id="stk-form" onsubmit="addStock(event)">
+        <div class="fgrid">
+          <div class="fgrp">
+            <label class="flbl">✉ Email da conta</label>
+            <input class="fi" id="stk-email" placeholder="ex: conta@netflix.com" required/>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">🔑 Senha</label>
+            <input class="fi" id="stk-pass" placeholder="senha de acesso" required/>
+          </div>
+          <div class="fgrp" style="grid-column:1/-1;">
+            <label class="flbl">📝 Observação (opcional)</label>
+            <input class="fi" id="stk-note" placeholder="perfil 1 / pin 0000 / etc."/>
+          </div>
+        </div>
+        <button type="submit" class="btn-p">➕ Adicionar Acesso</button>
+      </form>
+      <div class="twrap" style="margin-top:14px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Email</th>
+              <th>Senha</th>
+              <th>Observação</th>
+              <th>Status</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="stk-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- ============ LOJA: PEDIDOS ============ -->
+    <div class="panel" style="margin-top:20px;">
+      <div class="phdr">
+        <div class="ptit">💳 Pedidos Recentes</div>
+        <button class="btn-ref" onclick="loadOrders()">🔄 Atualizar</button>
+      </div>
+      <div class="twrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Pedido</th>
+              <th>Produto</th>
+              <th>Cliente</th>
+              <th>Valor</th>
+              <th>Status</th>
+              <th>Data</th>
+            </tr>
+          </thead>
+          <tbody id="ord-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
   </div><!-- /main -->
 
   <!-- modal: alterar senha -->
@@ -436,7 +512,158 @@
         document.getElementById('topbar-name').textContent = d.name || d.username;
       } catch { location.href = '/login'; return; }
       loadUsers();
+      loadLojaProdutos();
+      loadOrders();
     })();
+
+    /* ============ LOJA: PRODUTOS ============ */
+    let _produtos = [];
+    async function loadLojaProdutos() {
+      try {
+        const r = await fetch('/api/admin/loja/produtos');
+        const j = await r.json();
+        if (!j.success) return;
+        _produtos = j.products;
+        const list = document.getElementById('loja-prod-list');
+        list.innerHTML = j.products.map(p => `
+          <div style="background:rgba(15,5,32,0.6);border:1px solid var(--bd);border-radius:10px;padding:14px;display:grid;grid-template-columns:60px 1fr 130px 130px;gap:10px;align-items:end;">
+            <div style="font-size:2.2rem;text-align:center">${p.emoji||'🛍️'}</div>
+            <div>
+              <label class="flbl">Nome</label>
+              <input class="fi" value="${(p.name||'').replace(/"/g,'&quot;')}" id="pn-${p.id}"/>
+              <label class="flbl" style="margin-top:6px">Descrição</label>
+              <input class="fi" value="${(p.description||'').replace(/"/g,'&quot;')}" id="pd-${p.id}"/>
+            </div>
+            <div>
+              <label class="flbl">Preço R$</label>
+              <input class="fi" type="number" step="0.01" value="${Number(p.price).toFixed(2)}" id="pp-${p.id}"/>
+              <div style="margin-top:8px;font-size:0.75rem;color:var(--tm)">
+                Estoque: <b style="color:${p.available>0?'#4ade80':'#f87171'}">${p.available||0}</b> / ${p.total||0}
+              </div>
+            </div>
+            <button class="btn-p" style="padding:10px 12px;font-size:0.78rem" onclick="saveProduct('${p.id}')">💾 Salvar</button>
+          </div>
+        `).join('');
+        // popula select de estoque
+        const sel = document.getElementById('stk-prod-sel');
+        const cur = sel.value;
+        sel.innerHTML = j.products.map(p => `<option value="${p.id}">${p.emoji||''} ${p.name}</option>`).join('');
+        if (cur) sel.value = cur;
+        loadStock();
+      } catch(e){}
+    }
+
+    async function saveProduct(pid) {
+      const name  = document.getElementById('pn-'+pid).value.trim();
+      const desc  = document.getElementById('pd-'+pid).value.trim();
+      const price = document.getElementById('pp-'+pid).value;
+      try {
+        const r = await fetch('/api/admin/loja/produtos/'+pid, {
+          method:'PUT',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ name, description:desc, price })
+        });
+        const j = await r.json();
+        if (j.success) showToast('✓ Produto atualizado'); else showToast(j.message||'Erro');
+      } catch(e){ showToast('Erro de conexão'); }
+    }
+
+    /* ============ LOJA: ESTOQUE ============ */
+    async function loadStock() {
+      const pid = document.getElementById('stk-prod-sel').value;
+      if (!pid) return;
+      try {
+        const r = await fetch('/api/admin/loja/estoque/'+pid);
+        const j = await r.json();
+        const tb = document.getElementById('stk-tbody');
+        if (!j.success || !j.items.length) {
+          tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--tm);padding:14px">Sem acessos cadastrados.</td></tr>';
+          return;
+        }
+        tb.innerHTML = j.items.map(it => {
+          const status = it.used ? '<span style="color:#f87171">✗ Usado</span>' : '<span style="color:#4ade80">✓ Disponível</span>';
+          const delTo = it.delivered_to ? `<br><span style="font-size:0.7rem;color:var(--tm)">→ ${it.delivered_to}</span>` : '';
+          return `<tr>
+            <td>${it.email}</td>
+            <td><code style="color:var(--gold-light)">${it.password}</code></td>
+            <td>${it.note||'—'}</td>
+            <td>${status}${delTo}</td>
+            <td>
+              ${it.used ? `<button class="bsm" onclick="resetStock('${pid}','${it.id}')" style="background:#0f766e;color:#fff;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem">♻️ Reset</button>` : ''}
+              <button class="bsm" onclick="deleteStock('${pid}','${it.id}')" style="background:#b91c1c;color:#fff;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem;margin-left:4px">🗑️</button>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch(e){}
+    }
+
+    async function addStock(ev) {
+      ev.preventDefault();
+      const pid = document.getElementById('stk-prod-sel').value;
+      const email = document.getElementById('stk-email').value.trim();
+      const password = document.getElementById('stk-pass').value.trim();
+      const note = document.getElementById('stk-note').value.trim();
+      try {
+        const r = await fetch('/api/admin/loja/estoque/'+pid, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ email, password, note })
+        });
+        const j = await r.json();
+        if (j.success) {
+          document.getElementById('stk-email').value = '';
+          document.getElementById('stk-pass').value = '';
+          document.getElementById('stk-note').value = '';
+          showToast('✓ Acesso adicionado');
+          loadStock(); loadLojaProdutos();
+        } else { showToast(j.message||'Erro'); }
+      } catch(e){ showToast('Erro de conexão'); }
+    }
+
+    async function deleteStock(pid, iid) {
+      if (!confirm('Remover este acesso do estoque?')) return;
+      try {
+        const r = await fetch(`/api/admin/loja/estoque/${pid}/${iid}`, { method:'DELETE' });
+        const j = await r.json();
+        if (j.success) { showToast('✓ Removido'); loadStock(); loadLojaProdutos(); }
+        else showToast(j.message||'Erro');
+      } catch(e){}
+    }
+
+    async function resetStock(pid, iid) {
+      if (!confirm('Marcar este acesso como disponível novamente?')) return;
+      try {
+        const r = await fetch(`/api/admin/loja/estoque/${pid}/${iid}/reset`, { method:'POST' });
+        const j = await r.json();
+        if (j.success) { showToast('✓ Reativado'); loadStock(); loadLojaProdutos(); }
+      } catch(e){}
+    }
+
+    /* ============ LOJA: PEDIDOS ============ */
+    async function loadOrders() {
+      try {
+        const r = await fetch('/api/admin/loja/pedidos');
+        const j = await r.json();
+        const tb = document.getElementById('ord-tbody');
+        if (!j.success || !j.orders.length) {
+          tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--tm);padding:14px">Nenhum pedido ainda.</td></tr>';
+          return;
+        }
+        tb.innerHTML = j.orders.map(o => {
+          const dt = o.created_at ? new Date(o.created_at*1000).toLocaleString('pt-BR') : '—';
+          const stColor = o.status==='paid'?'#4ade80':(o.status==='pending'?'#fbbf24':'#f87171');
+          const stLabel = o.status==='paid'?'✓ Pago':(o.status==='pending'?'⏳ Pendente':o.status);
+          return `<tr>
+            <td style="font-family:monospace;font-size:0.78rem">${o.id}</td>
+            <td>${o.product_name}</td>
+            <td>${o.customer_name}<br><span style="font-size:0.72rem;color:var(--tm)">${o.customer_email}</span></td>
+            <td>R$ ${Number(o.price).toFixed(2).replace('.', ',')}</td>
+            <td style="color:${stColor}">${stLabel}</td>
+            <td style="font-size:0.78rem">${dt}</td>
+          </tr>`;
+        }).join('');
+      } catch(e){}
+    }
 
     /* logout */
     async function doLogout() {

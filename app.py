@@ -135,6 +135,84 @@ def get_imap_accounts():
         })
     return accounts
 
+# ─── LOJA / EFI PIX ─────────────────────────────────────────────────────────────
+LOJA_PASSWORD       = os.environ.get("LOJA_PASSWORD", "1995")
+PRODUCTS_FILE       = os.environ.get("PRODUCTS_FILE", os.path.join(_data_dir, "products.json"))
+STOCK_FILE          = os.environ.get("STOCK_FILE", os.path.join(_data_dir, "stock.json"))
+ORDERS_FILE         = os.environ.get("ORDERS_FILE", os.path.join(_data_dir, "orders.json"))
+
+# Credenciais Efi (Gerencianet) - configurar via Railway
+EFI_CLIENT_ID       = os.environ.get("EFI_CLIENT_ID", "")
+EFI_CLIENT_SECRET   = os.environ.get("EFI_CLIENT_SECRET", "")
+EFI_CERT_PATH       = os.environ.get("EFI_CERT_PATH", "")  # caminho do .p12/.pem no Railway
+EFI_PIX_KEY         = os.environ.get("EFI_PIX_KEY", "")    # chave Pix da loja
+EFI_SANDBOX         = os.environ.get("EFI_SANDBOX", "false").lower() == "true"
+EFI_WEBHOOK_TOKEN   = os.environ.get("EFI_WEBHOOK_TOKEN", "mestre-codigos-webhook")
+
+DEFAULT_PRODUCTS = [
+    {"id": "netflix-premium",  "name": "Netflix Premium",       "price": 35.00, "emoji": "🎬", "color": "#e50914", "description": "Acesso Netflix Premium - liberação automática"},
+    {"id": "disney-premium",   "name": "Disney+ Premium",       "price": 25.00, "emoji": "✨", "color": "#0066cc", "description": "Acesso Disney+ Premium - liberação automática"},
+    {"id": "globoplay-premium","name": "Globoplay+ Premium",    "price": 20.00, "emoji": "📡", "color": "#ff6600", "description": "Acesso Globoplay+ - liberação automática"},
+    {"id": "max-premium",      "name": "Max Premium",           "price": 25.00, "emoji": "🎬", "color": "#7e22ce", "description": "Acesso Max Premium - liberação automática"},
+    {"id": "prime-premium",    "name": "Prime Video Premium",   "price": 25.00, "emoji": "📺", "color": "#00a8e1", "description": "Acesso Prime Video - liberação automática"},
+]
+
+def _read_json_file(path, default):
+    if os.path.exists(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return default
+    return default
+
+def _write_json_file(path, data):
+    try:
+        parent = os.path.dirname(path)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        return True
+    except Exception as e:
+        print(f"[loja] erro ao gravar {path}: {e}")
+        return False
+
+def load_products():
+    data = _read_json_file(PRODUCTS_FILE, None)
+    if data is None:
+        _write_json_file(PRODUCTS_FILE, DEFAULT_PRODUCTS)
+        return DEFAULT_PRODUCTS
+    return data
+
+def save_products(products):
+    return _write_json_file(PRODUCTS_FILE, products)
+
+def load_stock():
+    """Estoque de acessos: { product_id: [ {id, email, password, note, used, used_at, delivered_to} ] }"""
+    return _read_json_file(STOCK_FILE, {})
+
+def save_stock(stock):
+    return _write_json_file(STOCK_FILE, stock)
+
+def load_orders():
+    return _read_json_file(ORDERS_FILE, [])
+
+def save_orders(orders):
+    return _write_json_file(ORDERS_FILE, orders)
+
+def get_next_stock_item(product_id):
+    """Retorna o primeiro acesso não usado do produto e marca como usado."""
+    stock = load_stock()
+    items = stock.get(product_id, [])
+    for item in items:
+        if not item.get("used"):
+            item["used"] = True
+            item["used_at"] = int(time.time())
+            save_stock(stock)
+            return item
+    return None
+
 PLATFORM_CONFIG = {
     # ── NETFLIX: código de acesso (PT/EN/ES) ──────────────────────────────────
     "netflix": {
@@ -1649,9 +1727,376 @@ def get_code():
     else:
         return jsonify({"success": False, "message": error or "Nao encontrado."})
 
+# ─── ROTAS LOJA (PÚBLICAS / CLIENTE) ──────────────────────────────────────────
+@app.route("/api/loja/unlock", methods=["POST"])
+def api_loja_unlock():
+    data = request.get_json(silent=True) or {}
+    password = str(data.get("password", "")).strip()
+    if password == LOJA_PASSWORD:
+        session["loja_unlocked"] = True
+        return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Senha incorreta."}), 401
+
+@app.route("/api/loja/produtos", methods=["GET"])
+def api_loja_produtos():
+    products = load_products()
+    stock = load_stock()
+    result = []
+    for p in products:
+        items = stock.get(p["id"], [])
+        avail = sum(1 for i in items if not i.get("used"))
+        result.append({
+            "id": p["id"],
+            "name": p["name"],
+            "price": p.get("price", 0),
+            "emoji": p.get("emoji", "🛍️"),
+            "color": p.get("color", "#7e22ce"),
+            "description": p.get("description", ""),
+            "available": avail,
+            "has_stock": avail > 0
+        })
+    return jsonify({"success": True, "products": result})
+
+@app.route("/api/loja/checkout", methods=["POST"])
+def api_loja_checkout():
+    if not session.get("loja_unlocked"):
+        return jsonify({"success": False, "message": "Acesso à loja bloqueado. Informe a senha."}), 403
+    data = request.get_json(silent=True) or {}
+    product_id = str(data.get("product_id", "")).strip()
+    customer_name  = str(data.get("name", "")).strip()
+    customer_email = str(data.get("email", "")).strip().lower()
+    customer_phone = str(data.get("phone", "")).strip()
+
+    if not product_id:
+        return jsonify({"success": False, "message": "Produto inválido."}), 400
+    if not customer_name or not customer_email:
+        return jsonify({"success": False, "message": "Informe nome e email."}), 400
+
+    products = load_products()
+    product  = next((p for p in products if p["id"] == product_id), None)
+    if not product:
+        return jsonify({"success": False, "message": "Produto não encontrado."}), 404
+
+    # Verifica estoque
+    stock = load_stock()
+    items = stock.get(product_id, [])
+    avail = sum(1 for i in items if not i.get("used"))
+    if avail <= 0:
+        return jsonify({
+            "success": False,
+            "message": "Produto temporariamente sem estoque. Tente novamente em alguns minutos."
+        }), 409
+
+    # Cria pedido
+    order_id  = f"PED-{int(time.time())}-{product_id[:6].upper()}"
+    order = {
+        "id": order_id,
+        "product_id": product_id,
+        "product_name": product["name"],
+        "price": product.get("price", 0),
+        "customer_name": customer_name,
+        "customer_email": customer_email,
+        "customer_phone": customer_phone,
+        "status": "pending",
+        "created_at": int(time.time()),
+        "paid_at": None,
+        "delivered_email": None,
+        "delivered_password": None,
+        "delivered_note": None,
+        "pix_txid": None,
+        "pix_qrcode": None,
+        "pix_copia_cola": None,
+    }
+
+    # Tenta gerar Pix via Efi (se configurado)
+    pix_data = efi_create_pix_charge(order)
+    if pix_data.get("success"):
+        order["pix_txid"]      = pix_data.get("txid")
+        order["pix_qrcode"]    = pix_data.get("qrcode_image")
+        order["pix_copia_cola"]= pix_data.get("copia_cola")
+        order["pix_expires_at"]= pix_data.get("expires_at")
+    else:
+        # Modo simulado quando Efi não configurado: gera Pix manual placeholder
+        order["pix_txid"]      = order_id
+        order["pix_qrcode"]    = None
+        order["pix_copia_cola"]= None
+        order["pix_warning"]   = pix_data.get("message", "Gateway Pix não configurado.")
+
+    orders = load_orders()
+    orders.append(order)
+    save_orders(orders)
+
+    return jsonify({
+        "success": True,
+        "order_id": order_id,
+        "product_name": product["name"],
+        "price": product.get("price", 0),
+        "pix_qrcode": order.get("pix_qrcode"),
+        "pix_copia_cola": order.get("pix_copia_cola"),
+        "pix_warning": order.get("pix_warning")
+    })
+
+@app.route("/api/loja/order-status/<order_id>", methods=["GET"])
+def api_loja_order_status(order_id):
+    orders = load_orders()
+    order  = next((o for o in orders if o["id"] == order_id), None)
+    if not order:
+        return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
+
+    # Se ainda pendente e tem txid Efi, consulta status no Efi
+    if order["status"] == "pending" and order.get("pix_txid"):
+        check = efi_check_pix_status(order["pix_txid"])
+        if check.get("paid"):
+            order = mark_order_paid_and_deliver(order_id)
+
+    return jsonify({
+        "success": True,
+        "order_id": order["id"],
+        "status": order["status"],
+        "product_name": order["product_name"],
+        "delivered_email":    order.get("delivered_email"),
+        "delivered_password": order.get("delivered_password"),
+        "delivered_note":     order.get("delivered_note")
+    })
+
+# ─── EFI PIX HELPERS ────────────────────────────────────────────────────────────────
+def efi_is_configured():
+    return bool(EFI_CLIENT_ID and EFI_CLIENT_SECRET and EFI_PIX_KEY)
+
+def efi_create_pix_charge(order):
+    """Cria cobrança Pix imediata na Efi. Retorna dict com qrcode_image e copia_cola."""
+    if not efi_is_configured():
+        return {
+            "success": False,
+            "message": "Gateway Efi não configurado. Configure EFI_CLIENT_ID, EFI_CLIENT_SECRET, EFI_PIX_KEY e EFI_CERT_PATH no Railway."
+        }
+    try:
+        # SDK Efi (gerencianet) seria importado aqui se instalado
+        # import requests via SDK - implementação real após usuário enviar certificado
+        try:
+            from efipay import EfiPay
+        except ImportError:
+            return {
+                "success": False,
+                "message": "SDK Efi não instalado. Aguardando configuração final."
+            }
+
+        options = {
+            "client_id":     EFI_CLIENT_ID,
+            "client_secret": EFI_CLIENT_SECRET,
+            "certificate":   EFI_CERT_PATH,
+            "sandbox":       EFI_SANDBOX
+        }
+        efi = EfiPay(options)
+
+        body = {
+            "calendario": {"expiracao": 3600},
+            "devedor": {
+                "nome": order["customer_name"][:200] or "Cliente"
+            },
+            "valor": {"original": f"{order['price']:.2f}"},
+            "chave": EFI_PIX_KEY,
+            "solicitacaoPagador": f"{order['product_name']} - {order['id']}"[:140]
+        }
+        resp = efi.pix_create_immediate_charge(body=body)
+        txid = resp.get("txid")
+        loc  = resp.get("loc", {}).get("id")
+
+        if not loc:
+            return {"success": False, "message": "Resposta inválida da Efi."}
+
+        qr = efi.pix_generate_qrcode(params={"id": loc})
+        return {
+            "success": True,
+            "txid": txid,
+            "qrcode_image": qr.get("imagemQrcode"),
+            "copia_cola":   qr.get("qrcode"),
+            "expires_at":   int(time.time()) + 3600
+        }
+    except Exception as e:
+        print(f"[efi] erro ao criar cobranca: {e}")
+        return {"success": False, "message": f"Erro Efi: {e}"}
+
+def efi_check_pix_status(txid):
+    if not efi_is_configured() or not txid:
+        return {"paid": False}
+    try:
+        from efipay import EfiPay
+        options = {
+            "client_id":     EFI_CLIENT_ID,
+            "client_secret": EFI_CLIENT_SECRET,
+            "certificate":   EFI_CERT_PATH,
+            "sandbox":       EFI_SANDBOX
+        }
+        efi  = EfiPay(options)
+        resp = efi.pix_detail_charge(params={"txid": txid})
+        status = (resp.get("status") or "").upper()
+        return {"paid": status == "CONCLUIDA", "status": status}
+    except Exception as e:
+        print(f"[efi] erro ao consultar txid {txid}: {e}")
+        return {"paid": False}
+
+def mark_order_paid_and_deliver(order_id):
+    """Marca pedido como pago e entrega o próximo acesso do estoque."""
+    orders = load_orders()
+    order  = next((o for o in orders if o["id"] == order_id), None)
+    if not order or order["status"] != "pending":
+        return order
+    stock_item = get_next_stock_item(order["product_id"])
+    order["status"]  = "paid"
+    order["paid_at"] = int(time.time())
+    if stock_item:
+        order["delivered_email"]    = stock_item.get("email")
+        order["delivered_password"] = stock_item.get("password")
+        order["delivered_note"]     = stock_item.get("note")
+        # marca o item como entregue ao cliente
+        st = load_stock()
+        for it in st.get(order["product_id"], []):
+            if it.get("id") == stock_item.get("id"):
+                it["delivered_to"] = order["customer_email"]
+                it["order_id"]     = order_id
+                break
+        save_stock(st)
+    else:
+        order["delivered_note"] = "Pagamento confirmado. Aguarde - entrega manual."
+    save_orders(orders)
+    return order
+
+@app.route("/api/loja/webhook/efi", methods=["POST"])
+def api_loja_webhook_efi():
+    """Webhook Efi confirmando pagamento Pix."""
+    token = request.args.get("token", "") or request.headers.get("X-Webhook-Token", "")
+    if token != EFI_WEBHOOK_TOKEN:
+        return jsonify({"success": False, "message": "Token invalido."}), 403
+    data = request.get_json(silent=True) or {}
+    pix_list = data.get("pix", [])
+    for px in pix_list:
+        txid = px.get("txid")
+        if not txid:
+            continue
+        orders = load_orders()
+        order  = next((o for o in orders if o.get("pix_txid") == txid), None)
+        if order and order["status"] == "pending":
+            mark_order_paid_and_deliver(order["id"])
+    return jsonify({"success": True})
+
+# ─── ROTAS ADMIN LOJA ───────────────────────────────────────────────────────────────────────
+@app.route("/api/admin/loja/produtos", methods=["GET"])
+@admin_required
+def api_admin_list_products():
+    products = load_products()
+    stock = load_stock()
+    for p in products:
+        items = stock.get(p["id"], [])
+        p["available"] = sum(1 for i in items if not i.get("used"))
+        p["total"]     = len(items)
+        p["delivered"] = sum(1 for i in items if i.get("used"))
+    return jsonify({"success": True, "products": products})
+
+@app.route("/api/admin/loja/produtos/<product_id>", methods=["PUT"])
+@admin_required
+def api_admin_update_product(product_id):
+    data = request.get_json(silent=True) or {}
+    products = load_products()
+    product = next((p for p in products if p["id"] == product_id), None)
+    if not product:
+        return jsonify({"success": False, "message": "Produto não encontrado."}), 404
+    if "name" in data:
+        product["name"] = str(data["name"]).strip()[:80] or product["name"]
+    if "price" in data:
+        try:
+            product["price"] = float(str(data["price"]).replace(",", "."))
+        except Exception:
+            return jsonify({"success": False, "message": "Preço inválido."}), 400
+    if "description" in data:
+        product["description"] = str(data["description"]).strip()[:200]
+    if "emoji" in data:
+        product["emoji"] = str(data["emoji"]).strip()[:4]
+    if "color" in data:
+        product["color"] = str(data["color"]).strip()[:20]
+    save_products(products)
+    return jsonify({"success": True, "product": product})
+
+@app.route("/api/admin/loja/estoque/<product_id>", methods=["GET"])
+@admin_required
+def api_admin_list_stock(product_id):
+    stock = load_stock()
+    items = stock.get(product_id, [])
+    return jsonify({"success": True, "items": items})
+
+@app.route("/api/admin/loja/estoque/<product_id>", methods=["POST"])
+@admin_required
+def api_admin_add_stock(product_id):
+    data = request.get_json(silent=True) or {}
+    email_acc = str(data.get("email", "")).strip()
+    password  = str(data.get("password", "")).strip()
+    note      = str(data.get("note", "")).strip()
+    if not email_acc or not password:
+        return jsonify({"success": False, "message": "Informe email e senha do acesso."}), 400
+    products = load_products()
+    if not any(p["id"] == product_id for p in products):
+        return jsonify({"success": False, "message": "Produto não encontrado."}), 404
+    stock = load_stock()
+    items = stock.get(product_id, [])
+    new_item = {
+        "id":       f"acc-{int(time.time()*1000)}",
+        "email":    email_acc,
+        "password": password,
+        "note":     note,
+        "used":     False,
+        "used_at":  None,
+        "delivered_to": None,
+        "order_id": None,
+        "created_at": int(time.time())
+    }
+    items.append(new_item)
+    stock[product_id] = items
+    save_stock(stock)
+    return jsonify({"success": True, "item": new_item})
+
+@app.route("/api/admin/loja/estoque/<product_id>/<item_id>", methods=["DELETE"])
+@admin_required
+def api_admin_delete_stock(product_id, item_id):
+    stock = load_stock()
+    items = stock.get(product_id, [])
+    new_items = [i for i in items if i.get("id") != item_id]
+    if len(new_items) == len(items):
+        return jsonify({"success": False, "message": "Item não encontrado."}), 404
+    stock[product_id] = new_items
+    save_stock(stock)
+    return jsonify({"success": True})
+
+@app.route("/api/admin/loja/estoque/<product_id>/<item_id>/reset", methods=["POST"])
+@admin_required
+def api_admin_reset_stock(product_id, item_id):
+    """Marca acesso como disponível novamente (útil se cliente teve problema)."""
+    stock = load_stock()
+    items = stock.get(product_id, [])
+    for it in items:
+        if it.get("id") == item_id:
+            it["used"] = False
+            it["used_at"] = None
+            it["delivered_to"] = None
+            it["order_id"] = None
+            save_stock(stock)
+            return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Item não encontrado."}), 404
+
+@app.route("/api/admin/loja/pedidos", methods=["GET"])
+@admin_required
+def api_admin_list_orders():
+    orders = load_orders()
+    orders_sorted = sorted(orders, key=lambda o: o.get("created_at", 0), reverse=True)
+    return jsonify({"success": True, "orders": orders_sorted[:200]})
+
 @app.route("/api/health", methods=["GET"])
 def health():
-    return jsonify({"status": "ok", "service": "Central dos Codigos"})
+    return jsonify({
+        "status": "ok",
+        "service": "Central dos Codigos",
+        "loja_enabled": True,
+        "efi_configured": efi_is_configured()
+    })
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))

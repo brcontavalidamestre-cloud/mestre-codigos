@@ -70,6 +70,297 @@
       padding: 0 20px 60px;
     }
 
+    /* ── MENU TOPO ── */
+    .top-menu {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin: 18px 0 8px;
+      position: relative;
+      z-index: 5;
+    }
+    .top-menu button {
+      background: linear-gradient(135deg, var(--bg-card2), var(--bg-card));
+      color: var(--text-white);
+      border: 1px solid var(--border-gold);
+      padding: 12px 22px;
+      border-radius: 12px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.85rem;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all .25s;
+      box-shadow: 0 4px 14px rgba(0,0,0,0.4);
+    }
+    .top-menu button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(245,158,11,0.35);
+      border-color: var(--gold);
+    }
+    .top-menu button.active {
+      background: linear-gradient(135deg, var(--purple-mid), var(--purple-deep));
+      border-color: var(--gold);
+      color: var(--gold-light);
+      box-shadow: 0 0 22px rgba(245,158,11,0.4), inset 0 0 15px rgba(168,85,247,0.3);
+    }
+    .logout-btn {
+      position: fixed;
+      top: 16px; right: 18px;
+      z-index: 50;
+      background: linear-gradient(135deg, #b45309, #f59e0b);
+      color: #1a0a2e;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 10px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 1.2px;
+      cursor: pointer;
+      box-shadow: 0 4px 16px rgba(245,158,11,0.4);
+      transition: all .2s;
+    }
+    .logout-btn:hover { transform: scale(1.05); box-shadow: 0 6px 22px rgba(245,158,11,0.6); }
+
+    /* ── LOJA ── */
+    .view { display: none; }
+    .view.active { display: block; }
+
+    .loja-lock {
+      background: linear-gradient(135deg, rgba(19,0,41,0.95), rgba(26,0,53,0.95));
+      border: 1px solid var(--border-gold);
+      border-radius: 20px;
+      padding: 50px 30px;
+      text-align: center;
+      max-width: 440px;
+      margin: 40px auto;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+    }
+    .loja-lock h2 {
+      font-family: 'Cinzel', serif;
+      color: var(--gold);
+      letter-spacing: 2px;
+      margin-bottom: 8px;
+    }
+    .loja-lock p {
+      color: var(--text-muted);
+      margin-bottom: 22px;
+      font-size: 0.95rem;
+    }
+    .loja-lock input {
+      width: 200px;
+      padding: 14px;
+      text-align: center;
+      font-size: 1.5rem;
+      letter-spacing: 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border-gold);
+      background: var(--bg-card);
+      color: var(--gold-light);
+      margin-bottom: 16px;
+      font-family: 'Cinzel', serif;
+      font-weight: 700;
+    }
+    .loja-lock input:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245,158,11,0.2); }
+    .loja-lock-btn {
+      background: linear-gradient(135deg, var(--purple-mid), var(--purple-deep));
+      color: var(--gold-light);
+      border: 1px solid var(--gold);
+      padding: 12px 28px;
+      border-radius: 10px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.9rem;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      font-weight: 700;
+    }
+    .loja-err { color: #f87171; margin-top: 10px; font-size: 0.85rem; min-height: 18px; }
+
+    .products-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 18px;
+      margin: 20px 0 30px;
+    }
+    .product-card {
+      background: linear-gradient(135deg, rgba(19,0,41,0.92), rgba(26,0,53,0.92));
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 22px 20px;
+      box-shadow: 0 6px 24px rgba(0,0,0,0.4);
+      transition: all .25s;
+      position: relative;
+      overflow: hidden;
+    }
+    .product-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 4px;
+      background: var(--accent, var(--purple-bright));
+    }
+    .product-card:hover { transform: translateY(-3px); border-color: var(--gold); box-shadow: 0 10px 30px rgba(245,158,11,0.25); }
+    .product-emoji { font-size: 2.6rem; margin-bottom: 8px; }
+    .product-name {
+      font-family: 'Cinzel', serif;
+      font-size: 1.15rem;
+      color: var(--gold-light);
+      letter-spacing: 1.2px;
+      margin-bottom: 6px;
+    }
+    .product-desc { color: var(--text-muted); font-size: 0.85rem; margin-bottom: 12px; min-height: 32px; }
+    .product-price {
+      font-family: 'Cinzel', serif;
+      font-size: 1.8rem;
+      color: var(--gold);
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+    .product-stock {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-bottom: 10px;
+    }
+    .product-stock.ok { color: #4ade80; }
+    .product-stock.zero { color: #f87171; }
+    .product-buy {
+      width: 100%;
+      background: linear-gradient(135deg, var(--gold), var(--gold-light));
+      color: #1a0a2e;
+      border: none;
+      padding: 12px;
+      border-radius: 10px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      cursor: pointer;
+      transition: transform .15s;
+    }
+    .product-buy:hover { transform: scale(1.02); }
+    .product-buy:disabled { background: #444; color: #999; cursor: not-allowed; transform: none; }
+
+    .checkout-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .checkout-modal.show { display: flex; }
+    .checkout-box {
+      background: linear-gradient(160deg, #1a0a2e, #0f0520);
+      border: 1px solid var(--border-gold);
+      border-radius: 18px;
+      padding: 30px 26px;
+      max-width: 460px;
+      width: 100%;
+      max-height: 92vh;
+      overflow-y: auto;
+    }
+    .checkout-title {
+      font-family: 'Cinzel', serif;
+      color: var(--gold);
+      text-align: center;
+      margin-bottom: 18px;
+      letter-spacing: 1.5px;
+    }
+    .checkout-box label { display: block; font-size: 0.78rem; color: var(--text-muted); margin: 10px 0 4px; letter-spacing: 1px; }
+    .checkout-box input {
+      width: 100%;
+      padding: 11px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      background: var(--bg-card);
+      color: var(--text-white);
+      font-size: 0.95rem;
+    }
+    .checkout-box input:focus { outline: none; border-color: var(--gold); }
+    .checkout-actions { display: flex; gap: 10px; margin-top: 18px; }
+    .checkout-actions button {
+      flex: 1;
+      padding: 12px;
+      border-radius: 10px;
+      font-family: 'Cinzel', serif;
+      font-size: 0.85rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-cancel { background: #3a1d4a; color: #c4b5fd; }
+    .btn-pay { background: linear-gradient(135deg, var(--gold), var(--gold-light)); color: #1a0a2e; font-weight: 700; }
+
+    .pix-result { margin-top: 20px; text-align: center; }
+    .pix-result img { max-width: 220px; border-radius: 10px; border: 2px solid var(--gold); background: #fff; padding: 6px; }
+    .pix-copy-box {
+      background: var(--bg-card);
+      border: 1px dashed var(--border-gold);
+      padding: 10px;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      word-break: break-all;
+      margin: 12px 0;
+      max-height: 100px;
+      overflow-y: auto;
+    }
+    .pix-copy-btn {
+      background: var(--purple-mid);
+      color: white;
+      border: none;
+      padding: 9px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .pix-waiting {
+      margin-top: 14px;
+      color: var(--gold-light);
+      font-size: 0.85rem;
+      animation: blink 1.5s infinite;
+    }
+    @keyframes blink { 50% { opacity: 0.4; } }
+
+    .paid-box {
+      background: linear-gradient(135deg, rgba(34,197,94,0.12), rgba(22,163,74,0.12));
+      border: 1px solid #4ade80;
+      border-radius: 12px;
+      padding: 20px;
+      margin-top: 18px;
+      text-align: center;
+    }
+    .paid-box h3 { color: #4ade80; font-family: 'Cinzel', serif; margin-bottom: 12px; }
+    .credential-row {
+      background: var(--bg-card);
+      border: 1px solid var(--border-gold);
+      border-radius: 8px;
+      padding: 12px;
+      margin: 8px 0;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: space-between;
+    }
+    .credential-row .label { font-size: 0.7rem; color: var(--text-muted); letter-spacing: 1px; }
+    .credential-row .value { font-family: monospace; color: var(--gold-light); font-size: 0.95rem; word-break: break-all; flex: 1; text-align: left; }
+    .credential-row button {
+      background: var(--gold);
+      color: #1a0a2e;
+      border: none;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      font-size: 0.78rem;
+    }
+
     /* ── HEADER ── */
     header {
       text-align: center;
@@ -691,15 +982,26 @@
   <div class="mist mist-2"></div>
   <div class="mist mist-3"></div>
 
+  <button class="logout-btn" onclick="doLogout()">🚪 SAIR</button>
+
   <div class="wrapper">
 
     <!-- HEADER -->
     <header>
       <div class="logo-icon">🧙‍♂️</div>
       <h1>Central dos Códigos</h1>
-      <p class="subtitle">✦ Solicite e receba seus códigos de verificação ✦</p>
+      <p class="subtitle">✦ Solicite códigos e adquira acessos com Pix automático ✦</p>
       <div class="gold-divider"></div>
     </header>
+
+    <!-- MENU TOPO -->
+    <div class="top-menu">
+      <button id="btn-view-codigos" class="active" onclick="switchView('codigos')">🔎 Consultar Códigos</button>
+      <button id="btn-view-loja" onclick="switchView('loja')">🛒 Loja com Pix</button>
+    </div>
+
+  <!-- ============ VIEW: CONSULTAR CÓDIGOS ============ -->
+  <div class="view active" id="view-codigos">
 
     <!-- PLATAFORMAS -->
     <section class="platforms-section">
@@ -809,6 +1111,54 @@
       </div>
     </section>
 
+  </div>
+  <!-- ============ FIM VIEW CÓDIGOS ============ -->
+
+  <!-- ============ VIEW: LOJA ============ -->
+  <div class="view" id="view-loja">
+
+    <!-- TRAVA SENHA LOJA -->
+    <div id="loja-lock-screen" class="loja-lock">
+      <h2>🔐 Acesso Restrito</h2>
+      <p>Informe a senha de 4 dígitos para acessar a loja</p>
+      <input type="password" id="loja-pwd" maxlength="4" placeholder="••••" onkeydown="if(event.key==='Enter') unlockLoja()" />
+      <br>
+      <button class="loja-lock-btn" onclick="unlockLoja()">🔓 Desbloquear</button>
+      <div class="loja-err" id="loja-err"></div>
+    </div>
+
+    <!-- LISTA DE PRODUTOS -->
+    <div id="loja-content" style="display:none">
+      <section class="platforms-section" style="text-align:center">
+        <div class="section-title">✦ Loja com Pix Automático ✦</div>
+        <p class="section-subtitle">Compre seu acesso — entrega automática após confirmação do pagamento</p>
+      </section>
+      <div class="products-grid" id="products-grid"></div>
+    </div>
+
+  </div>
+  <!-- ============ FIM VIEW LOJA ============ -->
+
+  </div>
+
+  <!-- ============ MODAL DE CHECKOUT ============ -->
+  <div class="checkout-modal" id="checkout-modal">
+    <div class="checkout-box">
+      <div class="checkout-title" id="checkout-title">Finalizar Compra</div>
+      <div id="checkout-form-area">
+        <label>Seu Nome</label>
+        <input type="text" id="co-name" placeholder="Nome completo" />
+        <label>Seu Email</label>
+        <input type="email" id="co-email" placeholder="seu@email.com" />
+        <label>Telefone (opcional)</label>
+        <input type="tel" id="co-phone" placeholder="(11) 99999-9999" />
+        <div class="checkout-actions">
+          <button class="btn-cancel" onclick="closeCheckout()">Cancelar</button>
+          <button class="btn-pay" id="btn-pay" onclick="finalizarCompra()">💰 Gerar Pix</button>
+        </div>
+      </div>
+      <div id="pix-result-area" class="pix-result" style="display:none"></div>
+    </div>
   </div>
 
   <!-- PIN Overlay — aparece após busca se resultado for redefinição de senha -->
@@ -1232,6 +1582,224 @@
       t.classList.add('show');
       setTimeout(() => t.classList.remove('show'), 2500);
     }
+
+    // ─────────────────────────────────────────
+    // NAVEGAÇÃO ENTRE VIEWS (CÓDIGOS / LOJA)
+    // ─────────────────────────────────────────
+    let lojaUnlocked = false;
+
+    function switchView(name) {
+      document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+      document.getElementById('view-' + name).classList.add('active');
+      document.querySelectorAll('.top-menu button').forEach(b => b.classList.remove('active'));
+      document.getElementById('btn-view-' + name).classList.add('active');
+      if (name === 'loja') {
+        if (lojaUnlocked) {
+          document.getElementById('loja-lock-screen').style.display = 'none';
+          document.getElementById('loja-content').style.display = 'block';
+          loadProducts();
+        } else {
+          document.getElementById('loja-lock-screen').style.display = 'block';
+          document.getElementById('loja-content').style.display = 'none';
+          setTimeout(()=> document.getElementById('loja-pwd').focus(), 100);
+        }
+      }
+    }
+
+    async function doLogout() {
+      if (!confirm('Deseja sair?')) return;
+      try {
+        await fetch('/api/auth/logout', { method:'POST' });
+      } catch(e){}
+      window.location.href = '/login';
+    }
+
+    // ─────────────────────────────────────────
+    // LOJA — SENHA 1995 + PIX
+    // ─────────────────────────────────────────
+    async function unlockLoja() {
+      const pwd = document.getElementById('loja-pwd').value.trim();
+      const err = document.getElementById('loja-err');
+      err.textContent = '';
+      if (!pwd) { err.textContent = 'Digite a senha.'; return; }
+      try {
+        const r = await fetch('/api/loja/unlock', {
+          method:'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({ password: pwd })
+        });
+        const j = await r.json();
+        if (j.success) {
+          lojaUnlocked = true;
+          document.getElementById('loja-lock-screen').style.display = 'none';
+          document.getElementById('loja-content').style.display = 'block';
+          loadProducts();
+        } else {
+          err.textContent = j.message || 'Senha incorreta.';
+          document.getElementById('loja-pwd').value = '';
+        }
+      } catch(e) {
+        err.textContent = 'Erro de conexão.';
+      }
+    }
+
+    async function loadProducts() {
+      const grid = document.getElementById('products-grid');
+      grid.innerHTML = '<p style="text-align:center;color:#c4b5fd;grid-column:1/-1">Carregando produtos...</p>';
+      try {
+        const r = await fetch('/api/loja/produtos');
+        const j = await r.json();
+        if (!j.success || !j.products.length) {
+          grid.innerHTML = '<p style="text-align:center;color:#c4b5fd;grid-column:1/-1">Nenhum produto disponível.</p>';
+          return;
+        }
+        grid.innerHTML = j.products.map(p => `
+          <div class="product-card" style="--accent:${p.color || '#7e22ce'}">
+            <div class="product-emoji">${p.emoji || '🛍️'}</div>
+            <div class="product-name">${p.name}</div>
+            <div class="product-desc">${p.description || ''}</div>
+            <div class="product-price">R$ ${Number(p.price).toFixed(2).replace('.', ',')}</div>
+            <div class="product-stock ${p.has_stock ? 'ok' : 'zero'}">
+              ${p.has_stock ? '✓ Disponível agora' : '✗ Sem estoque no momento'}
+            </div>
+            <button class="product-buy" ${p.has_stock ? '' : 'disabled'}
+              onclick="openCheckout('${p.id}','${p.name.replace(/'/g, "\\'")}',${p.price})">
+              💳 Comprar com Pix
+            </button>
+          </div>
+        `).join('');
+      } catch(e) {
+        grid.innerHTML = '<p style="text-align:center;color:#f87171;grid-column:1/-1">Erro ao carregar produtos.</p>';
+      }
+    }
+
+    let currentCheckoutProduct = null;
+    let pollTimer = null;
+
+    function openCheckout(productId, productName, price) {
+      currentCheckoutProduct = { id: productId, name: productName, price: price };
+      document.getElementById('checkout-title').textContent = `${productName} — R$ ${Number(price).toFixed(2).replace('.', ',')}`;
+      document.getElementById('checkout-form-area').style.display = 'block';
+      document.getElementById('pix-result-area').style.display = 'none';
+      document.getElementById('pix-result-area').innerHTML = '';
+      document.getElementById('co-name').value = '';
+      document.getElementById('co-email').value = '';
+      document.getElementById('co-phone').value = '';
+      document.getElementById('checkout-modal').classList.add('show');
+    }
+
+    function closeCheckout() {
+      document.getElementById('checkout-modal').classList.remove('show');
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      currentCheckoutProduct = null;
+      loadProducts();
+    }
+
+    async function finalizarCompra() {
+      const name  = document.getElementById('co-name').value.trim();
+      const email = document.getElementById('co-email').value.trim();
+      const phone = document.getElementById('co-phone').value.trim();
+      if (!name || !email) { showToast('Preencha nome e email'); return; }
+      const btn = document.getElementById('btn-pay');
+      btn.disabled = true; btn.textContent = 'Gerando...';
+      try {
+        const r = await fetch('/api/loja/checkout', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({
+            product_id: currentCheckoutProduct.id,
+            name, email, phone
+          })
+        });
+        const j = await r.json();
+        if (!j.success) { showToast(j.message || 'Erro'); btn.disabled=false; btn.textContent='💰 Gerar Pix'; return; }
+        document.getElementById('checkout-form-area').style.display = 'none';
+        const area = document.getElementById('pix-result-area');
+        area.style.display = 'block';
+        let html = `<h3 style="font-family:'Cinzel',serif;color:var(--gold);margin-bottom:14px">💳 Pague para receber o acesso</h3>`;
+        if (j.pix_qrcode) {
+          html += `<img src="${j.pix_qrcode}" alt="QR Pix" />`;
+          if (j.pix_copia_cola) {
+            html += `<div class="pix-copy-box">${j.pix_copia_cola}</div>`;
+            html += `<button class="pix-copy-btn" onclick="copyPix('${j.pix_copia_cola.replace(/'/g, "\\'")}')">📋 Copiar código Pix</button>`;
+          }
+          html += `<div class="pix-waiting" id="pix-waiting">⏳ Aguardando pagamento...</div>`;
+        } else if (j.pix_warning) {
+          html += `<div style="background:rgba(245,158,11,0.15);border:1px solid var(--gold);padding:14px;border-radius:10px;color:var(--gold-light);font-size:0.88rem">
+            ⚠️ ${j.pix_warning}<br><br>
+            Pedido <b>${j.order_id}</b> registrado. O administrador finalizará o pagamento manualmente.
+          </div>`;
+        }
+        area.innerHTML = html;
+        if (j.pix_qrcode) startPolling(j.order_id);
+      } catch(e) {
+        showToast('Erro de conexão');
+        btn.disabled=false; btn.textContent='💰 Gerar Pix';
+      }
+    }
+
+    function copyPix(code) {
+      navigator.clipboard.writeText(code);
+      showToast('✓ Código Pix copiado!');
+    }
+
+    function startPolling(orderId) {
+      if (pollTimer) clearInterval(pollTimer);
+      pollTimer = setInterval(async () => {
+        try {
+          const r = await fetch('/api/loja/order-status/' + orderId);
+          const j = await r.json();
+          if (j.success && j.status === 'paid') {
+            clearInterval(pollTimer); pollTimer = null;
+            showPaid(j);
+          }
+        } catch(e) {}
+      }, 4000);
+    }
+
+    function showPaid(data) {
+      const area = document.getElementById('pix-result-area');
+      let html = `<div class="paid-box">
+        <h3>✓ Pagamento Confirmado!</h3>
+        <p style="color:var(--text-muted);margin-bottom:10px">Seu acesso ${data.product_name}:</p>`;
+      if (data.delivered_email && data.delivered_password) {
+        html += `
+          <div class="credential-row">
+            <div>
+              <div class="label">EMAIL</div>
+              <div class="value">${data.delivered_email}</div>
+            </div>
+            <button onclick="copyVal('${data.delivered_email.replace(/'/g, "\\'")}')">📋 Copiar</button>
+          </div>
+          <div class="credential-row">
+            <div>
+              <div class="label">SENHA</div>
+              <div class="value">${data.delivered_password}</div>
+            </div>
+            <button onclick="copyVal('${data.delivered_password.replace(/'/g, "\\'")}')">📋 Copiar</button>
+          </div>
+          <button style="margin-top:14px;background:var(--purple-mid);color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.85rem"
+            onclick="copyVal('Email: ${data.delivered_email.replace(/'/g, "\\'")}\\nSenha: ${data.delivered_password.replace(/'/g, "\\'")}')">
+            📋 Copiar tudo
+          </button>`;
+        if (data.delivered_note) {
+          html += `<p style="margin-top:12px;font-size:0.82rem;color:var(--text-muted)">📌 ${data.delivered_note}</p>`;
+        }
+      } else {
+        html += `<p style="color:var(--gold-light)">${data.delivered_note || 'Pagamento confirmado. Aguarde a entrega manual.'}</p>`;
+      }
+      html += `<button style="margin-top:18px;background:#3a1d4a;color:#c4b5fd;border:none;padding:10px 20px;border-radius:8px;cursor:pointer" onclick="closeCheckout()">Fechar</button>`;
+      html += `</div>`;
+      area.innerHTML = html;
+    }
+
+    function copyVal(v) {
+      navigator.clipboard.writeText(v);
+      showToast('✓ Copiado!');
+    }
+
+    // Iniciação do hash (#loja abre direto a loja)
+    if (window.location.hash === '#loja') switchView('loja');
   </script>
 </body>
 </html>
