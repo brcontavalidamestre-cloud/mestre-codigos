@@ -908,9 +908,23 @@ def email_matches_user(msg, html_body, user_email):
         pass
 
     # 2. Verifica nos headers principais
-    for header in ["To", "Delivered-To", "X-Original-To", "X-Forwarded-To", "Cc", "Bcc", "Reply-To"]:
+    # INCLUI From: porque em emails encaminhados (Fw:) o destinatario original
+    # pode aparecer como remetente, ou o cliente identifica pelo endereco que
+    # encaminhou. Tambem inclui Sender, Return-Path e Received.
+    for header in ["To", "Delivered-To", "X-Original-To", "X-Forwarded-To",
+                   "Cc", "Bcc", "Reply-To", "From", "Sender",
+                   "Return-Path", "X-Original-From", "X-Sender"]:
         if user_lower in decode_str(msg.get(header, "")).lower():
             return True
+
+    # 2.5 Verifica em TODOS os headers Received (caminho percorrido)
+    try:
+        all_received = msg.get_all("Received") or []
+        for rec in all_received:
+            if user_lower in str(rec).lower():
+                return True
+    except Exception:
+        pass
 
     # 3. Verifica em TODAS as partes de texto (HTML + plain) do email
     #    Essencial para emails encaminhados (ENC:/FW:) onde o destinatário
