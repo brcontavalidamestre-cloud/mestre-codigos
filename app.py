@@ -276,6 +276,16 @@ PLATFORM_CONFIG = {
     # ── MAX: código único ──────────────────────────────────────────────────────
     "max": {
         "from_keyword": "hbomax.com",
+        "from_keywords": [
+            "alerts.hbomax.com",
+            "no-reply@alerts.hbomax.com",
+            "noreply@alerts.hbomax.com",
+            "hbomax.com",
+            "hbomax",
+            "max.com",
+            "warnermedia",
+            "wbd.com"
+        ],
         "subject_keywords": [
             # Português
             "temporário: aqui está seu código único",
@@ -284,15 +294,23 @@ PLATFORM_CONFIG = {
             "aqui esta seu codigo unico",
             "seu código único",
             "seu codigo unico",
+            "temporário",
+            "temporario",
+            "código único",
+            "codigo unico",
             # Inglês
             "your unique code",
             "your max unique code",
             "your verification code",
+            "temporary",
+            "unique code",
             # Espanhol
             "tu código único",
             "tu codigo unico",
             "tu código único de max",
-            "tu codigo unico de max"
+            "tu codigo unico de max",
+            "código único de max",
+            "codigo unico de max"
         ],
         "name": "Max",
         "type": "code"
@@ -1141,6 +1159,8 @@ def search_code_unified(user_email, platform_list):
                     targeted_platforms.append(("netflix-residence", ["residencia", "atualizar", "household", "hogar", "importante"]))
                 if "disney" in plat_configs:
                     targeted_platforms.append(("disney", ["codigo de acesso", "acesso unico", "access code", "verification code", "passcode", "codigo de verificacion"]))
+                if "max" in plat_configs:
+                    targeted_platforms.append(("max", ["codigo unico", "código único", "codigo único", "código unico", "unique code", "temporario", "temporário", "temporary", "aqui esta seu codigo", "aqui está seu código", "your unique code", "tu codigo unico", "tu código único", "max", "hbo"]))
 
                 if targeted_platforms:
                     _safe_logout(mail)
