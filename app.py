@@ -1981,6 +1981,66 @@ def api_loja_webhook_efi():
             mark_order_paid_and_deliver(order["id"])
     return jsonify({"success": True})
 
+@app.route("/api/admin/loja/efi-setup-webhook", methods=["POST"])
+@admin_required
+def api_admin_efi_setup_webhook():
+    """Cadastra automaticamente o webhook Pix da loja na Efi via API."""
+    if not efi_is_configured():
+        return jsonify({"success": False, "message": "Efi nao configurado."}), 400
+    try:
+        from efipay import EfiPay
+        options = {
+            "client_id":     EFI_CLIENT_ID,
+            "client_secret": EFI_CLIENT_SECRET,
+            "certificate":   EFI_CERT_PATH,
+            "sandbox":       EFI_SANDBOX
+        }
+        efi = EfiPay(options)
+        webhook_url = f"https://mestre-codigos-production.up.railway.app/api/loja/webhook/efi?token={EFI_WEBHOOK_TOKEN}"
+        params = {"chave": EFI_PIX_KEY}
+        body   = {"webhookUrl": webhook_url}
+        # PUT /v2/webhook/{chave} - cadastra ou substitui o webhook
+        resp = efi.pix_config_webhook(params=params, body=body, headers={"x-skip-mtls-checking": "true"})
+        return jsonify({
+            "success": True,
+            "message": "Webhook cadastrado com sucesso.",
+            "webhook_url": webhook_url,
+            "pix_key": EFI_PIX_KEY,
+            "response": resp
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Erro ao cadastrar webhook: {e}"
+        }), 500
+
+@app.route("/api/admin/loja/efi-status-webhook", methods=["GET"])
+@admin_required
+def api_admin_efi_status_webhook():
+    """Consulta se o webhook ja esta cadastrado na Efi."""
+    if not efi_is_configured():
+        return jsonify({"success": False, "message": "Efi nao configurado."}), 400
+    try:
+        from efipay import EfiPay
+        options = {
+            "client_id":     EFI_CLIENT_ID,
+            "client_secret": EFI_CLIENT_SECRET,
+            "certificate":   EFI_CERT_PATH,
+            "sandbox":       EFI_SANDBOX
+        }
+        efi = EfiPay(options)
+        params = {"chave": EFI_PIX_KEY}
+        resp = efi.pix_detail_webhook(params=params)
+        return jsonify({
+            "success": True,
+            "webhook": resp
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"Sem webhook ou erro: {e}"
+        })
+
 # ─── ROTAS ADMIN LOJA ───────────────────────────────────────────────────────────────────────
 @app.route("/api/admin/loja/produtos", methods=["GET"])
 @admin_required
