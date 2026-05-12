@@ -1,402 +1,728 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Admin • Mestre Códigos</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Raleway:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Central dos Códigos ✦ — Painel Admin</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Raleway:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
   <style>
-    *{box-sizing:border-box}
-    body{margin:0;background:#06000f;color:#fff;font-family:Raleway,sans-serif;padding:24px}
-    .wrap{max-width:1180px;margin:0 auto}
-    .card{background:linear-gradient(135deg,rgba(19,0,41,.96),rgba(26,0,53,.96));border:1px solid rgba(245,158,11,.35);border-radius:20px;padding:24px;margin-bottom:18px;box-shadow:0 10px 40px rgba(0,0,0,.45)}
-    h1{margin:0 0 10px;font-family:Cinzel,serif;font-size:2rem;background:linear-gradient(135deg,#fcd34d,#f59e0b,#a855f7);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-    h3{margin:0 0 12px;font-family:Cinzel,serif;color:#fcd34d;letter-spacing:1px}
-    p{color:#c4b5fd;margin:0 0 8px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}
-    .input,select{width:100%;padding:13px 14px;border-radius:12px;border:1px solid rgba(168,85,247,.25);background:rgba(59,7,100,.2);color:#fff;outline:none;font-family:Raleway,sans-serif}
-    .input:focus,select:focus{border-color:#a855f7;box-shadow:0 0 0 3px rgba(168,85,247,.15)}
-    .btn{padding:13px 16px;border:none;border-radius:12px;background:linear-gradient(135deg,#6d28d9,#3b0764);color:#fff;font-weight:700;cursor:pointer;font-family:Raleway,sans-serif}
-    .btn:hover{transform:translateY(-1px)}
-    .btn.red{background:linear-gradient(135deg,#b91c1c,#7f1d1d)}
-    .btn.gold{background:linear-gradient(135deg,#f59e0b,#b45309)}
-    .btn.green{background:linear-gradient(135deg,#15803d,#14532d)}
-    .btn.blue{background:linear-gradient(135deg,#1d4ed8,#1e3a8a)}
-    .btn.small{padding:8px 12px;font-size:.82rem;border-radius:10px}
-    table{width:100%;border-collapse:collapse;margin-top:14px}
-    th,td{padding:11px 10px;border-bottom:1px solid rgba(168,85,247,.18);text-align:left;font-size:.9rem;vertical-align:top}
-    th{color:#fcd34d;font-family:Cinzel,serif;letter-spacing:.5px}
-    .msg{display:none;margin-top:12px;padding:12px;border-radius:12px}
-    .ok{display:block;background:rgba(20,83,45,.35);border:1px solid rgba(74,222,128,.35);color:#bbf7d0}
-    .err{display:block;background:rgba(127,29,29,.35);border:1px solid rgba(248,113,113,.35);color:#fecaca}
-    .top{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
-    .product-box{background:rgba(59,7,100,.18);border:1px solid rgba(168,85,247,.25);border-radius:14px;padding:18px;margin-top:14px}
-    .product-head{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:8px}
-    .product-name{font-family:Cinzel,serif;color:#fcd34d;font-size:1.1rem}
-    .stats{display:flex;gap:8px;flex-wrap:wrap}
-    .stat{padding:6px 10px;border-radius:999px;font-size:.78rem;border:1px solid rgba(245,158,11,.25);background:rgba(245,158,11,.08);color:#fcd34d}
-    .stat.green{border-color:rgba(74,222,128,.35);background:rgba(20,83,45,.25);color:#bbf7d0}
-    .stat.red{border-color:rgba(248,113,113,.35);background:rgba(127,29,29,.25);color:#fecaca}
-    .stat.blue{border-color:rgba(96,165,250,.35);background:rgba(30,58,138,.25);color:#bfdbfe}
-    .empty{padding:14px;text-align:center;color:#c4b5fd;border:1px dashed rgba(168,85,247,.3);border-radius:10px;margin-top:10px}
-    .badge{display:inline-block;padding:3px 8px;border-radius:6px;font-size:.72rem;font-weight:700}
-    .badge.free{background:rgba(20,83,45,.4);color:#bbf7d0;border:1px solid rgba(74,222,128,.35)}
-    .badge.used{background:rgba(127,29,29,.4);color:#fecaca;border:1px solid rgba(248,113,113,.35)}
-    .badge.delivered{background:rgba(30,58,138,.4);color:#bfdbfe;border:1px solid rgba(96,165,250,.35);margin-left:4px}
-    .row-actions{display:flex;gap:6px;flex-wrap:wrap}
-    .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
-    .tab{padding:10px 14px;border-radius:10px;border:1px solid rgba(168,85,247,.25);background:rgba(59,7,100,.2);color:#c4b5fd;cursor:pointer;font-weight:700;font-family:Raleway,sans-serif}
-    .tab.active{background:linear-gradient(135deg,#6d28d9,#3b0764);color:#fff;border-color:rgba(245,158,11,.35)}
-    .section{display:none}.section.active{display:block}
-    .filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
-    .chip{padding:8px 12px;border-radius:999px;border:1px solid rgba(168,85,247,.25);background:rgba(59,7,100,.2);color:#c4b5fd;cursor:pointer;font-size:.83rem;font-weight:600}
-    .chip.active{background:linear-gradient(135deg,#6d28d9,#3b0764);color:#fff;border-color:rgba(245,158,11,.35)}
-    code{background:rgba(0,0,0,.35);padding:2px 6px;border-radius:6px;color:#fcd34d;font-family:monospace;font-size:.85rem}
-    .modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;align-items:center;justify-content:center;padding:20px}
-    .modal-bg.show{display:flex}
-    .modal{background:linear-gradient(135deg,#130029,#1a0035);border:1px solid rgba(245,158,11,.5);border-radius:18px;padding:24px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.6)}
-    .modal h3{margin-bottom:14px}
-    .modal .input{margin-bottom:10px}
-    .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:10px;flex-wrap:wrap}
-    .small-text{font-size:.78rem;color:#c4b5fd}
-    .pill{display:inline-block;padding:2px 8px;border-radius:999px;background:rgba(168,85,247,.18);color:#c4b5fd;font-size:.72rem;margin-right:4px}
-    @media (max-width:760px){
-      table thead{display:none}
-      table tr{display:block;border:1px solid rgba(168,85,247,.18);border-radius:12px;margin-bottom:10px;padding:8px}
-      table td{display:flex;justify-content:space-between;gap:10px;border:none;padding:6px 4px}
-      table td::before{content:attr(data-label);color:#fcd34d;font-weight:700;font-family:Cinzel,serif;font-size:.78rem}
+    :root {
+      --bg:#06000f; --bg2:#0d0020; --card:#130029;
+      --pu:#6d28d9; --pub:#a855f7;
+      --gold:#f59e0b; --goldf:#fcd34d;
+      --tw:#f5f0ff; --tm:#c4b5fd;
+      --bord:rgba(168,85,247,0.25); --bordg:rgba(245,158,11,0.35);
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    html,body{
+      height:100%;
+      background:var(--bg);
+      background-image:
+        radial-gradient(ellipse 60% 50% at 0% 0%, rgba(109,40,217,0.12) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 100% 100%, rgba(245,158,11,0.08) 0%, transparent 60%);
+      color:var(--tw);
+      font-family:'Raleway',sans-serif;
+    }
+
+    /* ── topbar ── */
+    .topbar{
+      background:var(--bg2);
+      border-bottom:1px solid var(--bordg);
+      padding:0 24px; height:64px;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .tl{display:flex;align-items:center;gap:12px;}
+    .logo{
+      width:40px;height:40px;border-radius:50%;
+      background:linear-gradient(135deg,#3b0764,var(--pu));
+      display:flex;align-items:center;justify-content:center;
+      font-size:18px;border:1px solid var(--bordg);
+      box-shadow:0 0 20px rgba(109,40,217,0.4);
+      flex-shrink:0;
+    }
+    .title{
+      font-family:'Cinzel',serif;font-size:1.05rem;font-weight:900;
+      background:linear-gradient(135deg,var(--goldf),var(--gold));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    }
+    .badge-adm{
+      background:rgba(245,158,11,0.15);border:1px solid var(--bordg);
+      color:var(--gold);font-size:0.68rem;font-weight:700;
+      letter-spacing:0.1em;text-transform:uppercase;
+      padding:3px 10px;border-radius:20px;
+    }
+    .tr{display:flex;align-items:center;gap:12px;}
+    .uname{font-size:0.88rem;font-weight:600;}
+    .urole{font-size:0.7rem;color:var(--gold);letter-spacing:0.1em;text-transform:uppercase;}
+    .btn-out{
+      padding:7px 14px;
+      background:rgba(220,38,38,0.15);
+      border:1px solid rgba(220,38,38,0.4);
+      border-radius:8px;color:#fca5a5;
+      font-size:0.78rem;font-weight:600;
+      cursor:pointer;transition:background .2s;
+      font-family:'Raleway',sans-serif;
+    }
+    .btn-out:hover{background:rgba(220,38,38,0.3);}
+
+    /* ── main ── */
+    .main{max-width:960px;margin:0 auto;padding:32px 24px;}
+
+    .ptitle{
+      font-family:'Cinzel',serif;font-size:1.5rem;font-weight:900;
+      background:linear-gradient(135deg,var(--goldf),var(--gold),var(--pub));
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+      margin-bottom:4px;
+    }
+    .psub{color:var(--tm);font-size:0.86rem;margin-bottom:28px;}
+
+    /* stats */
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:28px;}
+    .scard{
+      background:rgba(19,0,41,0.85);
+      border:1px solid var(--bord);
+      border-radius:14px;padding:18px;text-align:center;
+    }
+    .snum{font-size:1.9rem;font-weight:700;color:var(--pub);}
+    .slbl{font-size:0.74rem;color:var(--tm);margin-top:3px;letter-spacing:0.08em;text-transform:uppercase;}
+
+    /* panel */
+    .panel{
+      background:rgba(19,0,41,0.9);
+      border:1px solid var(--bordg);
+      border-radius:16px;padding:24px;
+      margin-bottom:24px;
+    }
+    .phdr{
+      display:flex;align-items:center;
+      justify-content:space-between;
+      flex-wrap:wrap;gap:10px;
+      margin-bottom:20px;
+    }
+    .ptit{
+      font-family:'Cinzel',serif;font-size:0.95rem;font-weight:700;
+      color:var(--gold);letter-spacing:0.07em;
+      display:flex;align-items:center;gap:7px;
+    }
+
+    /* form */
+    .fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;}
+    .fgrp{display:flex;flex-direction:column;gap:6px;}
+    .flbl{font-size:0.75rem;font-weight:600;color:var(--tm);letter-spacing:0.1em;text-transform:uppercase;}
+    .fi{
+      padding:10px 13px;
+      background:rgba(109,40,217,0.1);
+      border:1px solid var(--bord);
+      border-radius:9px;color:var(--tw);
+      font-family:'Raleway',sans-serif;font-size:0.92rem;
+      outline:none;transition:border-color .2s,box-shadow .2s;
+      width:100%;
+    }
+    .fi:focus{border-color:var(--pub);box-shadow:0 0 10px rgba(168,85,247,0.25);}
+    .fi::placeholder{color:rgba(196,181,253,0.3);}
+    select.fi{
+      cursor:pointer;
+      background-color:rgba(109,40,217,0.15);
+      appearance:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='7' viewBox='0 0 10 7'%3E%3Cpath fill='%23a855f7' d='M5 7L0 0h10z'/%3E%3C/svg%3E");
+      background-repeat:no-repeat;background-position:right 11px center;
+      padding-right:32px;
+    }
+    select.fi option{background:#130029;}
+
+    .btn-p{
+      margin-top:14px;padding:10px 22px;
+      background:linear-gradient(135deg,#3b0764,var(--pu));
+      border:1px solid rgba(168,85,247,0.4);
+      border-radius:9px;color:#fff;
+      font-family:'Raleway',sans-serif;font-size:0.88rem;font-weight:700;
+      cursor:pointer;transition:box-shadow .2s,transform .15s;
+      display:inline-flex;align-items:center;gap:6px;
+    }
+    .btn-p:hover{box-shadow:0 4px 18px rgba(109,40,217,0.5);transform:translateY(-1px);}
+    .btn-p:disabled{opacity:0.55;cursor:not-allowed;transform:none;}
+
+    .btn-ref{
+      padding:7px 16px;
+      background:rgba(109,40,217,0.15);
+      border:1px solid var(--bord);
+      border-radius:8px;color:var(--pub);
+      font-family:'Raleway',sans-serif;font-size:0.78rem;font-weight:600;
+      cursor:pointer;transition:background .2s;
+    }
+    .btn-ref:hover{background:rgba(109,40,217,0.3);}
+
+    /* alerts */
+    .alert{display:none;margin-top:12px;padding:10px 14px;border-radius:8px;font-size:0.84rem;align-items:center;gap:8px;}
+    .alert.show{display:flex;}
+    .aok{background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.35);color:#6ee7b7;}
+    .aerr{background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.35);color:#fca5a5;}
+
+    /* search */
+    .srow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;}
+    .swrap{position:relative;flex:1;min-width:170px;max-width:300px;}
+    .sico{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:13px;pointer-events:none;opacity:0.5;}
+    .sin{
+      width:100%;padding:8px 12px 8px 32px;
+      background:rgba(109,40,217,0.1);
+      border:1px solid var(--bord);border-radius:9px;
+      color:var(--tw);font-family:'Raleway',sans-serif;font-size:0.84rem;
+      outline:none;transition:border-color .2s;
+    }
+    .sin:focus{border-color:var(--pub);}
+    .sin::placeholder{color:rgba(196,181,253,0.3);}
+    .sinfo{font-size:0.74rem;color:var(--tm);margin-top:6px;}
+
+    /* table */
+    .twrap{overflow-x:auto;border-radius:10px;}
+    table{width:100%;border-collapse:collapse;}
+    thead tr{background:rgba(109,40,217,0.12);}
+    th{padding:11px 14px;font-size:0.72rem;font-weight:700;color:var(--tm);letter-spacing:0.1em;text-transform:uppercase;text-align:left;border-bottom:1px solid var(--bord);}
+    td{padding:13px 14px;font-size:0.88rem;border-bottom:1px solid rgba(168,85,247,0.07);vertical-align:middle;}
+    tr:last-child td{border-bottom:none;}
+    tr:hover td{background:rgba(109,40,217,0.05);}
+    .bdg{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:20px;font-size:0.7rem;font-weight:700;letter-spacing:0.07em;text-transform:uppercase;}
+    .badm{background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.35);color:var(--gold);}
+    .bcli{background:rgba(168,85,247,0.15);border:1px solid rgba(168,85,247,0.35);color:var(--pub);}
+    .abts{display:flex;gap:7px;flex-wrap:wrap;}
+    .bsm{padding:5px 11px;font-size:0.73rem;font-weight:600;border-radius:6px;cursor:pointer;font-family:'Raleway',sans-serif;transition:background .2s;}
+    .bpw{background:rgba(109,40,217,0.2);border:1px solid rgba(109,40,217,0.4);color:var(--pub);}
+    .bpw:hover{background:rgba(109,40,217,0.4);}
+    .bdel{background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.3);color:#fca5a5;}
+    .bdel:hover{background:rgba(220,38,38,0.28);}
+    .empty{text-align:center;padding:36px;color:var(--tm);font-size:0.88rem;}
+    .eico{font-size:2.5rem;margin-bottom:10px;}
+
+    /* ── MODAIS — inert por padrão, ativos apenas com .open ── */
+    .ov{
+      visibility:hidden;
+      pointer-events:none;
+      position:fixed;inset:0;
+      z-index:9000;
+      background:rgba(6,0,15,0.85);
+      display:flex;
+      align-items:center;justify-content:center;
+    }
+    .ov.open{
+      visibility:visible;
+      pointer-events:auto;
+    }
+    .modal{
+      background:linear-gradient(135deg,#130029,#1a0035);
+      border:1px solid var(--bordg);
+      border-radius:16px;padding:28px;
+      width:100%;max-width:400px;margin:16px;
+      box-shadow:0 0 50px rgba(109,40,217,0.35);
+    }
+    .mtit{font-family:'Cinzel',serif;font-size:1.05rem;font-weight:700;color:var(--gold);text-align:center;margin-bottom:18px;}
+    .mbts{display:flex;gap:10px;margin-top:18px;}
+    .bcan{flex:1;padding:10px;background:rgba(255,255,255,0.05);border:1px solid var(--bord);border-radius:8px;color:var(--tm);font-family:'Raleway',sans-serif;font-size:0.88rem;cursor:pointer;transition:background .2s;}
+    .bcan:hover{background:rgba(255,255,255,0.1);}
+    .bok{flex:1;padding:10px;background:linear-gradient(135deg,#3b0764,var(--pu));border:none;border-radius:8px;color:#fff;font-family:'Raleway',sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;transition:box-shadow .2s;}
+    .bok:hover{box-shadow:0 4px 18px rgba(109,40,217,0.5);}
+    .bok:disabled,.bdok:disabled{opacity:0.55;cursor:not-allowed;}
+    .bdok{flex:1;padding:10px;background:linear-gradient(135deg,#7f1d1d,#ef4444);border:none;border-radius:8px;color:#fff;font-family:'Raleway',sans-serif;font-size:0.88rem;font-weight:700;cursor:pointer;transition:box-shadow .2s;}
+    .bdok:hover{box-shadow:0 4px 18px rgba(220,38,38,0.5);}
+    .merr{display:none;margin-top:10px;padding:9px 12px;background:rgba(220,38,38,0.15);border:1px solid rgba(220,38,38,0.35);border-radius:7px;color:#fca5a5;font-size:0.82rem;}
+    .merr.show{display:block;}
+
+    /* spinner */
+    .sp{display:inline-block;width:13px;height:13px;border:2px solid rgba(255,255,255,0.25);border-top-color:#fff;border-radius:50%;animation:rot .65s linear infinite;vertical-align:middle;}
+    /* PIN bloqueio */
+    .bpin { background: linear-gradient(135deg,#92400e,#d97706); color:#fff; border:none; border-radius:7px; padding:5px 10px; font-size:0.75rem; font-weight:700; cursor:pointer; transition:.2s; }
+    .bpin:hover { opacity:.85; transform:scale(1.04); }
+    .bpin.locked { background: linear-gradient(135deg,#7f1d1d,#dc2626); }
+    .pin-badge { display:inline-block; font-size:0.7rem; padding:2px 7px; border-radius:10px; font-weight:700; margin-left:4px; }
+    .pin-badge.on  { background:rgba(220,38,38,0.18); color:#fca5a5; border:1px solid rgba(220,38,38,0.4); }
+    .pin-badge.off { background:rgba(16,185,129,0.12); color:#6ee7b7; border:1px solid rgba(16,185,129,0.3); }
+    /* PIN modal inputs */
+    .pin-inputs { display:flex; gap:10px; justify-content:center; margin:16px 0 4px; }
+    .pin-inputs input { width:52px; height:58px; text-align:center; font-size:1.6rem; font-weight:700; border:2px solid rgba(109,40,217,0.4); border-radius:10px; background:rgba(255,255,255,0.05); color:#fff; outline:none; transition:.2s; }
+    .pin-inputs input:focus { border-color:#a855f7; background:rgba(168,85,247,0.1); }
+    @keyframes rot{to{transform:rotate(360deg);}}
+
+    /* toast */
+    #toast{
+      position:fixed;bottom:22px;left:50%;transform:translateX(-50%);
+      padding:11px 22px;border-radius:10px;font-size:0.86rem;font-weight:600;
+      z-index:9999;opacity:0;pointer-events:none;
+      transition:opacity .3s;
+      box-shadow:0 4px 18px rgba(0,0,0,0.45);
+      white-space:nowrap;
+    }
+
+    @media(max-width:580px){
+      .topbar{padding:0 14px;}
+      .main{padding:18px 14px;}
+      .stats{grid-template-columns:repeat(3,1fr);gap:8px;}
+      .snum{font-size:1.4rem;}
+      .uname,.urole{display:none;}
+      .fgrid{grid-template-columns:1fr;}
     }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <div class="card">
-      <div class="top">
-        <div>
-          <h1>Painel Admin</h1>
-          <p>Gerencie usuários e os acessos digitais entregues após o pagamento.</p>
-        </div>
-        <button class="btn gold" onclick="logout()">Sair</button>
+
+  <!-- topbar -->
+  <div class="topbar">
+    <div class="tl">
+      <div class="logo">✦</div>
+      <div class="title">CENTRAL DOS CÓDIGOS</div>
+      <span class="badge-adm">⚙️ Admin</span>
+    </div>
+    <div class="tr">
+      <div>
+        <div class="uname" id="topbar-name">—</div>
+        <div class="urole">Administrador</div>
       </div>
-      <div class="tabs">
-        <button class="tab active" id="tab-users" onclick="switchSection('users')">👤 Usuários</button>
-        <button class="tab" id="tab-creds" onclick="switchSection('creds')">🔐 Acessos da loja</button>
-      </div>
+      <button class="btn-out" onclick="doLogout()">🚪 Sair</button>
+    </div>
+  </div>
+
+  <!-- main -->
+  <div class="main">
+
+    <div class="ptitle">⚙️ Central de Usuários</div>
+    <div class="psub">Gerencie os acessos dos clientes à plataforma</div>
+
+    <!-- stats -->
+    <div class="stats">
+      <div class="scard"><div class="snum" id="st-total">—</div><div class="slbl">Total</div></div>
+      <div class="scard"><div class="snum" id="st-cli">—</div><div class="slbl">Clientes</div></div>
+      <div class="scard"><div class="snum" id="st-adm">—</div><div class="slbl">Admins</div></div>
     </div>
 
-    <!-- USERS -->
-    <div class="section active" id="section-users">
-      <div class="card">
-        <h3>Criar usuário</h3>
-        <div class="grid">
-          <input class="input" id="name" placeholder="Nome">
-          <input class="input" id="username" placeholder="Usuário">
-          <input class="input" id="password" placeholder="Senha">
-          <select id="role"><option value="client">Cliente</option><option value="admin">Admin</option></select>
-        </div>
-        <div style="margin-top:12px"><button class="btn" onclick="createUser()">Criar usuário</button></div>
-        <div class="msg" id="msg"></div>
+    <!-- criar acesso -->
+    <div class="panel">
+      <div class="phdr">
+        <div class="ptit">➕ Criar Novo Acesso</div>
       </div>
+      <form id="cform" onsubmit="createUser(event)">
+        <div class="fgrid">
+          <div class="fgrp">
+            <label class="flbl">👤 Nome Completo</label>
+            <input class="fi" id="n-name" placeholder="Ex: João Silva" autocomplete="off"/>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">🔑 Usuário (login)</label>
+            <input class="fi" id="n-user" placeholder="Ex: joaosilva" required autocomplete="off"/>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">🔒 Senha</label>
+            <input class="fi" type="password" id="n-pass" placeholder="Mínimo 4 caracteres" required autocomplete="new-password"/>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">🎭 Perfil</label>
+            <select class="fi" id="n-role">
+              <option value="client">👤 Cliente</option>
+              <option value="admin">⭐ Administrador</option>
+            </select>
+          </div>
+        </div>
+        <button type="submit" class="btn-p" id="btn-cr">✦ Criar Acesso</button>
+      </form>
+      <div class="alert aok" id="a-ok"><span>✅</span><span id="a-ok-m"></span></div>
+      <div class="alert aerr" id="a-err"><span>❌</span><span id="a-err-m"></span></div>
+    </div>
 
-      <div class="card">
-        <h3>Usuários</h3>
-        <p class="small-text" style="margin-bottom:8px">A senha visível só aparece para usuários criados ou redefinidos a partir de agora. Usuários antigos ficarão sem senha visível até que você redefina pelo botão ao lado.</p>
+    <!-- usuários -->
+    <div class="panel">
+      <div class="phdr">
+        <div class="ptit">👥 Usuários Cadastrados</div>
+        <div class="srow">
+          <div class="swrap">
+            <span class="sico">🔍</span>
+            <input class="sin" id="s-in" type="text"
+              placeholder="Pesquisar usuário ou nome..."
+              oninput="filterUsers(this.value)"/>
+          </div>
+          <button class="btn-ref" onclick="loadUsers()">🔄 Atualizar</button>
+        </div>
+      </div>
+      <div id="s-info" class="sinfo"></div>
+      <div class="twrap">
         <table>
-          <thead><tr><th>Usuário</th><th>Nome</th><th>Senha</th><th>Perfil</th><th>Ações</th></tr></thead>
+          <thead>
+            <tr>
+              <th>Usuário</th>
+              <th>Nome</th>
+              <th>Perfil</th>
+              <th style="text-align:center;">🔐 Redefinição</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
           <tbody id="tbody"></tbody>
         </table>
       </div>
     </div>
 
-    <!-- CREDENTIALS -->
-    <div class="section" id="section-creds">
-      <div class="card">
-        <h3>Cadastrar novo acesso</h3>
-        <p>Cada acesso fica em estoque. Quando um cliente paga via Pix, o sistema entrega automaticamente um acesso disponível e marca como usado.</p>
-        <div class="grid">
-          <select id="cred-product"></select>
-          <input class="input" id="cred-email" placeholder="Email da conta">
-          <input class="input" id="cred-password" placeholder="Senha da conta">
-          <input class="input" id="cred-note" placeholder="Observação (perfil, validade...)">
-        </div>
-        <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-          <button class="btn green" onclick="createCredential()">+ Salvar acesso</button>
-          <button class="btn" onclick="loadCredentials()">Atualizar lista</button>
-        </div>
-        <div class="msg" id="cred-msg"></div>
-      </div>
+  </div><!-- /main -->
 
-      <div class="card">
-        <h3>Estoque de acessos</h3>
-        <p>Filtre por status para encontrar rapidamente os acessos.</p>
-        <div class="filter-bar">
-          <button class="chip active" data-filter="all" onclick="setFilter('all')">Todos</button>
-          <button class="chip" data-filter="free" onclick="setFilter('free')">Disponíveis</button>
-          <button class="chip" data-filter="used" onclick="setFilter('used')">Usados</button>
-          <button class="chip" data-filter="delivered" onclick="setFilter('delivered')">Entregues</button>
-        </div>
-        <div id="creds-list"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- EDIT MODAL -->
-  <div class="modal-bg" id="edit-modal">
+  <!-- modal: alterar senha -->
+  <div class="ov" id="ov-pw">
     <div class="modal">
-      <h3>Editar acesso</h3>
-      <input class="input" id="edit-email" placeholder="Email">
-      <input class="input" id="edit-password" placeholder="Senha">
-      <input class="input" id="edit-note" placeholder="Observação">
-      <div class="modal-actions">
-        <button class="btn red" onclick="closeEdit()">Cancelar</button>
-        <button class="btn green" onclick="saveEdit()">Salvar alterações</button>
+      <div class="mtit">🔒 Alterar Senha</div>
+      <div class="fgrp" style="margin-bottom:12px;">
+        <label class="flbl">Usuário</label>
+        <input class="fi" id="pw-user" disabled/>
+      </div>
+      <div class="fgrp">
+        <label class="flbl">Nova Senha</label>
+        <input class="fi" type="password" id="pw-new" placeholder="Mínimo 4 caracteres"/>
+      </div>
+      <div class="merr" id="pw-err"></div>
+      <div class="mbts">
+        <button class="bcan" onclick="closeOv('ov-pw')">Cancelar</button>
+        <button class="bok" id="pw-btn" onclick="confirmPw()">Salvar</button>
       </div>
     </div>
   </div>
 
-  <!-- DELIVER MODAL -->
-  <div class="modal-bg" id="deliver-modal">
+  <!-- modal: confirmar exclusão -->
+  <div class="ov" id="ov-del">
     <div class="modal">
-      <h3>Marcar como entregue</h3>
-      <p class="small-text">Use isso quando você entregar o acesso manualmente (fora do sistema). Ele sairá do estoque disponível.</p>
-      <input class="input" id="deliver-to" placeholder="Para quem foi entregue (opcional)">
-      <div class="modal-actions">
-        <button class="btn red" onclick="closeDeliver()">Cancelar</button>
-        <button class="btn blue" onclick="saveDeliver()">Marcar entregue</button>
+      <div class="mtit">🗑️ Remover Usuário</div>
+      <p style="text-align:center;color:var(--tm);margin-bottom:6px;">
+        Tem certeza que deseja remover<br>
+        <strong style="color:var(--tw)" id="del-who">—</strong>?
+      </p>
+      <p style="text-align:center;font-size:0.8rem;color:#fca5a5;">Esta ação não pode ser desfeita.</p>
+      <div class="mbts" style="margin-top:20px;">
+        <button class="bcan" onclick="closeOv('ov-del')">Cancelar</button>
+        <button class="bdok" id="del-btn" onclick="confirmDel()">Sim, Remover</button>
       </div>
     </div>
   </div>
+
+  <!-- modal: definir/remover PIN de redefinição de senha -->
+  <div class="ov" id="ov-pin">
+    <div class="modal">
+      <div class="mtit" id="pin-modal-title">🔐 Bloqueio — Redefinição de Senha</div>
+      <p style="text-align:center;color:var(--tm);font-size:0.85rem;margin-bottom:4px;">
+        Usuário: <strong style="color:var(--tw)" id="pin-user-label">—</strong>
+      </p>
+      <p style="text-align:center;color:#a78bfa;font-size:0.78rem;margin-bottom:2px;" id="pin-sub">
+        A redefinição de senha usa PIN automático por padrão. Se não houver PIN personalizado, o padrão é 1995.
+      </p>
+      <!-- Inputs de 4 dígitos -->
+      <div class="pin-inputs" id="pin-inputs-wrap">
+        <input type="number" min="0" max="9" maxlength="1" id="pin-d1" oninput="pinNext(this,'pin-d2')" onkeydown="pinKey(event,this,'')"/>
+        <input type="number" min="0" max="9" maxlength="1" id="pin-d2" oninput="pinNext(this,'pin-d3')" onkeydown="pinKey(event,this,'pin-d1')"/>
+        <input type="number" min="0" max="9" maxlength="1" id="pin-d3" oninput="pinNext(this,'pin-d4')" onkeydown="pinKey(event,this,'pin-d2')"/>
+        <input type="number" min="0" max="9" maxlength="1" id="pin-d4" oninput="pinNext(this,'')"        onkeydown="pinKey(event,this,'pin-d3')"/>
+      </div>
+      <div class="merr" id="pin-err"></div>
+      <div class="mbts" style="margin-top:16px;">
+        <button class="bcan" onclick="closeOv('ov-pin')">Cancelar</button>
+        <button class="bok" id="pin-rm-btn" onclick="confirmPinRemove()" style="background:linear-gradient(135deg,#0f766e,#14b8a6);display:none;">♻️ Restaurar Padrão 1995</button>
+        <button class="bok" id="pin-set-btn" onclick="confirmPinSet()">🔐 Salvar PIN</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- toast -->
+  <div id="toast"></div>
 
   <script>
-    let currentFilter='all';
-    let editCtx={productId:'',credId:''};
-    let deliverCtx={productId:'',credId:''};
+    let _users = [], _pwUser = null, _delUser = null;
 
-    function show(elId,type,text){const el=document.getElementById(elId); el.className='msg '+type; el.textContent=text; setTimeout(()=>{el.className='msg'}, 4500)}
+    /* init */
+    (async function init() {
+      try {
+        const r = await fetch('/api/auth/me');
+        const d = await r.json();
+        if (!d.logged_in) { location.href = '/login'; return; }
+        if (d.role !== 'admin') { location.href = '/'; return; }
+        document.getElementById('topbar-name').textContent = d.name || d.username;
+      } catch { location.href = '/login'; return; }
+      loadUsers();
+    })();
 
-    function switchSection(name){
-      document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
-      document.getElementById('tab-'+name).classList.add('active');
-      document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
-      document.getElementById('section-'+(name==='users'?'users':'creds')).classList.add('active');
-      if(name==='creds') loadCredentials();
-    }
-    function setFilter(f){
-      currentFilter=f;
-      document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('active', c.dataset.filter===f));
-      loadCredentials();
-    }
-
-    /* USERS */
-    async function loadUsers(){
-      const res=await fetch('/api/admin/users'); const data=await res.json();
-      if(!data.success){location.href='/'; return}
-      const tbody=document.getElementById('tbody'); tbody.innerHTML='';
-      data.users.forEach(u=>{
-        const tr=document.createElement('tr');
-        const safeUsername = (u.username||'').replace(/'/g, "\\'");
-        const pwd = u.password_plain || '';
-        const pwdId = 'pwd-'+(u.username||'').replace(/[^a-z0-9_-]/gi,'_');
-        const pwdCell = pwd
-          ? `<span id="${pwdId}" data-pwd="${pwd.replace(/"/g,'&quot;')}" data-visible="0">••••••</span>
-             <button class="btn small" style="margin-left:6px" onclick="togglePwd('${pwdId}')" title="Mostrar/ocultar">👁️</button>
-             <button class="btn gold small" onclick="copyPwd('${pwdId}')" title="Copiar">📋</button>`
-          : '<span class="small-text">(senha não visível — redefina para mostrar)</span>';
-        tr.innerHTML=`<td data-label="Usuário">${u.username}</td><td data-label="Nome">${u.name||''}</td><td data-label="Senha">${pwdCell}</td><td data-label="Perfil">${u.role}</td><td data-label="Ações"><div class="row-actions"><button class="btn gold small" onclick="resetUserPassword('${safeUsername}')">🔑 Alterar senha</button><button class="btn red small" onclick="removeUser('${safeUsername}')">Excluir</button></div></td>`;
-        tbody.appendChild(tr);
-      });
-    }
-    async function createUser(){
-      const name=document.getElementById('name').value.trim();
-      const username=document.getElementById('username').value.trim();
-      const password=document.getElementById('password').value.trim();
-      const role=document.getElementById('role').value;
-      const res=await fetch('/api/admin/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,username,password,role})});
-      const data=await res.json();
-      if(data.success){show('msg','ok',data.message||'Usuário criado.'); document.getElementById('name').value=''; document.getElementById('username').value=''; document.getElementById('password').value=''; loadUsers();}
-      else show('msg','err',data.message||'Falha ao criar usuário.');
-    }
-    async function removeUser(username){
-      if(!confirm('Excluir '+username+'?')) return;
-      const res=await fetch('/api/admin/users/'+encodeURIComponent(username),{method:'DELETE'}); const data=await res.json();
-      if(data.success){show('msg','ok',data.message||'Usuário removido.'); loadUsers();} else show('msg','err',data.message||'Falha ao remover.');
+    /* logout */
+    async function doLogout() {
+      await fetch('/api/auth/logout', { method: 'POST' });
+      location.href = '/login';
     }
 
-    async function resetUserPassword(username){
-      const pin = prompt('🔒 Para alterar a senha de "'+username+'", informe o PIN de administração:');
-      if(pin===null) return;
-      const newPwd = prompt('Digite a nova senha para "'+username+'" (mínimo 4 caracteres):');
-      if(newPwd===null) return;
-      if((newPwd||'').trim().length < 4){ show('msg','err','Senha deve ter pelo menos 4 caracteres.'); return; }
-      const res = await fetch('/api/admin/users/'+encodeURIComponent(username)+'/password', {
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({pin: (pin||'').trim(), password: newPwd.trim()})
-      });
-      const data = await res.json();
-      if(data.success){ show('msg','ok','✅ Senha de '+username+' alterada com sucesso.'); loadUsers(); }
-      else { show('msg','err', data.message || 'Falha ao alterar senha.'); }
-    }
-
-    function togglePwd(id){
-      const el = document.getElementById(id);
-      if(!el) return;
-      const visible = el.getAttribute('data-visible')==='1';
-      const pwd = el.getAttribute('data-pwd')||'';
-      if(visible){ el.textContent='•'.repeat(Math.max(6, pwd.length)); el.setAttribute('data-visible','0'); }
-      else { el.textContent = pwd; el.setAttribute('data-visible','1'); }
-    }
-    function copyPwd(id){
-      const el = document.getElementById(id);
-      if(!el) return;
-      const pwd = el.getAttribute('data-pwd')||'';
-      navigator.clipboard.writeText(pwd).then(()=>show('msg','ok','✅ Senha copiada para a área de transferência.'));
-    }
-
-    /* CREDENTIALS */
-    function passesFilter(it){
-      if(currentFilter==='all') return true;
-      if(currentFilter==='free') return !it.used;
-      if(currentFilter==='used') return !!it.used;
-      if(currentFilter==='delivered') return !!it.delivered_at;
-      return true;
-    }
-    function fmtDate(s){ if(!s) return ''; try{ return new Date(s).toLocaleString('pt-BR'); }catch(e){ return s; } }
-
-    async function loadCredentials(){
-      const res=await fetch('/api/admin/credentials'); const data=await res.json();
-      if(!data.success){show('cred-msg','err','Não foi possível carregar.'); return}
-      const sel=document.getElementById('cred-product');
-      const current=sel.value;
-      sel.innerHTML='';
-      data.products.forEach(p=>{
-        const opt=document.createElement('option'); opt.value=p.id; opt.textContent=`${p.name} (${p.price_label})`;
-        sel.appendChild(opt);
-      });
-      if(current) sel.value=current;
-
-      const list=document.getElementById('creds-list'); list.innerHTML='';
-      data.products.forEach(p=>{
-        const box=document.createElement('div'); box.className='product-box';
-        let html=`<div class="product-head">
-            <div class="product-name">${p.name} <span style="color:#c4b5fd;font-weight:400;font-size:.85rem">• ${p.price_label}</span></div>
-            <div class="stats">
-              <span class="stat">Total: ${p.total}</span>
-              <span class="stat green">Disponíveis: ${p.available}</span>
-              <span class="stat red">Usados: ${p.used}</span>
-              <span class="stat blue">Entregues: ${p.delivered||0}</span>
+    /* render */
+    function renderTable(list) {
+      const tb = document.getElementById('tbody');
+      if (!list.length) {
+        tb.innerHTML = `<tr><td colspan="4"><div class="empty"><div class="eico">👤</div>Nenhum usuário encontrado.</div></td></tr>`;
+        return;
+      }
+      tb.innerHTML = list.map(u => `
+        <tr>
+          <td><strong>${x(u.username)}</strong></td>
+          <td>${x(u.name || '—')}</td>
+          <td><span class="bdg ${u.role === 'admin' ? 'badm' : 'bcli'}">${u.role === 'admin' ? '⭐ Admin' : '👤 Cliente'}</span></td>
+          <td style="text-align:center;">
+            ${u.reset_pin_custom
+              ? `<span class="pin-badge on">🔒 Personalizado</span>`
+              : `<span class="pin-badge on">🔒 Padrão 1995</span>`}
+          </td>
+          <td>
+            <div class="abts">
+              <button class="bsm bpw" onclick="openPw('${x(u.username)}')">🔑 Alterar Senha</button>
+              <button class="bsm bpin locked" onclick="openPin('${x(u.username)}', ${u.reset_pin_custom})">${u.reset_pin_custom ? '🔒 PIN Personalizado' : '🔒 PIN Padrão 1995'}</button>
+              <button class="bsm bdel" onclick="openDel('${x(u.username)}')">🗑️ Remover</button>
             </div>
-          </div>`;
-        const filtered = (p.items||[]).filter(passesFilter);
-        if(!filtered.length){
-          html+=`<div class="empty">Nenhum acesso ${currentFilter==='all'?'cadastrado':'neste filtro'} para ${p.name}.</div>`;
+          </td>
+        </tr>`).join('');
+    }
+
+    /* filter */
+    function filterUsers(q) {
+      q = q.trim().toLowerCase();
+      const info = document.getElementById('s-info');
+      if (!q) { renderTable(_users); info.textContent = ''; return; }
+      const f = _users.filter(u =>
+        u.username.toLowerCase().includes(q) ||
+        (u.name || '').toLowerCase().includes(q)
+      );
+      renderTable(f);
+      info.textContent = f.length
+        ? `🔍 ${f.length} de ${_users.length} resultado(s)`
+        : `❌ Nenhum resultado para "${q}"`;
+    }
+
+    /* load */
+    async function loadUsers() {
+      document.getElementById('tbody').innerHTML =
+        `<tr><td colspan="4"><div class="empty"><span class="sp"></span> Carregando...</div></td></tr>`;
+      const si = document.getElementById('s-in');
+      if (si) si.value = '';
+      document.getElementById('s-info').textContent = '';
+      try {
+        const r = await fetch('/api/admin/users');
+        const d = await r.json();
+        if (!d.success) { showTblErr('Erro ao carregar usuários.'); return; }
+        _users = d.users;
+        document.getElementById('st-total').textContent = _users.length;
+        document.getElementById('st-cli').textContent   = _users.filter(u => u.role === 'client').length;
+        document.getElementById('st-adm').textContent   = _users.filter(u => u.role === 'admin').length;
+        renderTable(_users);
+      } catch { showTblErr('Erro de conexão.'); }
+    }
+
+    /* create */
+    async function createUser(e) {
+      e.preventDefault();
+      hideAlerts();
+      const btn  = document.getElementById('btn-cr');
+      const uname = document.getElementById('n-user').value.trim();
+      const pass  = document.getElementById('n-pass').value;
+      const name  = document.getElementById('n-name').value.trim();
+      const role  = document.getElementById('n-role').value;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="sp"></span> Criando...';
+      try {
+        const r = await fetch('/api/admin/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: uname, password: pass, name, role })
+        });
+        const d = await r.json();
+        if (d.success) {
+          showOk(d.message || 'Usuário criado!');
+          document.getElementById('cform').reset();
+          loadUsers();
         } else {
-          html+=`<table><thead><tr><th>Email</th><th>Senha</th><th>Status</th><th>Observação</th><th>Datas</th><th>Ações</th></tr></thead><tbody>`;
-          filtered.forEach(it=>{
-            const status = it.used
-              ? `<span class="badge used">Usado</span>${it.delivered_at?'<span class="badge delivered">Entregue</span>':''}`
-              : `<span class="badge free">Disponível</span>`;
-            const dates = `
-              ${it.created_at?`<div class="small-text">Criado: ${fmtDate(it.created_at)}</div>`:''}
-              ${it.used_at?`<div class="small-text">Usado: ${fmtDate(it.used_at)}</div>`:''}
-              ${it.delivered_at?`<div class="small-text">Entregue: ${fmtDate(it.delivered_at)}</div>`:''}
-              ${it.delivered_to?`<div class="small-text">Para: ${it.delivered_to}</div>`:''}
-            `;
-            const actions = `
-              <div class="row-actions">
-                <button class="btn small" onclick='openEdit(${JSON.stringify(p.id)}, ${JSON.stringify(it.id)}, ${JSON.stringify(it.email||"")}, ${JSON.stringify(it.password||"")}, ${JSON.stringify(it.note||"")})'>Editar</button>
-                ${!it.used ? `<button class="btn blue small" onclick='openDeliver(${JSON.stringify(p.id)}, ${JSON.stringify(it.id)})'>Marcar entregue</button>` : ''}
-                ${it.used ? `<button class="btn gold small" onclick="resetCredential('${p.id}','${it.id}')">Liberar</button>` : ''}
-                <button class="btn red small" onclick="deleteCredential('${p.id}','${it.id}')">Excluir</button>
-              </div>`;
-            html+=`<tr>
-              <td data-label="Email">${it.email||''}</td>
-              <td data-label="Senha"><code>${it.password||''}</code></td>
-              <td data-label="Status">${status}</td>
-              <td data-label="Observação">${it.note||''}</td>
-              <td data-label="Datas">${dates}</td>
-              <td data-label="Ações">${actions}</td>
-            </tr>`;
-          });
-          html+='</tbody></table>';
+          showErrA(d.message || 'Erro ao criar.');
         }
-        box.innerHTML=html; list.appendChild(box);
+      } catch { showErrA('Erro de conexão.'); }
+      finally { btn.disabled = false; btn.innerHTML = '✦ Criar Acesso'; }
+    }
+
+    /* pw modal */
+    function openPw(u) {
+      _pwUser = u;
+      document.getElementById('pw-user').value = u;
+      document.getElementById('pw-new').value = '';
+      document.getElementById('pw-err').className = 'merr';
+      document.getElementById('ov-pw').classList.add('open');
+    }
+    async function confirmPw() {
+      const pw  = document.getElementById('pw-new').value;
+      const btn = document.getElementById('pw-btn');
+      const err = document.getElementById('pw-err');
+      err.className = 'merr';
+      if (!pw || pw.length < 4) {
+        err.textContent = 'Senha deve ter ao menos 4 caracteres.';
+        err.className = 'merr show';
+        return;
+      }
+      btn.disabled = true; btn.innerHTML = '<span class="sp"></span>';
+      try {
+        const r = await fetch(`/api/admin/users/${encodeURIComponent(_pwUser)}/password`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: pw })
+        });
+        const d = await r.json();
+        if (d.success) { closeOv('ov-pw'); toast('✅ Senha alterada!', '#10b981'); }
+        else { err.textContent = d.message || 'Erro.'; err.className = 'merr show'; }
+      } catch { err.textContent = 'Erro de conexão.'; err.className = 'merr show'; }
+      finally { btn.disabled = false; btn.innerHTML = 'Salvar'; }
+    }
+
+    /* del modal */
+    function openDel(u) {
+      _delUser = u;
+      document.getElementById('del-who').textContent = u;
+      document.getElementById('ov-del').classList.add('open');
+    }
+    async function confirmDel() {
+      const btn = document.getElementById('del-btn');
+      btn.disabled = true; btn.innerHTML = '<span class="sp"></span>';
+      try {
+        const r = await fetch(`/api/admin/users/${encodeURIComponent(_delUser)}`, { method: 'DELETE' });
+        const d = await r.json();
+        closeOv('ov-del');
+        if (d.success) { toast('🗑️ Usuário removido!', '#10b981'); loadUsers(); }
+        else toast('❌ ' + (d.message || 'Erro.'), '#ef4444');
+      } catch { closeOv('ov-del'); toast('❌ Erro de conexão.', '#ef4444'); }
+      finally { btn.disabled = false; btn.innerHTML = 'Sim, Remover'; }
+    }
+
+    /* helpers */
+    function closeOv(id) { document.getElementById(id).classList.remove('open'); }
+    function x(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+    function showOk(m) { const el = document.getElementById('a-ok'); document.getElementById('a-ok-m').textContent = m; el.className = 'alert aok show'; setTimeout(() => el.className = 'alert aok', 4500); }
+    function showErrA(m) { const el = document.getElementById('a-err'); document.getElementById('a-err-m').textContent = m; el.className = 'alert aerr show'; setTimeout(() => el.className = 'alert aerr', 5000); }
+    function showTblErr(m) { document.getElementById('tbody').innerHTML = `<tr><td colspan="4"><div class="empty">${x(m)}</div></td></tr>`; }
+    function hideAlerts() { document.getElementById('a-ok').className='alert aok'; document.getElementById('a-err').className='alert aerr'; }
+
+    let _tt;
+    function toast(msg, color) {
+      const t = document.getElementById('toast');
+      t.textContent = msg; t.style.background = color + 'dd';
+      t.style.color = '#fff'; t.style.border = '1px solid ' + color;
+      t.style.opacity = '1';
+      clearTimeout(_tt);
+      _tt = setTimeout(() => t.style.opacity = '0', 3000);
+    }
+
+    /* fechar modal clicando fora */
+    document.querySelectorAll('.ov').forEach(o => {
+      o.addEventListener('click', function(e) {
+        if (e.target === this) closeOv(this.id);
       });
-    }
+    });
 
-    async function createCredential(){
-      const product_id=document.getElementById('cred-product').value;
-      const email=document.getElementById('cred-email').value.trim();
-      const password=document.getElementById('cred-password').value.trim();
-      const note=document.getElementById('cred-note').value.trim();
-      if(!product_id||!email||!password){ show('cred-msg','err','Produto, email e senha são obrigatórios.'); return; }
-      const res=await fetch('/api/admin/credentials',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({product_id,email,password,note})});
-      const data=await res.json();
-      if(data.success){
-        show('cred-msg','ok',data.message||'Acesso cadastrado.');
-        document.getElementById('cred-email').value='';
-        document.getElementById('cred-password').value='';
-        document.getElementById('cred-note').value='';
-        loadCredentials();
-      } else show('cred-msg','err',data.message||'Falha ao cadastrar.');
-    }
-    async function deleteCredential(productId, credId){
-      if(!confirm('Excluir este acesso?')) return;
-      const res=await fetch('/api/admin/credentials/'+encodeURIComponent(productId)+'/'+encodeURIComponent(credId),{method:'DELETE'});
-      const data=await res.json();
-      if(data.success){show('cred-msg','ok',data.message||'Removido.'); loadCredentials();}
-      else show('cred-msg','err',data.message||'Falha ao remover.');
-    }
-    async function resetCredential(productId, credId){
-      if(!confirm('Liberar este acesso novamente para venda?')) return;
-      const res=await fetch('/api/admin/credentials/'+encodeURIComponent(productId)+'/'+encodeURIComponent(credId)+'/reset',{method:'POST'});
-      const data=await res.json();
-      if(data.success){show('cred-msg','ok',data.message||'Liberado.'); loadCredentials();}
-      else show('cred-msg','err',data.message||'Falha.');
-    }
+    /* ── PIN modal ── */
+    let _pinUser = null, _pinHasPin = false;
 
-    /* EDIT MODAL */
-    function openEdit(productId, credId, email, password, note){
-      editCtx={productId, credId};
-      document.getElementById('edit-email').value=email||'';
-      document.getElementById('edit-password').value=password||'';
-      document.getElementById('edit-note').value=note||'';
-      document.getElementById('edit-modal').classList.add('show');
-    }
-    function closeEdit(){ document.getElementById('edit-modal').classList.remove('show'); }
-    async function saveEdit(){
-      const email=document.getElementById('edit-email').value.trim();
-      const password=document.getElementById('edit-password').value.trim();
-      const note=document.getElementById('edit-note').value.trim();
-      if(!email||!password){ alert('Email e senha são obrigatórios.'); return; }
-      const res=await fetch('/api/admin/credentials/'+encodeURIComponent(editCtx.productId)+'/'+encodeURIComponent(editCtx.credId),{
-        method:'PUT', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({email,password,note})
+    function openPin(u, hasPin) {
+      _pinUser   = u;
+      _pinHasPin = hasPin;
+      document.getElementById('pin-user-label').textContent = u;
+      ['pin-d1','pin-d2','pin-d3','pin-d4'].forEach(id => {
+        const el = document.getElementById(id);
+        el.value = '';
+        el.style.display = '';
       });
-      const data=await res.json();
-      if(data.success){ closeEdit(); show('cred-msg','ok',data.message||'Atualizado.'); loadCredentials(); }
-      else show('cred-msg','err',data.message||'Falha ao atualizar.');
+      document.getElementById('pin-inputs-wrap').style.display = '';
+      document.getElementById('pin-err').className = 'merr';
+      document.getElementById('pin-err').textContent = '';
+
+      if (hasPin) {
+        document.getElementById('pin-modal-title').textContent = '🔒 PIN Personalizado Ativo';
+        document.getElementById('pin-sub').textContent = 'Digite um novo PIN de 4 dígitos para substituir o PIN atual ou restaure o padrão 1995.';
+        document.getElementById('pin-rm-btn').style.display = '';
+        document.getElementById('pin-set-btn').textContent = '🔐 Alterar PIN';
+      } else {
+        document.getElementById('pin-modal-title').textContent = '🔒 PIN Padrão Ativo (1995)';
+        document.getElementById('pin-sub').textContent = 'A redefinição de senha já sai protegida automaticamente com o PIN padrão 1995. Se quiser, digite outro PIN de 4 dígitos para personalizar.';
+        document.getElementById('pin-rm-btn').style.display = 'none';
+        document.getElementById('pin-set-btn').textContent = '🔐 Definir PIN Personalizado';
+      }
+      document.getElementById('ov-pin').classList.add('open');
+      setTimeout(() => document.getElementById('pin-d1').focus(), 100);
     }
 
-    /* DELIVER MODAL */
-    function openDeliver(productId, credId){
-      deliverCtx={productId, credId};
-      document.getElementById('deliver-to').value='';
-      document.getElementById('deliver-modal').classList.add('show');
-    }
-    function closeDeliver(){ document.getElementById('deliver-modal').classList.remove('show'); }
-    async function saveDeliver(){
-      const delivered_to=document.getElementById('deliver-to').value.trim();
-      const res=await fetch('/api/admin/credentials/'+encodeURIComponent(deliverCtx.productId)+'/'+encodeURIComponent(deliverCtx.credId)+'/deliver',{
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({delivered_to})
-      });
-      const data=await res.json();
-      if(data.success){ closeDeliver(); show('cred-msg','ok',data.message||'Marcado como entregue.'); loadCredentials(); }
-      else show('cred-msg','err',data.message||'Falha.');
+    function pinNext(el, nextId) {
+      const v = el.value.toString().replace(/\D/g,'');
+      el.value = v.slice(-1);
+      if (v && nextId) document.getElementById(nextId).focus();
     }
 
-    async function logout(){ await fetch('/api/auth/logout',{method:'POST'}); location.href='/login'; }
-    loadUsers();
+    function pinKey(e, el, prevId) {
+      if (e.key === 'Backspace' && !el.value && prevId) {
+        document.getElementById(prevId).focus();
+      }
+    }
+
+    function getPinValue() {
+      return ['pin-d1','pin-d2','pin-d3','pin-d4']
+        .map(id => document.getElementById(id).value.replace(/\D/g,''))
+        .join('');
+    }
+
+    async function confirmPinSet() {
+      const pin = getPinValue();
+      const btn = document.getElementById('pin-set-btn');
+      const err = document.getElementById('pin-err');
+      err.className = 'merr';
+      if (pin.length !== 4) {
+        err.textContent = 'Preencha os 4 dígitos do PIN.';
+        err.className = 'merr show';
+        return;
+      }
+      btn.disabled = true; btn.innerHTML = '<span class="sp"></span>';
+      try {
+        const r = await fetch(`/api/admin/users/${encodeURIComponent(_pinUser)}/reset-pin`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'set', pin })
+        });
+        const d = await r.json();
+        if (d.success) {
+          closeOv('ov-pin');
+          toast('🔐 PIN da redefinição salvo!', '#d97706');
+          loadUsers();
+        } else {
+          err.textContent = d.message || 'Erro ao salvar PIN.';
+          err.className = 'merr show';
+        }
+      } catch {
+        err.textContent = 'Erro de conexão.';
+        err.className = 'merr show';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = _pinHasPin ? '🔐 Alterar PIN' : '🔐 Definir PIN Personalizado';
+      }
+    }
+
+    async function confirmPinRemove() {
+      const btn = document.getElementById('pin-rm-btn');
+      const err = document.getElementById('pin-err');
+      err.className = 'merr';
+      btn.disabled = true; btn.innerHTML = '<span class="sp"></span>';
+      try {
+        const r = await fetch(`/api/admin/users/${encodeURIComponent(_pinUser)}/reset-pin`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'restore_default' })
+        });
+        const d = await r.json();
+        if (d.success) {
+          closeOv('ov-pin');
+          toast('♻️ PIN restaurado para o padrão 1995!', '#10b981');
+          loadUsers();
+        } else {
+          err.textContent = d.message || 'Erro ao remover.';
+          err.className = 'merr show';
+        }
+      } catch {
+        err.textContent = 'Erro de conexão.';
+        err.className = 'merr show';
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = '♻️ Restaurar Padrão 1995';
+      }
+    }
+
   </script>
 </body>
 </html>
