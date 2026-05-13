@@ -267,7 +267,7 @@
   <div class="topbar">
     <div class="tl">
       <div class="logo">✦</div>
-      <div class="title">CENTRAL DOS CÓDIGOS</div>
+      <div class="title" id="site-title-h1">CENTRAL DOS CÓDIGOS</div>
       <span class="badge-adm">⚙️ Admin</span>
     </div>
     <div class="tr">
@@ -500,6 +500,17 @@
   <div id="toast"></div>
 
   <script>
+    // ── NOME DINÂMICO BASEADO NO DOMÍNIO ──
+    (function() {
+      const host = (window.location.hostname || '').toLowerCase();
+      const isRios = host.startsWith('rios.') || host.includes('rios.up.railway.app');
+      if (isRios) {
+        const t = document.getElementById('site-title-h1');
+        if (t) t.textContent = 'RIO CÓDIGOS';
+        document.title = 'Rio Códigos ✦ — Painel Admin';
+      }
+    })();
+
     let _users = [], _pwUser = null, _delUser = null;
 
     /* init */

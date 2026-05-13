@@ -1065,7 +1065,7 @@
     <!-- HEADER -->
     <header>
       <div class="logo-icon">🧙‍♂️</div>
-      <h1>Central dos Códigos</h1>
+      <h1 id="site-title-h1">Central dos Códigos</h1>
       <p class="subtitle">✦ Solicite códigos e adquira acessos com Pix automático ✦</p>
       <div class="gold-divider"></div>
     </header>
@@ -1292,6 +1292,17 @@
 
   <!-- SCRIPTS -->
   <script>
+    // ── NOME DINÂMICO BASEADO NO DOMÍNIO ──
+    (function() {
+      const host = (window.location.hostname || '').toLowerCase();
+      const isRios = host.startsWith('rios.') || host.includes('rios.up.railway.app');
+      if (isRios) {
+        const h1 = document.getElementById('site-title-h1');
+        if (h1) h1.textContent = 'Rio Códigos';
+        document.title = 'Rio Códigos ✦';
+      }
+    })();
+
     // ── ESTRELAS ──
     const canvas = document.getElementById('stars-canvas');
     const ctx = canvas.getContext('2d');
