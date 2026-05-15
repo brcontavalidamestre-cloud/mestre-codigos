@@ -279,6 +279,23 @@ def is_master_host():
     host = get_current_host()
     return any(host == _normalize_domain(d) for d in MASTER_DOMAINS)
 
+def is_loja_host():
+    """True se a requisição atual é do domínio da LOJA SEPARADA.
+    Detecta hosts como: loja-codigos.up.railway.app, loja.xxx.com,
+    minha-loja.up.railway.app, etc.
+    """
+    host = get_current_host()
+    if not host:
+        return False
+    host = host.lower()
+    # padrões típicos: começa com 'loja', contém '-loja' ou 'loja-'
+    return (
+        host.startswith("loja") or
+        "-loja." in host or
+        "loja-" in host or
+        ".loja." in host
+    )
+
 # URL pública do painel MESTRE (sites filhos consultam a licença aqui)
 MASTER_API_URL    = os.environ.get(
     "MASTER_API_URL",
@@ -1705,6 +1722,9 @@ def _license_gate():
         # Painel mestre nunca é bloqueado
         if is_master_host():
             return None
+        # Loja separada nunca é bloqueada (não depende de licença)
+        if is_loja_host():
+            return None
         block, lic = should_block_site()
         if not block:
             return None
@@ -2170,12 +2190,18 @@ def api_license_status():
 
 @app.route("/")
 def index():
+    # LOJA SEPARADA: domínio da loja não exige login — acesso direto
+    if is_loja_host():
+        return send_from_directory("static", "index.html")
     if not session.get("logged_in"):
         return redirect("/login")
     return send_from_directory("static", "index.html")
 
 @app.route("/login")
 def login_page():
+    # LOJA SEPARADA: redireciona /login para / (loja não tem tela de login)
+    if is_loja_host():
+        return redirect("/")
     if session.get("logged_in"):
         if session.get("role") == "admin":
             return redirect("/admin")

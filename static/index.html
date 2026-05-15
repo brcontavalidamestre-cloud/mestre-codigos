@@ -1077,7 +1077,7 @@
     <!-- MENU TOPO -->
     <div class="top-menu">
       <button id="btn-view-codigos" class="active" onclick="switchView('codigos')">🔎 Consultar Códigos</button>
-      <button id="btn-view-loja" onclick="switchView('loja')">🛒 Loja com Pix</button>
+      <button id="btn-view-loja" onclick="switchView('loja')" style="display:none">🛒 Loja com Pix</button>
     </div>
 
   <!-- ============ VIEW: CONSULTAR CÓDIGOS ============ -->
@@ -2429,6 +2429,59 @@
 
     // Iniciação do hash (#loja abre direto a loja)
     if (window.location.hash === '#loja') switchView('loja');
+
+    // ───────────────────────────────────────
+    // DETECÇÃO DE DOMÍNIO DA LOJA SEPARADA
+    // Se o host contém 'loja', mostra APENAS a loja (sem senha, sem códigos)
+    // ───────────────────────────────────────
+    (function configureLojaStandalone() {
+      const host = (window.location.hostname || '').toLowerCase();
+      const isLojaSite = host.startsWith('loja') || host.includes('loja-') || host.includes('-loja') || host.includes('.loja.');
+      if (!isLojaSite) return;
+
+      // Marca modo loja-standalone no <body> para CSS
+      document.body.setAttribute('data-loja-standalone', 'true');
+
+      // 1) Esconde botão 'Consultar Códigos' e mostra 'Loja' como único ativo
+      const btnCod = document.getElementById('btn-view-codigos');
+      const btnLoja = document.getElementById('btn-view-loja');
+      if (btnCod) btnCod.style.display = 'none';
+      if (btnLoja) {
+        btnLoja.style.display = 'inline-block';
+        btnLoja.classList.add('active');
+      }
+
+      // 2) Esconde a view de códigos
+      const viewCod = document.getElementById('view-codigos');
+      if (viewCod) viewCod.classList.remove('active');
+      const viewLoja = document.getElementById('view-loja');
+      if (viewLoja) viewLoja.classList.add('active');
+
+      // 3) Esconde o menu superior inteiro (não há alternação de view)
+      const topMenu = document.querySelector('.top-menu');
+      if (topMenu) topMenu.style.display = 'none';
+
+      // 4) ACESSO DIRETO — pula a tela de senha 1995
+      lojaUnlocked = true;
+      const lockScreen = document.getElementById('loja-lock-screen');
+      const lojaContent = document.getElementById('loja-content');
+      if (lockScreen) lockScreen.style.display = 'none';
+      if (lojaContent) lojaContent.style.display = 'block';
+
+      // 5) Atualiza título, header e tab do navegador
+      document.title = 'Loja com Pix — Códigos Premium';
+      const headerTitle = document.querySelector('header h1, .site-title-h1, #site-title');
+      if (headerTitle) headerTitle.textContent = '🛒 LOJA COM PIX';
+      const headerSub = document.querySelector('header p, .site-subtitle');
+      if (headerSub) headerSub.textContent = 'Compre códigos premium com pagamento instantâneo via Pix';
+
+      // 6) Esconde botão SAIR (no domain da loja não tem login)
+      const btnLogout = document.querySelector('.logout-btn, #btn-logout, [onclick*="doLogout"]');
+      if (btnLogout) btnLogout.style.display = 'none';
+
+      // 7) Carrega produtos imediatamente
+      try { if (typeof loadProducts === 'function') loadProducts(); } catch(e){}
+    })();
   </script>
 </body>
 </html>
