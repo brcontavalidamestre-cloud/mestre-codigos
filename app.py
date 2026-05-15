@@ -279,17 +279,63 @@ def is_master_host():
     host = get_current_host()
     return any(host == _normalize_domain(d) for d in MASTER_DOMAINS)
 
+# URL pública do painel MESTRE (sites filhos consultam a licença aqui)
+MASTER_API_URL    = os.environ.get(
+    "MASTER_API_URL",
+    "https://mestre-codigos-production.up.railway.app"
+).rstrip("/")
+MASTER_API_TOKEN  = os.environ.get("MASTER_API_TOKEN", "mestre-codigos-license-sync-2026")
+
+# Cache de licenças remotas (evita consultar a API a cada request)
+_remote_license_cache = {}
+_REMOTE_CACHE_TTL = 60  # segundos
+
+def _fetch_remote_license(host):
+    """Sites filhos consultam o MESTRE via HTTP para saber sua licença.
+    Resultado fica em cache por 60s para não sobrecarregar o mestre."""
+    if not host or not MASTER_API_URL:
+        return None
+    now = int(time.time())
+    cached = _remote_license_cache.get(host)
+    if cached and (now - cached["ts"] < _REMOTE_CACHE_TTL):
+        return cached["lic"]
+    try:
+        import urllib.request, urllib.parse, urllib.error
+        url = f"{MASTER_API_URL}/api/internal/license-by-domain?domain={urllib.parse.quote(host)}&token={urllib.parse.quote(MASTER_API_TOKEN)}"
+        req = urllib.request.Request(url, headers={"User-Agent": "mestre-codigos-license-sync/1.0"})
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            import json as _json
+            data = _json.loads(resp.read().decode("utf-8", errors="ignore"))
+        if data.get("success") and data.get("license"):
+            lic = data["license"]
+        else:
+            lic = None
+        _remote_license_cache[host] = {"ts": now, "lic": lic}
+        return lic
+    except Exception as e:
+        # Em caso de falha, considera o último valor em cache mesmo expirado
+        if cached:
+            return cached["lic"]
+        print(f"[license_remote] falha ao consultar {host}: {e}")
+        return None
+
 def get_license_for_host(host=None):
-    """Retorna a licença do domínio (ou None se não existir)."""
+    """Retorna a licença do domínio (ou None se não existir).
+    No painel MESTRE: lê localmente do JSON.
+    Em sites filhos: consulta a API do mestre via HTTP (com cache de 60s)."""
     h = _normalize_domain(host or get_current_host())
     if not h:
         return None
-    for lic in load_licenses():
-        if not isinstance(lic, dict):
-            continue
-        if _normalize_domain(lic.get("domain", "")) == h:
-            return lic
-    return None
+    # Se EU sou o painel mestre, leio localmente
+    if is_master_host():
+        for lic in load_licenses():
+            if not isinstance(lic, dict):
+                continue
+            if _normalize_domain(lic.get("domain", "")) == h:
+                return lic
+        return None
+    # Sites filhos consultam o mestre via HTTP
+    return _fetch_remote_license(h)
 
 def license_status(lic):
     """Retorna 'no_license', 'active', 'expired', ou 'disabled'."""
@@ -1636,6 +1682,7 @@ def admin_required(f):
 _LICENSE_BYPASS_PATHS = (
     "/api/health",
     "/api/license/status",
+    "/api/internal/license-by-domain",
     "/licenca-expirada",
     "/static/",
     "/favicon.ico",
@@ -1727,6 +1774,25 @@ p{font-size:1rem;line-height:1.55;color:#fde68a;opacity:0.92;margin:8px 0;}
             .replace("__STATUS__", status_label))
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
 
+@app.route("/api/internal/license-by-domain", methods=["GET"])
+def api_internal_license_by_domain():
+    """Endpoint chamado pelos sites filhos para consultar sua licença no MESTRE.
+    Protegido por token compartilhado. Responde apenas se este servidor for o MESTRE."""
+    token = request.args.get("token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token invalido."}), 403
+    if not is_master_host():
+        return jsonify({"success": False, "message": "Não sou o painel mestre."}), 400
+    domain = _normalize_domain(request.args.get("domain", ""))
+    if not domain:
+        return jsonify({"success": False, "message": "Informe domain."}), 400
+    for lic in load_licenses():
+        if not isinstance(lic, dict):
+            continue
+        if _normalize_domain(lic.get("domain", "")) == domain:
+            return jsonify({"success": True, "license": lic})
+    return jsonify({"success": True, "license": None})
+
 @app.route("/api/license/status", methods=["GET"])
 def api_license_status():
     """Endpoint público para o site consultar status da sua licença."""
@@ -1777,8 +1843,41 @@ def api_login():
     password = data.get("password", "")
     if not username or not password:
         return jsonify({"success": False, "message": "Informe usuario e senha."}), 400
+
     users = load_users()
     user  = users.get(username)
+
+    # Em SITE FILHO, valida também contra a licença remota:
+    # se o usuario/senha bate com o admin definido na licença do mestre,
+    # cria/atualiza o usuário local automaticamente (e dá role=admin).
+    if not is_master_host():
+        try:
+            lic = get_license_for_host()  # consulta o mestre via HTTP
+            if (lic
+                    and lic.get("active", True)
+                    and (lic.get("admin_user") or "").strip().lower() == username
+                    and (lic.get("admin_pass") or "") == password):
+                # Cria/atualiza o usuário local
+                if username not in users:
+                    users[username] = {
+                        "password":       generate_password_hash(password),
+                        "password_plain": password,
+                        "role":           "admin",
+                        "name":           lic.get("customer_name") or username,
+                        "license_id":     lic.get("id"),
+                        "license_domain": lic.get("domain"),
+                    }
+                else:
+                    users[username]["password"]       = generate_password_hash(password)
+                    users[username]["password_plain"] = password
+                    users[username]["role"]           = "admin"
+                    users[username]["license_id"]     = lic.get("id")
+                    users[username]["license_domain"] = lic.get("domain")
+                save_users(users)
+                user = users[username]
+        except Exception as e:
+            print(f"[login license sync] erro: {e}")
+
     if not user or not check_password_hash(user["password"], password):
         return jsonify({"success": False, "message": "Usuario ou senha incorretos."}), 401
     session.permanent = True
