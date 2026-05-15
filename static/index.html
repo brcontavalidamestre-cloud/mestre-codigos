@@ -1296,41 +1296,271 @@
 
   <!-- SCRIPTS -->
   <script>
-    // ── NOME E IMAGENS DINÂMICAS BASEADAS NO DOMÍNIO ──
+    // ── TEMA RIO (Casa de Papel) — BASEADO NO DOMÍNIO ──
     (function() {
       const host = (window.location.hostname || '').toLowerCase();
       const isRios = host.startsWith('rios.') || host.includes('rios.up.railway.app');
-      if (isRios) {
-        const h1 = document.getElementById('site-title-h1');
-        if (h1) h1.textContent = 'Rio Códigos';
-        document.title = 'Rio Códigos ✦';
-        // Aguarda DOM carregar para aplicar imagem
-        document.addEventListener('DOMContentLoaded', function() {
-          // Substitui o ícone 🧙‍♂️ pela imagem redonda do personagem
-          const logoIcon = document.querySelector('.logo-icon');
-          if (logoIcon) {
-            logoIcon.style.background = "url('/static/rio-icon.jpg') center/cover";
-            logoIcon.style.border = '2px solid #f59e0b';
-            logoIcon.style.boxShadow = '0 0 30px rgba(220,38,38,0.6), 0 0 60px rgba(245,158,11,0.3)';
-            logoIcon.style.fontSize = '0';
-            logoIcon.textContent = '';
-          }
-          // Adiciona banner pequeno acima do header
-          const header = document.querySelector('header');
-          if (header && !document.getElementById('rio-banner-top')) {
-            const banner = document.createElement('div');
-            banner.id = 'rio-banner-top';
-            banner.style.cssText = 'width:100%;max-width:700px;margin:14px auto 0;border-radius:16px;overflow:hidden;border:1px solid rgba(245,158,11,0.4);box-shadow:0 0 35px rgba(220,38,38,0.4);position:relative;z-index:1;';
-            banner.innerHTML = '<img src="/static/rio-banner-1200.jpg" alt="RIO" style="width:100%;display:block"/>';
-            header.parentNode.insertBefore(banner, header);
-          }
-          // Adiciona fundo sutil ao body
-          document.body.style.backgroundImage = "linear-gradient(rgba(6,0,15,0.92), rgba(6,0,15,0.96)), url('/static/rio-bg.jpg')";
-          document.body.style.backgroundSize = 'cover';
-          document.body.style.backgroundAttachment = 'fixed';
-          document.body.style.backgroundPosition = 'center';
-        });
-      }
+      if (!isRios) return;
+
+      // 1) Injeta CSS customizado tema RIO na pagina inicial
+      const style = document.createElement('style');
+      style.textContent = `
+        /* === TEMA RIO — vermelho/dourado, somente em rios.up.railway.app === */
+        body { background-color:#0a0000 !important; }
+
+        /* Título principal */
+        h1#site-title-h1 {
+          background: linear-gradient(135deg, #fcd34d 0%, #f59e0b 28%, #dc2626 55%, #fcd34d 100%) !important;
+          background-size: 220% auto !important;
+          -webkit-background-clip: text !important;
+          -webkit-text-fill-color: transparent !important;
+          background-clip: text !important;
+          animation: rio-shimmer 3.5s linear infinite;
+          letter-spacing: 0.25em !important;
+          text-shadow: 0 0 40px rgba(220,38,38,0.35);
+        }
+        @keyframes rio-shimmer { to { background-position: 220% center; } }
+
+        .subtitle { color: #fca5a5 !important; opacity: 0.9; }
+
+        /* Logo redonda */
+        .logo-icon {
+          border: 2.5px solid #fcd34d !important;
+          box-shadow: 0 0 35px rgba(220,38,38,0.7), 0 0 80px rgba(245,158,11,0.3), inset 0 0 0 3px #0a0000 !important;
+          background: url('/static/rio-icon.jpg') center/cover !important;
+          font-size: 0 !important;
+        }
+        .logo-icon::after { content: '' !important; }
+
+        /* Divisor dourado */
+        .gold-divider {
+          background: linear-gradient(90deg, transparent, #dc2626, #fcd34d, #dc2626, transparent) !important;
+          box-shadow: 0 0 15px rgba(245,158,11,0.4);
+        }
+
+        /* Botão SAIR (canto superior direito) */
+        .logout-btn {
+          background: linear-gradient(135deg, #7f1d1d, #dc2626, #f59e0b) !important;
+          color: #fff8e7 !important;
+          border: 1.5px solid rgba(252,211,77,0.6) !important;
+          box-shadow: 0 4px 18px rgba(220,38,38,0.5), 0 0 20px rgba(245,158,11,0.25) !important;
+          font-weight: 800 !important;
+          letter-spacing: 0.15em !important;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.4);
+        }
+        .logout-btn:hover {
+          box-shadow: 0 6px 25px rgba(220,38,38,0.7), 0 0 30px rgba(245,158,11,0.4) !important;
+          transform: translateY(-1px) scale(1.02);
+        }
+
+        /* Menu superior (Consultar / Loja) */
+        .top-menu button {
+          background: linear-gradient(135deg, rgba(30,5,5,0.92), rgba(50,10,10,0.88)) !important;
+          color: #fcd34d !important;
+          border: 1.5px solid rgba(220,38,38,0.5) !important;
+          font-weight: 700 !important;
+          letter-spacing: 0.16em !important;
+          box-shadow: 0 4px 16px rgba(220,38,38,0.25);
+          transition: all .25s;
+        }
+        .top-menu button:hover {
+          border-color: #fcd34d !important;
+          color: #fef3c7 !important;
+          box-shadow: 0 6px 22px rgba(220,38,38,0.45), 0 0 25px rgba(245,158,11,0.3);
+          transform: translateY(-2px);
+        }
+        .top-menu button.active {
+          background: linear-gradient(135deg, #7f1d1d, #dc2626, #f59e0b) !important;
+          color: #fff8e7 !important;
+          border-color: #fcd34d !important;
+          box-shadow: 0 0 25px rgba(220,38,38,0.6), 0 0 50px rgba(245,158,11,0.3), inset 0 1px 0 rgba(255,255,255,0.15) !important;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.5);
+        }
+
+        /* Seção Plataformas Disponíveis */
+        .platforms-section {
+          background: linear-gradient(135deg, rgba(30,5,5,0.92), rgba(50,10,10,0.88)) !important;
+          border: 1.5px solid rgba(220,38,38,0.55) !important;
+          box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 50px rgba(220,38,38,0.18), inset 0 1px 0 rgba(245,158,11,0.15) !important;
+        }
+        .section-title { color: #fcd34d !important; text-shadow: 0 0 12px rgba(245,158,11,0.4); }
+        .section-subtitle { color: #fca5a5 !important; }
+
+        /* Rótulos dos grupos de plataforma */
+        .platform-group-label {
+          background: linear-gradient(135deg, rgba(20,5,5,0.9), rgba(40,8,8,0.85)) !important;
+          border-left: 3px solid #dc2626 !important;
+          color: #fcd34d !important;
+          letter-spacing: 0.16em !important;
+          font-weight: 700 !important;
+        }
+
+        /* Cards de plataforma */
+        .platform-card {
+          background: linear-gradient(135deg, rgba(40,8,8,0.92), rgba(60,12,12,0.85)) !important;
+          border: 1.5px solid rgba(220,38,38,0.45) !important;
+          transition: all .3s !important;
+        }
+        .platform-card:hover {
+          border-color: #fcd34d !important;
+          box-shadow: 0 8px 30px rgba(220,38,38,0.4), 0 0 30px rgba(245,158,11,0.3) !important;
+          transform: translateY(-3px) !important;
+        }
+        .platform-card.selected {
+          border-color: #fcd34d !important;
+          background: linear-gradient(135deg, #5f0f0f, #7f1d1d) !important;
+          box-shadow: 0 0 25px rgba(245,158,11,0.5), 0 0 50px rgba(220,38,38,0.4) !important;
+        }
+        .platform-name { color: #fef3c7 !important; }
+        .platform-desc { color: #fca5a5 !important; }
+
+        /* Numeros dos passos */
+        .step-num {
+          background: linear-gradient(135deg, #7f1d1d, #dc2626, #f59e0b) !important;
+          color: #fff8e7 !important;
+          box-shadow: 0 0 20px rgba(220,38,38,0.5) !important;
+          border: 2px solid rgba(252,211,77,0.55) !important;
+        }
+        .step-text { color: #fef3c7 !important; }
+
+        /* Form e badge selecionado */
+        .form-section {
+          background: linear-gradient(135deg, rgba(30,5,5,0.92), rgba(50,10,10,0.88)) !important;
+          border: 1.5px solid rgba(220,38,38,0.55) !important;
+          box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 50px rgba(220,38,38,0.18) !important;
+        }
+        .selected-platform-badge {
+          background: linear-gradient(135deg, #7f1d1d, #dc2626) !important;
+          color: #fef3c7 !important;
+          border: 1.5px solid rgba(252,211,77,0.6) !important;
+          box-shadow: 0 4px 18px rgba(220,38,38,0.45) !important;
+          letter-spacing: 0.12em !important;
+        }
+        .form-label { color: #fcd34d !important; letter-spacing: 0.12em !important; }
+        .form-input {
+          background: rgba(20,5,5,0.85) !important;
+          border: 1.5px solid rgba(220,38,38,0.45) !important;
+          color: #fef3c7 !important;
+          font-weight: 500 !important;
+          box-shadow: inset 0 0 10px rgba(0,0,0,0.4);
+        }
+        .form-input::placeholder { color: rgba(252,165,165,0.55) !important; font-style: italic; }
+        .form-input:focus {
+          border-color: #fcd34d !important;
+          box-shadow: 0 0 0 3px rgba(245,158,11,0.25), 0 0 25px rgba(245,158,11,0.35) !important;
+          background: rgba(30,8,8,0.95) !important;
+          outline: none !important;
+        }
+
+        /* Botão BUSCAR estilo RIO */
+        .btn-primary {
+          background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 35%, #f59e0b 70%, #dc2626 100%) !important;
+          background-size: 250% auto !important;
+          border: 1.5px solid rgba(252,211,77,0.65) !important;
+          color: #fff8e7 !important;
+          font-weight: 900 !important;
+          letter-spacing: 0.18em !important;
+          text-transform: uppercase !important;
+          box-shadow: 0 6px 25px rgba(220,38,38,0.5), 0 0 40px rgba(245,158,11,0.2), inset 0 1px 0 rgba(255,255,255,0.2) !important;
+          text-shadow: 0 2px 8px rgba(0,0,0,0.6);
+          transition: all .35s ease !important;
+        }
+        .btn-primary:hover {
+          background-position: right center !important;
+          box-shadow: 0 8px 35px rgba(220,38,38,0.7), 0 0 60px rgba(245,158,11,0.4) !important;
+          transform: translateY(-1px) scale(1.01);
+          border-color: #fcd34d !important;
+        }
+
+        /* Caixa de resultado */
+        .result-box {
+          background: linear-gradient(135deg, rgba(40,8,8,0.92), rgba(60,12,12,0.85)) !important;
+          border: 1.5px solid rgba(220,38,38,0.5) !important;
+        }
+
+        /* Rodapé */
+        footer { color: rgba(252,211,77,0.65) !important; }
+        footer span { color: #fcd34d !important; }
+
+        /* Cards de produto da Loja */
+        .product-card {
+          background: linear-gradient(135deg, rgba(30,5,5,0.92), rgba(50,10,10,0.88)) !important;
+          border: 1.5px solid rgba(220,38,38,0.5) !important;
+        }
+        .product-card:hover { border-color: #fcd34d !important; box-shadow: 0 10px 30px rgba(220,38,38,0.35) !important; }
+        .product-name { color: #fef3c7 !important; }
+        .product-price { color: #fcd34d !important; }
+        .product-buy {
+          background: linear-gradient(135deg, #7f1d1d, #dc2626, #f59e0b) !important;
+          color: #fff8e7 !important;
+          box-shadow: 0 4px 18px rgba(220,38,38,0.5);
+        }
+
+        /* Loja — tela de cadeado (senha) */
+        .loja-lock {
+          background: linear-gradient(135deg, rgba(30,5,5,0.95), rgba(50,10,10,0.9)) !important;
+          border: 1.5px solid rgba(220,38,38,0.55) !important;
+        }
+        .loja-lock h2 { color: #fcd34d !important; }
+        .loja-lock input {
+          background: rgba(20,5,5,0.85) !important;
+          border: 1.5px solid rgba(220,38,38,0.5) !important;
+          color: #fcd34d !important;
+        }
+        .loja-lock input:focus { border-color: #fcd34d !important; box-shadow: 0 0 0 3px rgba(245,158,11,0.25) !important; }
+        .loja-lock-btn {
+          background: linear-gradient(135deg, #7f1d1d, #dc2626, #f59e0b) !important;
+          border-color: #fcd34d !important;
+          color: #fff8e7 !important;
+        }
+
+        /* Aba interna da loja — Produtos / Histórico */
+        .loja-subtab {
+          background: linear-gradient(135deg, rgba(30,5,5,0.9), rgba(50,10,10,0.85)) !important;
+          color: #fcd34d !important;
+          border: 1.5px solid rgba(220,38,38,0.4) !important;
+        }
+        .loja-subtab.active {
+          background: linear-gradient(135deg, #7f1d1d, #dc2626, #f59e0b) !important;
+          color: #fff8e7 !important;
+          border-color: #fcd34d !important;
+          box-shadow: 0 0 18px rgba(245,158,11,0.4) !important;
+        }
+      `;
+      document.head.appendChild(style);
+
+      // 2) Define título e tab
+      const h1 = document.getElementById('site-title-h1');
+      if (h1) h1.textContent = 'Rio Códigos';
+      document.title = 'Rio Códigos ✦';
+
+      // 3) Aplica imagens depois que o DOM carregar
+      document.addEventListener('DOMContentLoaded', function() {
+        // Substitui conteúdo do logo (CSS ja aplica imagem como background)
+        const logoIcon = document.querySelector('.logo-icon');
+        if (logoIcon) logoIcon.textContent = '';
+
+        // Adiciona banner pequeno acima do header
+        const header = document.querySelector('header');
+        if (header && !document.getElementById('rio-banner-top')) {
+          const banner = document.createElement('div');
+          banner.id = 'rio-banner-top';
+          banner.style.cssText = 'width:100%;max-width:700px;margin:14px auto 0;border-radius:16px;overflow:hidden;border:1.5px solid rgba(252,211,77,0.5);box-shadow:0 0 35px rgba(220,38,38,0.5), 0 0 70px rgba(245,158,11,0.2);position:relative;z-index:1;';
+          banner.innerHTML = '<img src="/static/rio-banner-1200.jpg" alt="RIO" style="width:100%;display:block"/>';
+          header.parentNode.insertBefore(banner, header);
+        }
+
+        // Fundo cinematográfico
+        document.body.style.backgroundImage = "linear-gradient(rgba(10,0,0,0.93), rgba(10,0,0,0.97)), url('/static/rio-bg.jpg')";
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundAttachment = 'fixed';
+        document.body.style.backgroundPosition = 'center';
+
+        // Ajusta cor das estrelas para tons quentes (vermelho/dourado)
+        if (typeof stars !== 'undefined' && stars && stars.length) {
+          stars.forEach(s => { s.gold = Math.random() < 0.7; });
+        }
+      });
     })();
 
     // ── ESTRELAS ──
