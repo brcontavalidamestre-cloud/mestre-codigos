@@ -1296,7 +1296,7 @@
 
   <!-- SCRIPTS -->
   <script>
-    // ── NOME DINÂMICO BASEADO NO DOMÍNIO ──
+    // ── NOME E IMAGENS DINÂMICAS BASEADAS NO DOMÍNIO ──
     (function() {
       const host = (window.location.hostname || '').toLowerCase();
       const isRios = host.startsWith('rios.') || host.includes('rios.up.railway.app');
@@ -1304,6 +1304,32 @@
         const h1 = document.getElementById('site-title-h1');
         if (h1) h1.textContent = 'Rio Códigos';
         document.title = 'Rio Códigos ✦';
+        // Aguarda DOM carregar para aplicar imagem
+        document.addEventListener('DOMContentLoaded', function() {
+          // Substitui o ícone 🧙‍♂️ pela imagem redonda do personagem
+          const logoIcon = document.querySelector('.logo-icon');
+          if (logoIcon) {
+            logoIcon.style.background = "url('/static/rio-icon.jpg') center/cover";
+            logoIcon.style.border = '2px solid #f59e0b';
+            logoIcon.style.boxShadow = '0 0 30px rgba(220,38,38,0.6), 0 0 60px rgba(245,158,11,0.3)';
+            logoIcon.style.fontSize = '0';
+            logoIcon.textContent = '';
+          }
+          // Adiciona banner pequeno acima do header
+          const header = document.querySelector('header');
+          if (header && !document.getElementById('rio-banner-top')) {
+            const banner = document.createElement('div');
+            banner.id = 'rio-banner-top';
+            banner.style.cssText = 'width:100%;max-width:700px;margin:14px auto 0;border-radius:16px;overflow:hidden;border:1px solid rgba(245,158,11,0.4);box-shadow:0 0 35px rgba(220,38,38,0.4);position:relative;z-index:1;';
+            banner.innerHTML = '<img src="/static/rio-banner-1200.jpg" alt="RIO" style="width:100%;display:block"/>';
+            header.parentNode.insertBefore(banner, header);
+          }
+          // Adiciona fundo sutil ao body
+          document.body.style.backgroundImage = "linear-gradient(rgba(6,0,15,0.92), rgba(6,0,15,0.96)), url('/static/rio-bg.jpg')";
+          document.body.style.backgroundSize = 'cover';
+          document.body.style.backgroundAttachment = 'fixed';
+          document.body.style.backgroundPosition = 'center';
+        });
       }
     })();
 

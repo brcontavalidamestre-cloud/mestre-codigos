@@ -106,7 +106,7 @@
     <p class="footer-txt">✦ Plataforma exclusiva ✦</p>
   </div>
   <script>
-    // ── NOME DINÂMICO BASEADO NO DOMÍNIO ──
+    // ── NOME E IMAGENS DINÂMICAS BASEADOS NO DOMÍNIO ──
     (function() {
       const host = (window.location.hostname || '').toLowerCase();
       const isRios = host.startsWith('rios.') || host.includes('rios.up.railway.app');
@@ -114,6 +114,28 @@
         const h1 = document.getElementById('site-title-h1');
         if (h1) h1.textContent = 'RIO CÓDIGOS';
         document.title = 'Rio Códigos ✦ — Login';
+        // Aplica banner como fundo do body (efeito cinema)
+        document.body.style.backgroundImage = "linear-gradient(rgba(6,0,15,0.78), rgba(6,0,15,0.92)), url('/static/rio-bg.jpg')";
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundAttachment = 'fixed';
+        // Substitui o ícone ✦ pela imagem redonda do personagem
+        const logoIcon = document.querySelector('.logo-icon');
+        if (logoIcon) {
+          logoIcon.style.background = "url('/static/rio-icon.jpg') center/cover";
+          logoIcon.style.border = '2px solid #f59e0b';
+          logoIcon.style.boxShadow = '0 0 30px rgba(220,38,38,0.6), 0 0 60px rgba(245,158,11,0.3)';
+          logoIcon.textContent = '';
+        }
+        // Adiciona banner pequeno acima do card
+        const card = document.querySelector('.card');
+        if (card && !document.getElementById('rio-banner')) {
+          const banner = document.createElement('div');
+          banner.id = 'rio-banner';
+          banner.style.cssText = 'width:100%;max-width:420px;margin:0 auto 14px;border-radius:14px;overflow:hidden;border:1px solid rgba(245,158,11,0.4);box-shadow:0 0 30px rgba(220,38,38,0.4);';
+          banner.innerHTML = '<img src="/static/rio-banner-1200.jpg" alt="RIO" style="width:100%;display:block"/>';
+          card.parentNode.insertBefore(banner, card);
+        }
       }
     })();
 

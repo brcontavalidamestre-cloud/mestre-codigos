@@ -505,7 +505,7 @@
   <div id="toast"></div>
 
   <script>
-    // ── NOME DINÂMICO BASEADO NO DOMÍNIO ──
+    // ── NOME E IMAGENS DINÂMICAS BASEADAS NO DOMÍNIO ──
     (function() {
       const host = (window.location.hostname || '').toLowerCase();
       const isRios = host.startsWith('rios.') || host.includes('rios.up.railway.app');
@@ -513,6 +513,22 @@
         const t = document.getElementById('site-title-h1');
         if (t) t.textContent = 'RIO CÓDIGOS';
         document.title = 'Rio Códigos ✦ — Painel Admin';
+        document.addEventListener('DOMContentLoaded', function() {
+          // Substitui o logo ✦ da topbar pela imagem redonda
+          const logo = document.querySelector('.topbar .logo');
+          if (logo) {
+            logo.style.background = "url('/static/rio-icon.jpg') center/cover";
+            logo.style.border = '2px solid #f59e0b';
+            logo.style.boxShadow = '0 0 20px rgba(220,38,38,0.4)';
+            logo.style.fontSize = '0';
+            logo.textContent = '';
+          }
+          // Adiciona fundo sutil ao body
+          document.body.style.backgroundImage = "linear-gradient(rgba(6,0,15,0.94), rgba(6,0,15,0.97)), url('/static/rio-bg.jpg')";
+          document.body.style.backgroundSize = 'cover';
+          document.body.style.backgroundAttachment = 'fixed';
+          document.body.style.backgroundPosition = 'center';
+        });
       }
     })();
 
