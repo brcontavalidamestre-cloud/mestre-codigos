@@ -281,14 +281,28 @@ def is_master_host():
 
 def is_loja_host():
     """True se a requisição atual é do domínio da LOJA SEPARADA.
-    Detecta hosts como: loja-codigos.up.railway.app, loja.xxx.com,
-    minha-loja.up.railway.app, etc.
+    Detecção em 3 níveis (qualquer um ativa a loja standalone):
+    1) Variável de ambiente IS_LOJA=true (mais confiável — marca o serviço)
+    2) Host configurado em LOJA_DOMAINS (lista separada por vírgula)
+    3) Padrão no nome do host: começa com 'loja', contém '-loja' ou 'loja-'
     """
+    # Nível 1: variável IS_LOJA=true marca todo o serviço como loja
+    if os.environ.get("IS_LOJA", "").strip().lower() in ("1", "true", "yes", "sim"):
+        return True
+
     host = get_current_host()
     if not host:
         return False
     host = host.lower()
-    # padrões típicos: começa com 'loja', contém '-loja' ou 'loja-'
+
+    # Nível 2: domínios explicitamente configurados como loja
+    loja_domains_env = os.environ.get("LOJA_DOMAINS", "").strip()
+    if loja_domains_env:
+        loja_domains = [_normalize_domain(d) for d in loja_domains_env.split(",") if d.strip()]
+        if host in loja_domains:
+            return True
+
+    # Nível 3: padrões típicos no nome do host
     return (
         host.startswith("loja") or
         "-loja." in host or
@@ -1702,6 +1716,7 @@ def admin_required(f):
 # O domínio MESTRE nunca é bloqueado.
 _LICENSE_BYPASS_PATHS = (
     "/api/health",
+    "/api/site-mode",
     "/api/license/status",
     "/api/internal/license-by-domain",
     "/api/license/renew/",
@@ -3328,13 +3343,24 @@ def api_admin_delete_license(license_id):
 def health():
     host = get_current_host()
     is_master = is_master_host()
+    is_loja = is_loja_host()
     return jsonify({
         "status": "ok",
         "service": "Central dos Codigos",
         "loja_enabled": True,
         "efi_configured": efi_is_configured(),
         "host": host,
-        "is_master": is_master
+        "is_master": is_master,
+        "is_loja": is_loja
+    })
+
+@app.route("/api/site-mode", methods=["GET"])
+def api_site_mode():
+    """Frontend consulta para saber se o site está em modo LOJA (sem login)."""
+    return jsonify({
+        "is_master": is_master_host(),
+        "is_loja": is_loja_host(),
+        "host": get_current_host()
     })
 
 if __name__ == "__main__":

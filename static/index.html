@@ -2434,9 +2434,19 @@
     // DETECÇÃO DE DOMÍNIO DA LOJA SEPARADA
     // Se o host contém 'loja', mostra APENAS a loja (sem senha, sem códigos)
     // ───────────────────────────────────────
-    (function configureLojaStandalone() {
+    async function configureLojaStandalone() {
       const host = (window.location.hostname || '').toLowerCase();
-      const isLojaSite = host.startsWith('loja') || host.includes('loja-') || host.includes('-loja') || host.includes('.loja.');
+      let isLojaSite = host.startsWith('loja') || host.includes('loja-') || host.includes('-loja') || host.includes('.loja.');
+
+      // Também consulta o backend (pega caso de IS_LOJA=true via env var)
+      if (!isLojaSite) {
+        try {
+          const r = await fetch('/api/site-mode');
+          const j = await r.json();
+          if (j && j.is_loja) isLojaSite = true;
+        } catch(e) {}
+      }
+
       if (!isLojaSite) return;
 
       // Marca modo loja-standalone no <body> para CSS
@@ -2481,7 +2491,8 @@
 
       // 7) Carrega produtos imediatamente
       try { if (typeof loadProducts === 'function') loadProducts(); } catch(e){}
-    })();
+    }
+    configureLojaStandalone();
   </script>
 </body>
 </html>
