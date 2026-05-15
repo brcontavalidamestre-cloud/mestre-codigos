@@ -286,6 +286,10 @@ MASTER_API_URL    = os.environ.get(
 ).rstrip("/")
 MASTER_API_TOKEN  = os.environ.get("MASTER_API_TOKEN", "mestre-codigos-license-sync-2026")
 
+# Renovação Pix — valor padrão quando o cliente paga direto na tela de bloqueio
+LICENSE_RENEW_VALUE = float(os.environ.get("LICENSE_RENEW_VALUE", "100.00"))
+LICENSE_RENEW_DAYS  = int(os.environ.get("LICENSE_RENEW_DAYS", "30"))
+
 # Cache de licenças remotas (evita consultar a API a cada request)
 _remote_license_cache = {}
 _REMOTE_CACHE_TTL = 60  # segundos
@@ -1683,6 +1687,10 @@ _LICENSE_BYPASS_PATHS = (
     "/api/health",
     "/api/license/status",
     "/api/internal/license-by-domain",
+    "/api/license/renew/",
+    "/api/internal/renew-pix",
+    "/api/internal/renew-status",
+    "/api/internal/renew-webhook",
     "/licenca-expirada",
     "/static/",
     "/favicon.ico",
@@ -1720,7 +1728,8 @@ def _license_gate():
 
 @app.route("/licenca-expirada")
 def license_expired_page():
-    """Tela exibida quando o site filho está bloqueado por licença."""
+    """Tela exibida quando o site filho está bloqueado por licença.
+    Inclui opção de renovação via Pix automático (R$ 100 / 30 dias por padrão)."""
     if is_master_host():
         return redirect("/login")
     lic = get_license_for_host()
@@ -1733,46 +1742,395 @@ def license_expired_page():
         "disabled": "Licença desativada",
         "active": "Ativa"
     }.get(status, status)
+    renew_value = float((lic or {}).get("plan_value") or LICENSE_RENEW_VALUE)
+    renew_days  = LICENSE_RENEW_DAYS
+    can_renew = bool(lic)  # só mostra Pix se tem licença cadastrada
     html = """<!DOCTYPE html>
 <html lang="pt-BR"><head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Acesso expirado</title>
 <style>
-body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+*{box-sizing:border-box;margin:0;padding:0;}
+body{min-height:100vh;display:flex;align-items:center;justify-content:center;
      background:radial-gradient(circle at top, #200015, #0a0010 70%);color:#fef3c7;
      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:20px;}
-.card{max-width:480px;background:linear-gradient(135deg,#1a0010,#2a0014);
-      border:2px solid #dc2626;border-radius:20px;padding:42px 32px;text-align:center;
+.card{max-width:480px;width:100%;background:linear-gradient(135deg,#1a0010,#2a0014);
+      border:2px solid #dc2626;border-radius:20px;padding:36px 28px;text-align:center;
       box-shadow:0 0 60px rgba(220,38,38,0.4),0 0 120px rgba(220,38,38,0.15);}
-.icon{font-size:64px;margin-bottom:12px;}
-h1{font-size:1.8rem;margin:0 0 10px;letter-spacing:2px;color:#fcd34d;
+.icon{font-size:60px;margin-bottom:10px;}
+h1{font-size:1.7rem;margin:0 0 8px;letter-spacing:2px;color:#fcd34d;
    text-shadow:0 0 20px rgba(245,158,11,0.4);}
-p{font-size:1rem;line-height:1.55;color:#fde68a;opacity:0.92;margin:8px 0;}
-.meta{margin-top:22px;padding:14px 16px;background:rgba(220,38,38,0.12);
-      border:1px solid rgba(220,38,38,0.4);border-radius:10px;text-align:left;font-size:0.86rem;}
+p{font-size:0.96rem;line-height:1.5;color:#fde68a;opacity:0.95;margin:6px 0;}
+.meta{margin-top:18px;padding:12px 14px;background:rgba(220,38,38,0.12);
+      border:1px solid rgba(220,38,38,0.4);border-radius:10px;text-align:left;font-size:0.85rem;}
 .meta b{color:#fcd34d;}
-.muted{color:#fca5a5;font-size:0.78rem;margin-top:18px;letter-spacing:1px;}
+.muted{color:#fca5a5;font-size:0.76rem;margin-top:14px;letter-spacing:1px;}
+.renew-btn{
+  display:inline-block;width:100%;margin-top:18px;padding:14px;
+  background:linear-gradient(135deg,#10b981 0%,#059669 50%,#fcd34d 100%);
+  background-size:200% auto;
+  border:1.5px solid #fcd34d;color:#0a0010;
+  font-weight:900;font-size:1rem;letter-spacing:1.5px;text-transform:uppercase;
+  border-radius:12px;cursor:pointer;
+  box-shadow:0 6px 25px rgba(16,185,129,0.45),0 0 40px rgba(245,158,11,0.18);
+  transition:all .3s;
+}
+.renew-btn:hover{background-position:right center;transform:translateY(-1px);box-shadow:0 8px 35px rgba(16,185,129,0.6);}
+.renew-btn:disabled{opacity:0.6;cursor:not-allowed;}
+.pix-area{display:none;margin-top:18px;padding:18px 14px;
+  background:rgba(255,255,255,0.02);border:1px solid rgba(245,158,11,0.4);
+  border-radius:14px;}
+.pix-area.show{display:block;}
+.pix-area img{max-width:240px;width:100%;border-radius:10px;border:2px solid #fcd34d;background:#fff;padding:6px;}
+.pix-code{margin-top:12px;padding:10px;background:#0a0010;
+  border:1px dashed rgba(245,158,11,0.4);border-radius:8px;
+  font-family:monospace;font-size:0.7rem;color:#fde68a;
+  word-break:break-all;max-height:90px;overflow-y:auto;text-align:left;}
+.copy-btn,.recheck-btn{margin-top:10px;padding:9px 14px;border:none;
+  border-radius:8px;cursor:pointer;font-weight:700;font-size:0.85rem;}
+.copy-btn{background:#7e22ce;color:#fff;margin-right:6px;}
+.recheck-btn{background:#10b981;color:#fff;}
+.waiting{margin-top:10px;color:#fcd34d;font-size:0.85rem;animation:pulse 1.5s infinite;}
+@keyframes pulse{50%{opacity:0.4;}}
+.paid{margin-top:14px;padding:14px;background:rgba(16,185,129,0.15);
+  border:1.5px solid #4ade80;border-radius:10px;color:#86efac;font-weight:700;}
+.err{margin-top:10px;color:#fca5a5;font-size:0.85rem;}
+.value-pill{display:inline-block;background:rgba(245,158,11,0.18);
+  border:1px solid #fcd34d;color:#fcd34d;font-weight:800;
+  padding:6px 14px;border-radius:20px;margin-top:8px;letter-spacing:1px;}
 </style>
 </head><body>
 <div class="card">
   <div class="icon">⛔</div>
   <h1>ACESSO EXPIRADO</h1>
   <p>Esta plataforma está temporariamente <b>bloqueada</b>.</p>
-  <p>Entre em contato com o administrador para renovar o acesso.</p>
   <div class="meta">
     <div><b>Domínio:</b> __DOMAIN__</div>
     <div><b>Cliente:</b> __CUSTOMER__</div>
     <div><b>Status:</b> __STATUS__</div>
   </div>
+
+  __RENEW_BLOCK__
+
   <div class="muted">✦ Suporte: administrador da plataforma ✦</div>
 </div>
+
+<script>
+let renewalId = null;
+let pollTimer = null;
+
+async function gerarPix() {
+  const btn = document.getElementById('btn-renew');
+  btn.disabled = true; btn.textContent = '⏳ Gerando Pix...';
+  document.getElementById('pix-err').textContent = '';
+  try {
+    const r = await fetch('/api/license/renew/create-pix', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({})
+    });
+    const j = await r.json();
+    if (!j.success) {
+      document.getElementById('pix-err').textContent = '❌ ' + (j.message || 'Erro ao gerar Pix.');
+      btn.disabled = false; btn.textContent = '💳 Pagar Renovação R$ __VALUE__';
+      return;
+    }
+    renewalId = j.renewal_id;
+    const area = document.getElementById('pix-area');
+    area.classList.add('show');
+    let html = '';
+    if (j.qrcode_image) html += '<img src="' + j.qrcode_image + '" alt="QR Pix"/>';
+    if (j.copia_cola) {
+      html += '<div class="pix-code">' + j.copia_cola + '</div>';
+      html += '<button class="copy-btn" onclick="copyPix()">📋 Copiar código Pix</button>';
+    }
+    html += '<button class="recheck-btn" onclick="checkPaid()">🔄 Já paguei</button>';
+    html += '<div class="waiting" id="waiting">⏳ Aguardando pagamento...</div>';
+    area.innerHTML = html;
+    btn.style.display = 'none';
+    startPolling();
+  } catch (e) {
+    document.getElementById('pix-err').textContent = '❌ Erro de conexão.';
+    btn.disabled = false; btn.textContent = '💳 Pagar Renovação R$ __VALUE__';
+  }
+}
+
+function copyPix() {
+  const code = document.querySelector('.pix-code');
+  if (!code) return;
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    const b = document.querySelector('.copy-btn');
+    const t = b.textContent; b.textContent = '✓ Copiado!';
+    setTimeout(() => b.textContent = t, 1500);
+  });
+}
+
+function startPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(checkPaid, 5000);
+}
+
+async function checkPaid() {
+  if (!renewalId) return;
+  try {
+    const r = await fetch('/api/license/renew/status?renewal_id=' + encodeURIComponent(renewalId));
+    const j = await r.json();
+    if (j.success && j.paid) {
+      if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+      const area = document.getElementById('pix-area');
+      area.innerHTML = '<div class="paid">✓ Pagamento confirmado!<br>Licença renovada por __DAYS__ dias.<br>Recarregando o site...</div>';
+      setTimeout(() => location.reload(), 2500);
+    }
+  } catch (e) {}
+}
+</script>
 </body></html>"""
+
+    renew_block = ""
+    if can_renew:
+        renew_block = (
+            f'<div class="value-pill">💰 Renove agora por R$ {renew_value:.2f} — {renew_days} dias</div>'
+            f'<button class="renew-btn" id="btn-renew" onclick="gerarPix()">💳 Pagar Renovação R$ {renew_value:.2f}</button>'
+            f'<div id="pix-area" class="pix-area"></div>'
+            f'<div id="pix-err" class="err"></div>'
+        )
+    else:
+        renew_block = '<p style="margin-top:14px">Entre em contato com o administrador para cadastrar e ativar este domínio.</p>'
+
     html = (html
             .replace("__DOMAIN__", domain or "(desconhecido)")
             .replace("__CUSTOMER__", customer or "(não cadastrado)")
-            .replace("__STATUS__", status_label))
+            .replace("__STATUS__", status_label)
+            .replace("__RENEW_BLOCK__", renew_block)
+            .replace("__VALUE__", f"{renew_value:.2f}")
+            .replace("__DAYS__", str(renew_days)))
     return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+# ─── RENOVAÇÃO PIX DE LICENÇAS ──────────────────────────────────────────
+# Sites filhos chamam essas rotas no MESTRE via HTTP (token).
+# O Pix é gerado na conta Efi da loja (mesmas credenciais).
+
+@app.route("/api/internal/renew-pix", methods=["POST"])
+def api_internal_renew_pix():
+    """Cria cobrança Pix para renovação de licença. Chamado pelo site filho via HTTP."""
+    if not is_master_host():
+        return jsonify({"success": False, "message": "Só o mestre cria Pix de renovação."}), 400
+    data = request.get_json(silent=True) or {}
+    token = data.get("token") or request.args.get("token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token invalido."}), 403
+    domain = _normalize_domain(data.get("domain", ""))
+    if not domain:
+        return jsonify({"success": False, "message": "Informe domain."}), 400
+    licenses = load_licenses()
+    lic = next((l for l in licenses if isinstance(l, dict) and _normalize_domain(l.get("domain","")) == domain), None)
+    if not lic:
+        return jsonify({"success": False, "message": "Licença não encontrada."}), 404
+    if not efi_is_configured():
+        return jsonify({"success": False, "message": "Gateway Pix não configurado."}), 503
+
+    value = float(data.get("value") or lic.get("plan_value") or LICENSE_RENEW_VALUE)
+    days  = int(data.get("days")  or LICENSE_RENEW_DAYS)
+    if value <= 0:
+        value = LICENSE_RENEW_VALUE
+    if days  <= 0:
+        days  = LICENSE_RENEW_DAYS
+
+    fake_order = {
+        "id": f"REN-{int(time.time())}-{lic['id'][-6:]}",
+        "customer_name": lic.get("customer_name") or domain,
+        "product_name": f"Renovacao {days}d - {domain}",
+        "price": value
+    }
+    pix_data = efi_create_pix_charge(fake_order)
+    if not pix_data.get("success"):
+        return jsonify({"success": False, "message": pix_data.get("message", "Falha ao gerar Pix.")}), 502
+
+    # Persiste renovação pendente dentro da licença
+    renewals = lic.get("pending_renewals") or []
+    renewals.append({
+        "renewal_id": fake_order["id"],
+        "txid":       pix_data.get("txid"),
+        "value":      value,
+        "days":       days,
+        "created_at": int(time.time()),
+        "status":     "pending"
+    })
+    lic["pending_renewals"] = renewals[-10:]
+    save_licenses(licenses)
+
+    return jsonify({
+        "success": True,
+        "renewal_id":   fake_order["id"],
+        "txid":         pix_data.get("txid"),
+        "qrcode_image": pix_data.get("qrcode_image"),
+        "copia_cola":   pix_data.get("copia_cola"),
+        "expires_at":   pix_data.get("expires_at"),
+        "value":        value,
+        "days":         days,
+        "domain":       domain
+    })
+
+@app.route("/api/internal/renew-status", methods=["GET"])
+def api_internal_renew_status():
+    """Consulta status da renovação pendente. Quando o Pix é pago, renova a licença."""
+    if not is_master_host():
+        return jsonify({"success": False, "message": "Só o mestre."}), 400
+    token = request.args.get("token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token invalido."}), 403
+    domain     = _normalize_domain(request.args.get("domain", ""))
+    renewal_id = request.args.get("renewal_id", "")
+    if not domain or not renewal_id:
+        return jsonify({"success": False, "message": "Informe domain e renewal_id."}), 400
+
+    licenses = load_licenses()
+    lic = next((l for l in licenses if isinstance(l, dict) and _normalize_domain(l.get("domain","")) == domain), None)
+    if not lic:
+        return jsonify({"success": False, "message": "Licença não encontrada."}), 404
+
+    renewals = lic.get("pending_renewals") or []
+    r = next((x for x in renewals if x.get("renewal_id") == renewal_id), None)
+    if not r:
+        return jsonify({"success": False, "message": "Renovação não encontrada."}), 404
+
+    # Já pago e processado?
+    if r.get("status") == "paid":
+        return jsonify({
+            "success": True,
+            "paid": True,
+            "already_processed": True,
+            "new_expires_at": lic.get("expires_at")
+        })
+
+    # Consulta Efi para ver se o Pix foi pago
+    check = efi_check_pix_status(r.get("txid"))
+    if not check.get("paid"):
+        return jsonify({
+            "success": True,
+            "paid": False,
+            "efi_status": check.get("status"),
+            "reason":     check.get("reason")
+        })
+
+    # Pix pago: renova a licença
+    now = int(time.time())
+    base = max(now, int(lic.get("expires_at") or now))
+    add_days = int(r.get("days") or LICENSE_RENEW_DAYS)
+    lic["expires_at"]    = base + add_days * 86400
+    lic["duration_days"] = int(lic.get("duration_days", 30)) + add_days
+    lic["active"]        = True
+    lic["payment_status"]= "pago"
+    r["status"]          = "paid"
+    r["paid_at"]         = now
+    # registra histórico simples
+    history = lic.get("renewal_history") or []
+    history.append({
+        "renewal_id": renewal_id,
+        "value":      r.get("value"),
+        "days":       add_days,
+        "paid_at":    now
+    })
+    lic["renewal_history"] = history[-30:]
+    save_licenses(licenses)
+
+    # Invalida cache remoto para o site filho atualizar na próxima consulta
+    try:
+        _remote_license_cache.pop(domain, None)
+    except Exception:
+        pass
+
+    return jsonify({
+        "success": True,
+        "paid": True,
+        "new_expires_at": lic["expires_at"],
+        "days_added": add_days
+    })
+
+@app.route("/api/license/renew/create-pix", methods=["POST"])
+def api_license_renew_create_pix():
+    """Endpoint público (chamado pela tela de licença expirada do site filho).
+    Se este servidor for o MESTRE, atende direto.
+    Se for um site FILHO, encaminha para o mestre via HTTP."""
+    host = get_current_host()
+    data = request.get_json(silent=True) or {}
+    target_domain = _normalize_domain(data.get("domain") or host)
+    days  = int(data.get("days")  or LICENSE_RENEW_DAYS)
+    value = float(data.get("value") or LICENSE_RENEW_VALUE)
+
+    if is_master_host():
+        # Reusa endpoint interno
+        fake_req = {
+            "domain": target_domain,
+            "value":  value,
+            "days":   days,
+            "token":  MASTER_API_TOKEN
+        }
+        # Chama a função internamente reaproveitando lógica
+        with app.test_request_context(json=fake_req):
+            return api_internal_renew_pix()
+
+    # Site filho — encaminha para o mestre via HTTP
+    try:
+        import urllib.request, urllib.error
+        import json as _json
+        body = _json.dumps({
+            "domain": target_domain,
+            "value":  value,
+            "days":   days,
+            "token":  MASTER_API_TOKEN
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"{MASTER_API_URL}/api/internal/renew-pix",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.read(), resp.status, {"Content-Type": "application/json"}
+    except urllib.error.HTTPError as e:
+        try:
+            return e.read(), e.code, {"Content-Type": "application/json"}
+        except Exception:
+            return jsonify({"success": False, "message": f"Erro HTTP {e.code}"}), 502
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro ao chamar mestre: {e}"}), 502
+
+@app.route("/api/license/renew/status", methods=["GET"])
+def api_license_renew_status():
+    """Polling do status da renovação. Mesma lógica de proxy mestre/filho."""
+    host = get_current_host()
+    target_domain = _normalize_domain(request.args.get("domain") or host)
+    renewal_id = request.args.get("renewal_id", "")
+    if not renewal_id:
+        return jsonify({"success": False, "message": "Informe renewal_id."}), 400
+
+    if is_master_host():
+        # Reusa endpoint interno
+        with app.test_request_context(
+            f"/api/internal/renew-status?domain={target_domain}&renewal_id={renewal_id}&token={MASTER_API_TOKEN}"
+        ):
+            return api_internal_renew_status()
+
+    # Site filho — encaminha
+    try:
+        import urllib.request, urllib.error, urllib.parse
+        params = urllib.parse.urlencode({
+            "domain":     target_domain,
+            "renewal_id": renewal_id,
+            "token":      MASTER_API_TOKEN
+        })
+        url = f"{MASTER_API_URL}/api/internal/renew-status?{params}"
+        with urllib.request.urlopen(url, timeout=15) as resp:
+            return resp.read(), resp.status, {"Content-Type": "application/json"}
+    except urllib.error.HTTPError as e:
+        try:
+            return e.read(), e.code, {"Content-Type": "application/json"}
+        except Exception:
+            return jsonify({"success": False, "message": f"Erro HTTP {e.code}"}), 502
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 502
 
 @app.route("/api/internal/license-by-domain", methods=["GET"])
 def api_internal_license_by_domain():
