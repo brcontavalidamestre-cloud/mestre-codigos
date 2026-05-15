@@ -1383,22 +1383,36 @@
           border: 1.5px solid rgba(220,38,38,0.55) !important;
           box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 50px rgba(220,38,38,0.18), inset 0 1px 0 rgba(245,158,11,0.15) !important;
         }
-        .section-title { color: #fcd34d !important; text-shadow: 0 0 12px rgba(245,158,11,0.4); }
-        .section-subtitle { color: #fca5a5 !important; }
+        .section-title {
+          color: #fde68a !important;
+          text-shadow: 0 0 14px rgba(245,158,11,0.6), 0 2px 6px rgba(0,0,0,0.8) !important;
+          font-weight: 800 !important;
+          letter-spacing: 0.22em !important;
+        }
+        .section-subtitle {
+          color: #fef3c7 !important;
+          opacity: 0.95 !important;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.8) !important;
+          font-weight: 500 !important;
+        }
 
-        /* Rótulos dos grupos de plataforma */
+        /* Rótulos dos grupos de plataforma (Netflix, Disney+, etc) */
         .platform-group-label {
-          background: linear-gradient(135deg, rgba(20,5,5,0.9), rgba(40,8,8,0.85)) !important;
-          border-left: 3px solid #dc2626 !important;
-          color: #fcd34d !important;
-          letter-spacing: 0.16em !important;
-          font-weight: 700 !important;
+          background: linear-gradient(135deg, rgba(30,8,8,0.95), rgba(60,12,12,0.92)) !important;
+          border-left: 4px solid #fcd34d !important;
+          color: #fef3c7 !important;
+          letter-spacing: 0.2em !important;
+          font-weight: 800 !important;
+          font-size: 0.9rem !important;
+          padding: 12px 16px !important;
+          text-shadow: 0 0 10px rgba(245,158,11,0.5), 0 2px 6px rgba(0,0,0,0.9) !important;
+          box-shadow: 0 4px 14px rgba(0,0,0,0.4), inset 0 0 20px rgba(220,38,38,0.18) !important;
         }
 
         /* Cards de plataforma */
         .platform-card {
-          background: linear-gradient(135deg, rgba(40,8,8,0.92), rgba(60,12,12,0.85)) !important;
-          border: 1.5px solid rgba(220,38,38,0.45) !important;
+          background: linear-gradient(135deg, rgba(50,10,10,0.95), rgba(80,15,15,0.88)) !important;
+          border: 1.5px solid rgba(220,38,38,0.55) !important;
           transition: all .3s !important;
         }
         .platform-card:hover {
@@ -1411,8 +1425,22 @@
           background: linear-gradient(135deg, #5f0f0f, #7f1d1d) !important;
           box-shadow: 0 0 25px rgba(245,158,11,0.5), 0 0 50px rgba(220,38,38,0.4) !important;
         }
-        .platform-name { color: #fef3c7 !important; }
-        .platform-desc { color: #fca5a5 !important; }
+        .platform-card .platform-logo {
+          filter: drop-shadow(0 0 10px rgba(245,158,11,0.6)) drop-shadow(0 2px 4px rgba(0,0,0,0.8)) !important;
+        }
+        .platform-name {
+          color: #fff8e7 !important;
+          font-weight: 800 !important;
+          letter-spacing: 0.15em !important;
+          text-shadow: 0 0 12px rgba(245,158,11,0.45), 0 2px 6px rgba(0,0,0,0.9) !important;
+          font-size: 1.02rem !important;
+        }
+        .platform-desc {
+          color: #fef3c7 !important;
+          opacity: 0.92 !important;
+          font-weight: 500 !important;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.85) !important;
+        }
 
         /* Numeros dos passos */
         .step-num {
@@ -1420,8 +1448,14 @@
           color: #fff8e7 !important;
           box-shadow: 0 0 20px rgba(220,38,38,0.5) !important;
           border: 2px solid rgba(252,211,77,0.55) !important;
+          font-weight: 900 !important;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.8) !important;
         }
-        .step-text { color: #fef3c7 !important; }
+        .step-text {
+          color: #fff8e7 !important;
+          font-weight: 500 !important;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.85) !important;
+        }
 
         /* Form e badge selecionado */
         .form-section {
@@ -1484,12 +1518,25 @@
 
         /* Cards de produto da Loja */
         .product-card {
-          background: linear-gradient(135deg, rgba(30,5,5,0.92), rgba(50,10,10,0.88)) !important;
-          border: 1.5px solid rgba(220,38,38,0.5) !important;
+          background: linear-gradient(135deg, rgba(40,8,8,0.95), rgba(70,14,14,0.9)) !important;
+          border: 1.5px solid rgba(220,38,38,0.55) !important;
         }
         .product-card:hover { border-color: #fcd34d !important; box-shadow: 0 10px 30px rgba(220,38,38,0.35) !important; }
-        .product-name { color: #fef3c7 !important; }
-        .product-price { color: #fcd34d !important; }
+        .product-card .product-name {
+          color: #fff8e7 !important;
+          font-weight: 800 !important;
+          text-shadow: 0 0 10px rgba(245,158,11,0.4), 0 2px 5px rgba(0,0,0,0.9) !important;
+        }
+        .product-card .product-desc {
+          color: #fef3c7 !important;
+          opacity: 0.92 !important;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.85) !important;
+        }
+        .product-card .product-price {
+          color: #fcd34d !important;
+          font-weight: 900 !important;
+          text-shadow: 0 0 16px rgba(245,158,11,0.6), 0 2px 6px rgba(0,0,0,0.85) !important;
+        }
         .product-buy {
           background: linear-gradient(135deg, #7f1d1d, #dc2626, #f59e0b) !important;
           color: #fff8e7 !important;
