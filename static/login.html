@@ -111,23 +111,171 @@
       const host = (window.location.hostname || '').toLowerCase();
       const isRios = host.startsWith('rios.') || host.includes('rios.up.railway.app');
       if (isRios) {
+        // 1) Injeta CSS customizado tema RIO
+        const style = document.createElement('style');
+        style.textContent = `
+          /* Tema RIO — vermelho/dourado, somente para rios.up.railway.app */
+          body { background-color:#0a0000 !important; }
+          .card {
+            background: linear-gradient(135deg, rgba(30,5,5,0.95), rgba(50,10,10,0.92)) !important;
+            border: 1.5px solid rgba(220,38,38,0.55) !important;
+            box-shadow: 0 0 60px rgba(220,38,38,0.35), 0 0 120px rgba(245,158,11,0.12), inset 0 0 30px rgba(220,38,38,0.05) !important;
+          }
+          h1#site-title-h1 {
+            background: linear-gradient(135deg, #fcd34d 0%, #f59e0b 30%, #dc2626 70%, #fcd34d 100%) !important;
+            background-size: 200% auto !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            background-clip: text !important;
+            animation: rio-shimmer 3s linear infinite;
+            text-shadow: 0 0 40px rgba(220,38,38,0.4);
+          }
+          @keyframes rio-shimmer { to { background-position: 200% center; } }
+
+          .subtitle { color: #fca5a5 !important; }
+
+          /* Labels com ícone vermelho */
+          label {
+            color: #fcd34d !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.12em !important;
+            text-shadow: 0 1px 4px rgba(220,38,38,0.3);
+          }
+
+          /* Inputs estilo RIO — borda vermelha + glow dourado no foco */
+          .form-group { position: relative; }
+          .form-group input {
+            background: rgba(20,5,5,0.85) !important;
+            border: 1.5px solid rgba(220,38,38,0.4) !important;
+            color: #fef3c7 !important;
+            padding: 14px 16px 14px 46px !important;
+            font-size: 1.02rem !important;
+            font-weight: 500 !important;
+            border-radius: 12px !important;
+            transition: all .28s ease !important;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.4);
+          }
+          .form-group input::placeholder { color: rgba(252,165,165,0.55) !important; font-style: italic; }
+          .form-group input:focus {
+            border-color: #fcd34d !important;
+            box-shadow: 0 0 0 3px rgba(245,158,11,0.25), 0 0 25px rgba(245,158,11,0.35), inset 0 0 10px rgba(220,38,38,0.15) !important;
+            background: rgba(30,8,8,0.95) !important;
+            outline: none !important;
+          }
+          /* Ícone dentro do input (esquerda) */
+          .rio-input-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-top: 14px;
+            font-size: 1.15rem;
+            color: #dc2626;
+            text-shadow: 0 0 8px rgba(220,38,38,0.6);
+            pointer-events: none;
+            transition: all .25s;
+            z-index: 2;
+          }
+          .form-group input:focus + .rio-input-icon,
+          .form-group:focus-within .rio-input-icon {
+            color: #fcd34d;
+            text-shadow: 0 0 12px rgba(245,158,11,0.8);
+            transform: translateY(-50%) scale(1.12);
+          }
+
+          /* Botão estilo "assalto" RIO */
+          .btn {
+            background: linear-gradient(135deg, #7f1d1d 0%, #dc2626 35%, #f59e0b 70%, #dc2626 100%) !important;
+            background-size: 250% auto !important;
+            border: 1.5px solid rgba(252,211,77,0.65) !important;
+            color: #fff8e7 !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.18em !important;
+            text-transform: uppercase !important;
+            font-size: 1.05rem !important;
+            padding: 16px !important;
+            margin-top: 14px !important;
+            border-radius: 12px !important;
+            box-shadow: 0 6px 25px rgba(220,38,38,0.5), 0 0 40px rgba(245,158,11,0.2), inset 0 1px 0 rgba(255,255,255,0.2) !important;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.6), 0 0 12px rgba(220,38,38,0.4);
+            transition: all .35s ease !important;
+            position: relative;
+            overflow: hidden;
+          }
+          .btn:hover {
+            background-position: right center !important;
+            box-shadow: 0 8px 35px rgba(220,38,38,0.7), 0 0 60px rgba(245,158,11,0.4), inset 0 1px 0 rgba(255,255,255,0.3) !important;
+            transform: translateY(-1px);
+            border-color: #fcd34d !important;
+          }
+          .btn:active { transform: translateY(0); }
+
+          /* Logo icon ja com imagem do Rio — ajusta borda/sombra */
+          .logo-icon {
+            border: 2.5px solid #fcd34d !important;
+            box-shadow: 0 0 35px rgba(220,38,38,0.7), 0 0 70px rgba(245,158,11,0.35), inset 0 0 0 3px #0a0000 !important;
+          }
+
+          .footer-txt { color: rgba(252,211,77,0.6) !important; letter-spacing: 0.15em !important; }
+          .error-msg {
+            background: rgba(220,38,38,0.2) !important;
+            border: 1px solid rgba(220,38,38,0.6) !important;
+            color: #fca5a5 !important;
+          }
+
+          @media (max-width: 480px) {
+            .form-group input { padding-left: 44px !important; }
+            .rio-input-icon { left: 12px; font-size: 1.05rem; }
+          }
+        `;
+        document.head.appendChild(style);
+
+        // 2) Define título e abas
         const h1 = document.getElementById('site-title-h1');
         if (h1) h1.textContent = 'RIO CÓDIGOS';
         document.title = 'Rio Códigos ✦ — Login';
-        // Aplica banner como fundo do body (efeito cinema)
-        document.body.style.backgroundImage = "linear-gradient(rgba(6,0,15,0.78), rgba(6,0,15,0.92)), url('/static/rio-bg.jpg')";
+
+        // 3) Aplica banner como fundo do body (efeito cinema)
+        document.body.style.backgroundImage = "linear-gradient(rgba(10,0,0,0.86), rgba(10,0,0,0.94)), url('/static/rio-bg.jpg')";
         document.body.style.backgroundSize = 'cover';
         document.body.style.backgroundPosition = 'center';
         document.body.style.backgroundAttachment = 'fixed';
-        // Substitui o ícone ✦ pela imagem redonda do personagem
+
+        // 4) Substitui o ícone ✦ pela imagem redonda do personagem
         const logoIcon = document.querySelector('.logo-icon');
         if (logoIcon) {
           logoIcon.style.background = "url('/static/rio-icon.jpg') center/cover";
-          logoIcon.style.border = '2px solid #f59e0b';
-          logoIcon.style.boxShadow = '0 0 30px rgba(220,38,38,0.6), 0 0 60px rgba(245,158,11,0.3)';
           logoIcon.textContent = '';
         }
-        // Adiciona banner pequeno acima do card — envolvendo em wrapper centralizado
+
+        // 5) Adiciona ícones SVG/emoji dentro de cada input
+        const userInput = document.getElementById('username');
+        const passInput = document.getElementById('password');
+        if (userInput && !userInput.parentNode.querySelector('.rio-input-icon')) {
+          // Limpa o emoji do label e injeta ícone no input
+          const userLabel = document.querySelector('label[for="username"]');
+          if (userLabel) userLabel.textContent = 'Usuário';
+          const ic = document.createElement('span');
+          ic.className = 'rio-input-icon';
+          ic.textContent = '🎭';
+          userInput.parentNode.appendChild(ic);
+          userInput.placeholder = 'Digite seu usuário';
+        }
+        if (passInput && !passInput.parentNode.querySelector('.rio-input-icon')) {
+          const passLabel = document.querySelector('label[for="password"]');
+          if (passLabel) passLabel.textContent = 'Senha';
+          const ic = document.createElement('span');
+          ic.className = 'rio-input-icon';
+          ic.textContent = '🔑';
+          passInput.parentNode.appendChild(ic);
+          passInput.placeholder = 'Digite sua senha';
+        }
+
+        // 6) Botão entrar com ícone de cofre/máscara
+        const btn = document.getElementById('btn-login');
+        if (btn) btn.innerHTML = '🎭 Entrar no Cofre';
+
+        // 7) Adiciona banner pequeno acima do card — envolvendo em wrapper centralizado
         const card = document.querySelector('.card');
         if (card && !document.getElementById('rio-wrapper')) {
           const wrapper = document.createElement('div');
@@ -137,7 +285,6 @@
           banner.id = 'rio-banner';
           banner.style.cssText = 'width:100%;margin:0 0 14px 0;border-radius:14px;overflow:hidden;border:1px solid rgba(245,158,11,0.4);box-shadow:0 0 30px rgba(220,38,38,0.4);';
           banner.innerHTML = '<img src="/static/rio-banner-1200.jpg" alt="RIO" style="width:100%;display:block"/>';
-          // Coloca o card dentro do wrapper, e banner antes dele
           card.parentNode.insertBefore(wrapper, card);
           wrapper.appendChild(banner);
           wrapper.appendChild(card);
