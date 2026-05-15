@@ -14,6 +14,9 @@ from datetime import timedelta
 app = Flask(__name__, static_folder='static')
 CORS(app)
 
+# Variável global para indicar se a requisição atual está bloqueada por licença
+# (preenchida no before_request, lida pelo template)
+
 # ─── SECRET KEY para sessoes ───────────────────────────────────────────────────
 app.secret_key = os.environ.get("SECRET_KEY", "central-codigos-secret-2025")
 app.permanent_session_lifetime = timedelta(hours=8)
@@ -140,6 +143,14 @@ LOJA_PASSWORD       = os.environ.get("LOJA_PASSWORD", "1995")
 PRODUCTS_FILE       = os.environ.get("PRODUCTS_FILE", os.path.join(_data_dir, "products.json"))
 STOCK_FILE          = os.environ.get("STOCK_FILE", os.path.join(_data_dir, "stock.json"))
 ORDERS_FILE         = os.environ.get("ORDERS_FILE", os.path.join(_data_dir, "orders.json"))
+LICENSES_FILE       = os.environ.get("LICENSES_FILE", os.path.join(_data_dir, "licenses.json"))
+
+# Domínio do painel MESTRE (só ele pode gerenciar licenças).
+# Pode incluir múltiplos separados por vírgula via env MASTER_DOMAINS.
+MASTER_DOMAINS = [d.strip().lower() for d in os.environ.get(
+    "MASTER_DOMAINS",
+    "mestre-codigos-production.up.railway.app,localhost,127.0.0.1"
+).split(",") if d.strip()]
 
 # Credenciais Efi (Gerencianet) - configurar via Railway
 # Credenciais Efi (Produção) - valores padrão embutidos; podem ser sobrescritos via Railway
@@ -230,6 +241,91 @@ def get_next_stock_item(product_id):
             save_stock(stock)
             return item
     return None
+
+# ─── LICENÇAS DE SITES FILHOS ───────────────────────────────────────────
+def load_licenses():
+    """Lista de licenças: cada uma com domain, admin_user, admin_pass, dur_days,
+    start_at, expires_at, customer_name, plan_value, payment_method, payment_status, notes, active."""
+    data = _read_json_file(LICENSES_FILE, [])
+    if not isinstance(data, list):
+        data = []
+    return data
+
+def save_licenses(licenses):
+    if not isinstance(licenses, list):
+        licenses = []
+    return _write_json_file(LICENSES_FILE, licenses)
+
+def _normalize_domain(domain):
+    """Remove protocolo, www, barras finais, espaços e deixa minúsculo."""
+    if not domain:
+        return ""
+    d = str(domain).strip().lower()
+    d = re.sub(r"^https?://", "", d)
+    d = re.sub(r"^www\.", "", d)
+    d = d.split("/")[0]
+    return d.strip()
+
+def get_current_host():
+    """Pega o host da requisição atual (Host header), normalizado."""
+    try:
+        host = request.headers.get("X-Forwarded-Host") or request.host or ""
+        return _normalize_domain(host)
+    except Exception:
+        return ""
+
+def is_master_host():
+    """True se a requisição atual está vindo do domínio MESTRE."""
+    host = get_current_host()
+    return any(host == _normalize_domain(d) for d in MASTER_DOMAINS)
+
+def get_license_for_host(host=None):
+    """Retorna a licença do domínio (ou None se não existir)."""
+    h = _normalize_domain(host or get_current_host())
+    if not h:
+        return None
+    for lic in load_licenses():
+        if not isinstance(lic, dict):
+            continue
+        if _normalize_domain(lic.get("domain", "")) == h:
+            return lic
+    return None
+
+def license_status(lic):
+    """Retorna 'no_license', 'active', 'expired', ou 'disabled'."""
+    if not lic:
+        return "no_license"
+    if not lic.get("active", True):
+        return "disabled"
+    now = int(time.time())
+    exp = int(lic.get("expires_at") or 0)
+    if exp and now > exp:
+        return "expired"
+    return "active"
+
+def days_remaining(lic):
+    if not lic or not lic.get("expires_at"):
+        return 0
+    secs = int(lic["expires_at"]) - int(time.time())
+    return max(0, int(secs // 86400))
+
+def compute_expiration(start_at, duration_days):
+    try:
+        return int(start_at) + int(duration_days) * 86400
+    except Exception:
+        return int(start_at) + 30 * 86400
+
+def should_block_site():
+    """Decide se a requisição deve ser bloqueada por licença expirada.
+    Painel MESTRE nunca é bloqueado. Sites filhos são bloqueados quando
+    sua licença estiver expirada, desativada ou não existir."""
+    if is_master_host():
+        return False, None
+    lic = get_license_for_host()
+    status = license_status(lic)
+    if status == "active":
+        return False, lic
+    return True, lic
 
 PLATFORM_CONFIG = {
     # ── NETFLIX: código de acesso (PT/EN/ES) ──────────────────────────────────
@@ -1534,6 +1630,120 @@ def admin_required(f):
 
 # ─── ROTAS DE PAGINAS ──────────────────────────────────────────────────────────
 
+# ─── MIDDLEWARE DE LICENÇA ──────────────────────────────────────────────────────
+# Bloqueia automaticamente sites filhos com licença expirada/desativada/inexistente.
+# O domínio MESTRE nunca é bloqueado.
+_LICENSE_BYPASS_PATHS = (
+    "/api/health",
+    "/api/license/status",
+    "/licenca-expirada",
+    "/static/",
+    "/favicon.ico",
+)
+
+@app.before_request
+def _license_gate():
+    try:
+        path = request.path or "/"
+        if any(path == p or path.startswith(p) for p in _LICENSE_BYPASS_PATHS):
+            return None
+        # Painel mestre nunca é bloqueado
+        if is_master_host():
+            return None
+        block, lic = should_block_site()
+        if not block:
+            return None
+        # Bloqueado: API responde JSON, páginas respondem HTML de licença expirada
+        if path.startswith("/api/"):
+            return jsonify({
+                "success": False,
+                "message": "Site bloqueado: licença expirada ou inexistente. Contate o administrador.",
+                "license_blocked": True,
+                "redirect": "/licenca-expirada"
+            }), 402
+        # Limpa sessão para impedir uso
+        try:
+            session.clear()
+        except Exception:
+            pass
+        return redirect("/licenca-expirada")
+    except Exception as e:
+        print(f"[license_gate] erro: {e}")
+        return None
+
+@app.route("/licenca-expirada")
+def license_expired_page():
+    """Tela exibida quando o site filho está bloqueado por licença."""
+    if is_master_host():
+        return redirect("/login")
+    lic = get_license_for_host()
+    status = license_status(lic)
+    domain = get_current_host()
+    customer = (lic or {}).get("customer_name", "")
+    status_label = {
+        "no_license": "Não cadastrado",
+        "expired": "Licença expirada",
+        "disabled": "Licença desativada",
+        "active": "Ativa"
+    }.get(status, status)
+    html = """<!DOCTYPE html>
+<html lang="pt-BR"><head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Acesso expirado</title>
+<style>
+body{margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;
+     background:radial-gradient(circle at top, #200015, #0a0010 70%);color:#fef3c7;
+     font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;padding:20px;}
+.card{max-width:480px;background:linear-gradient(135deg,#1a0010,#2a0014);
+      border:2px solid #dc2626;border-radius:20px;padding:42px 32px;text-align:center;
+      box-shadow:0 0 60px rgba(220,38,38,0.4),0 0 120px rgba(220,38,38,0.15);}
+.icon{font-size:64px;margin-bottom:12px;}
+h1{font-size:1.8rem;margin:0 0 10px;letter-spacing:2px;color:#fcd34d;
+   text-shadow:0 0 20px rgba(245,158,11,0.4);}
+p{font-size:1rem;line-height:1.55;color:#fde68a;opacity:0.92;margin:8px 0;}
+.meta{margin-top:22px;padding:14px 16px;background:rgba(220,38,38,0.12);
+      border:1px solid rgba(220,38,38,0.4);border-radius:10px;text-align:left;font-size:0.86rem;}
+.meta b{color:#fcd34d;}
+.muted{color:#fca5a5;font-size:0.78rem;margin-top:18px;letter-spacing:1px;}
+</style>
+</head><body>
+<div class="card">
+  <div class="icon">⛔</div>
+  <h1>ACESSO EXPIRADO</h1>
+  <p>Esta plataforma está temporariamente <b>bloqueada</b>.</p>
+  <p>Entre em contato com o administrador para renovar o acesso.</p>
+  <div class="meta">
+    <div><b>Domínio:</b> __DOMAIN__</div>
+    <div><b>Cliente:</b> __CUSTOMER__</div>
+    <div><b>Status:</b> __STATUS__</div>
+  </div>
+  <div class="muted">✦ Suporte: administrador da plataforma ✦</div>
+</div>
+</body></html>"""
+    html = (html
+            .replace("__DOMAIN__", domain or "(desconhecido)")
+            .replace("__CUSTOMER__", customer or "(não cadastrado)")
+            .replace("__STATUS__", status_label))
+    return html, 200, {"Content-Type": "text/html; charset=utf-8"}
+
+@app.route("/api/license/status", methods=["GET"])
+def api_license_status():
+    """Endpoint público para o site consultar status da sua licença."""
+    host = get_current_host()
+    is_master = is_master_host()
+    lic = get_license_for_host() if not is_master else None
+    status = "master" if is_master else license_status(lic)
+    return jsonify({
+        "success": True,
+        "host": host,
+        "is_master": is_master,
+        "status": status,
+        "days_remaining": days_remaining(lic) if lic else None,
+        "expires_at": (lic or {}).get("expires_at"),
+        "customer_name": (lic or {}).get("customer_name")
+    })
+
 @app.route("/")
 def index():
     if not session.get("logged_in"):
@@ -2421,13 +2631,227 @@ def api_admin_list_orders():
         print(f"[admin/pedidos] erro: {e}\n{traceback.format_exc()}")
         return jsonify({"success": False, "message": f"Erro: {e}", "orders": []})
 
+# ─── ROTAS ADMIN: LICENÇAS DE SITES FILHOS (só disponível no MESTRE) ────────────────
+def _master_admin_required(f):
+    """Decorator: exige admin E que esteja no domínio MESTRE."""
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if not session.get("logged_in"):
+            return jsonify({"success": False, "message": "Nao autenticado.", "redirect": "/login"}), 401
+        if session.get("role") != "admin":
+            return jsonify({"success": False, "message": "Acesso restrito ao administrador."}), 403
+        if not is_master_host():
+            return jsonify({
+                "success": False,
+                "message": "Gerenciamento de licenças disponível apenas no painel MESTRE."
+            }), 403
+        return f(*args, **kwargs)
+    return decorated
+
+@app.route("/api/admin/licencas", methods=["GET"])
+@_master_admin_required
+def api_admin_list_licenses():
+    """Lista todas as licenças cadastradas."""
+    licenses = load_licenses()
+    now = int(time.time())
+    result = []
+    for lic in licenses:
+        if not isinstance(lic, dict):
+            continue
+        out = dict(lic)
+        out["status"] = license_status(lic)
+        out["days_remaining"] = days_remaining(lic)
+        # Por segurança, não devolve senha em texto claro na listagem
+        # (mantemos `admin_pass` para o admin master ver/copiar quando precisar)
+        result.append(out)
+    # ordena por data de criação desc
+    result.sort(key=lambda l: l.get("created_at", 0) or 0, reverse=True)
+    return jsonify({"success": True, "licenses": result, "now": now, "master_domains": MASTER_DOMAINS})
+
+@app.route("/api/admin/licencas", methods=["POST"])
+@_master_admin_required
+def api_admin_create_license():
+    data = request.get_json(silent=True) or {}
+    domain      = _normalize_domain(data.get("domain", ""))
+    admin_user  = str(data.get("admin_user", "")).strip().lower()
+    admin_pass  = str(data.get("admin_pass", "")).strip()
+    dur_days    = int(data.get("duration_days") or 30)
+    customer    = str(data.get("customer_name", "")).strip()
+    plan_value  = float(str(data.get("plan_value") or 0).replace(",", "."))
+    pay_method  = str(data.get("payment_method", "")).strip()
+    pay_status  = str(data.get("payment_status", "pendente")).strip()
+    notes       = str(data.get("notes", "")).strip()
+    start_at    = int(data.get("start_at") or time.time())
+
+    if not domain:
+        return jsonify({"success": False, "message": "Informe o domínio do site."}), 400
+    if not admin_user or not admin_pass:
+        return jsonify({"success": False, "message": "Informe usuário e senha do admin."}), 400
+    if dur_days <= 0 or dur_days > 3650:
+        return jsonify({"success": False, "message": "Duração inválida (1-3650 dias)."}), 400
+
+    # impede cadastrar domínio do próprio mestre
+    if any(domain == _normalize_domain(d) for d in MASTER_DOMAINS):
+        return jsonify({"success": False, "message": "Não é possível cadastrar licença para o próprio domínio MESTRE."}), 400
+
+    licenses = load_licenses()
+    # impede domínio duplicado
+    if any(_normalize_domain((l or {}).get("domain", "")) == domain for l in licenses):
+        return jsonify({"success": False, "message": "Já existe licença para este domínio. Use editar."}), 409
+
+    expires_at = compute_expiration(start_at, dur_days)
+    lic = {
+        "id":              f"LIC-{int(time.time()*1000)}",
+        "domain":          domain,
+        "customer_name":   customer,
+        "admin_user":      admin_user,
+        "admin_pass":      admin_pass,
+        "duration_days":   dur_days,
+        "start_at":        start_at,
+        "expires_at":      expires_at,
+        "plan_value":      plan_value,
+        "payment_method":  pay_method,
+        "payment_status":  pay_status,
+        "notes":           notes,
+        "active":          True,
+        "created_at":      int(time.time()),
+        "created_by":      session.get("username")
+    }
+    licenses.append(lic)
+    save_licenses(licenses)
+
+    # Cria/atualiza usuário admin no banco principal de usuários
+    # Importante: o usuário só "funciona" quando a licença estiver ativa
+    # (o bloqueio acontece no middleware before_request).
+    users = load_users()
+    if admin_user not in users:
+        users[admin_user] = {
+            "password":   generate_password_hash(admin_pass),
+            "password_plain": admin_pass,
+            "role":       "admin",
+            "name":       customer or admin_user,
+            "created_by": session.get("username"),
+            "license_id": lic["id"],
+            "license_domain": domain
+        }
+    else:
+        # atualiza senha mantendo papel
+        users[admin_user]["password"]       = generate_password_hash(admin_pass)
+        users[admin_user]["password_plain"] = admin_pass
+        users[admin_user]["license_id"]     = lic["id"]
+        users[admin_user]["license_domain"] = domain
+    save_users(users)
+
+    return jsonify({"success": True, "license": lic})
+
+@app.route("/api/admin/licencas/<license_id>", methods=["PUT"])
+@_master_admin_required
+def api_admin_update_license(license_id):
+    data = request.get_json(silent=True) or {}
+    licenses = load_licenses()
+    lic = next((l for l in licenses if isinstance(l, dict) and l.get("id") == license_id), None)
+    if not lic:
+        return jsonify({"success": False, "message": "Licença não encontrada."}), 404
+
+    if "customer_name" in data:
+        lic["customer_name"] = str(data["customer_name"]).strip()
+    if "admin_user" in data:
+        new_user = str(data["admin_user"]).strip().lower()
+        if new_user:
+            lic["admin_user"] = new_user
+    if "admin_pass" in data and str(data["admin_pass"]).strip():
+        lic["admin_pass"] = str(data["admin_pass"]).strip()
+    if "duration_days" in data:
+        try:
+            lic["duration_days"] = int(data["duration_days"])
+        except Exception:
+            pass
+    if "plan_value" in data:
+        try:
+            lic["plan_value"] = float(str(data["plan_value"]).replace(",", "."))
+        except Exception:
+            pass
+    if "payment_method" in data:
+        lic["payment_method"] = str(data["payment_method"]).strip()
+    if "payment_status" in data:
+        lic["payment_status"] = str(data["payment_status"]).strip()
+    if "notes" in data:
+        lic["notes"] = str(data["notes"]).strip()
+    if "active" in data:
+        lic["active"] = bool(data["active"])
+    if "start_at" in data:
+        try:
+            lic["start_at"] = int(data["start_at"])
+        except Exception:
+            pass
+    # recalcula expiração sempre que mudar duração ou início
+    lic["expires_at"] = compute_expiration(lic.get("start_at", time.time()), lic.get("duration_days", 30))
+
+    save_licenses(licenses)
+
+    # sincroniza usuário admin
+    users = load_users()
+    user_key = lic.get("admin_user")
+    if user_key and user_key in users and lic.get("admin_pass"):
+        users[user_key]["password"]       = generate_password_hash(lic["admin_pass"])
+        users[user_key]["password_plain"] = lic["admin_pass"]
+        users[user_key]["license_id"]     = lic["id"]
+        users[user_key]["license_domain"] = lic.get("domain")
+        save_users(users)
+
+    return jsonify({"success": True, "license": lic})
+
+@app.route("/api/admin/licencas/<license_id>/renovar", methods=["POST"])
+@_master_admin_required
+def api_admin_renew_license(license_id):
+    data = request.get_json(silent=True) or {}
+    add_days = int(data.get("days") or 30)
+    licenses = load_licenses()
+    lic = next((l for l in licenses if isinstance(l, dict) and l.get("id") == license_id), None)
+    if not lic:
+        return jsonify({"success": False, "message": "Licença não encontrada."}), 404
+    now = int(time.time())
+    # se já expirou, renova a partir de agora; caso contrário, soma ao final
+    base = max(now, int(lic.get("expires_at") or now))
+    lic["expires_at"]    = base + add_days * 86400
+    lic["duration_days"] = int(lic.get("duration_days", 30)) + add_days
+    lic["active"]        = True
+    save_licenses(licenses)
+    return jsonify({"success": True, "license": lic})
+
+@app.route("/api/admin/licencas/<license_id>/toggle", methods=["POST"])
+@_master_admin_required
+def api_admin_toggle_license(license_id):
+    licenses = load_licenses()
+    lic = next((l for l in licenses if isinstance(l, dict) and l.get("id") == license_id), None)
+    if not lic:
+        return jsonify({"success": False, "message": "Licença não encontrada."}), 404
+    lic["active"] = not bool(lic.get("active", True))
+    save_licenses(licenses)
+    return jsonify({"success": True, "active": lic["active"]})
+
+@app.route("/api/admin/licencas/<license_id>", methods=["DELETE"])
+@_master_admin_required
+def api_admin_delete_license(license_id):
+    licenses = load_licenses()
+    new_list = [l for l in licenses if isinstance(l, dict) and l.get("id") != license_id]
+    if len(new_list) == len(licenses):
+        return jsonify({"success": False, "message": "Licença não encontrada."}), 404
+    save_licenses(new_list)
+    return jsonify({"success": True})
+
 @app.route("/api/health", methods=["GET"])
 def health():
+    host = get_current_host()
+    is_master = is_master_host()
     return jsonify({
         "status": "ok",
         "service": "Central dos Codigos",
         "loja_enabled": True,
-        "efi_configured": efi_is_configured()
+        "efi_configured": efi_is_configured(),
+        "host": host,
+        "is_master": is_master
     })
 
 if __name__ == "__main__":

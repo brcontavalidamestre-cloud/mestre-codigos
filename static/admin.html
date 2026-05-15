@@ -437,6 +437,98 @@
       </div>
     </div>
 
+    <!-- ============ MESTRE: LICENÇAS DE SITES FILHOS ============ -->
+    <!-- Visivel APENAS no domínio MESTRE -->
+    <div class="panel" id="licencas-panel" style="display:none;margin-top:20px;">
+      <div class="phdr">
+        <div class="ptit">🏰 Licenças de Sites Filhos</div>
+        <button class="btn-ref" onclick="loadLicencas()">🔄 Atualizar</button>
+      </div>
+      <div class="sinfo" style="margin-bottom:10px;">
+        Cadastre cada site filho com prazo e valor. Quando o prazo vence, o site fica
+        <b>bloqueado automaticamente</b> até você renovar aqui.
+      </div>
+
+      <form id="lic-form" onsubmit="createLicenca(event)">
+        <div class="fgrid">
+          <div class="fgrp">
+            <label class="flbl">🌐 Domínio do site</label>
+            <input class="fi" id="lic-domain" placeholder="ex: rios.up.railway.app" required/>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">👤 Nome do cliente</label>
+            <input class="fi" id="lic-customer" placeholder="Ex: João Silva"/>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">🔑 Usuário admin do site</label>
+            <input class="fi" id="lic-user" placeholder="ex: cliente1" required/>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">🔐 Senha admin do site</label>
+            <input class="fi" type="text" id="lic-pass" placeholder="Senha que o cliente vai usar" required/>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">⏳ Duração (dias)</label>
+            <select class="fi" id="lic-days">
+              <option value="7">7 dias</option>
+              <option value="15">15 dias</option>
+              <option value="30" selected>30 dias</option>
+              <option value="60">60 dias</option>
+              <option value="90">90 dias</option>
+              <option value="180">180 dias</option>
+              <option value="365">365 dias</option>
+            </select>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">💰 Valor do plano (R$)</label>
+            <input class="fi" id="lic-value" type="number" step="0.01" placeholder="150.00"/>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">💳 Forma de pagamento</label>
+            <select class="fi" id="lic-pay">
+              <option value="pix">Pix</option>
+              <option value="dinheiro">Dinheiro</option>
+              <option value="cartao">Cartão</option>
+              <option value="boleto">Boleto</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">📌 Status do pagamento</label>
+            <select class="fi" id="lic-pay-status">
+              <option value="pago">✓ Pago</option>
+              <option value="pendente">⏳ Pendente</option>
+              <option value="atrasado">⚠️ Atrasado</option>
+            </select>
+          </div>
+          <div class="fgrp" style="grid-column:1/-1;">
+            <label class="flbl">📝 Observações</label>
+            <input class="fi" id="lic-notes" placeholder="plano mensal premium, etc."/>
+          </div>
+        </div>
+        <button type="submit" class="btn-p">💾 Cadastrar Licença</button>
+      </form>
+
+      <div class="twrap" style="margin-top:14px;">
+        <table>
+          <thead>
+            <tr>
+              <th>Domínio</th>
+              <th>Cliente</th>
+              <th>Login</th>
+              <th>Plano</th>
+              <th>Status</th>
+              <th>Expira em</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="lic-tbody">
+            <tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
   </div><!-- /main -->
 
   <!-- modal: alterar senha -->
@@ -546,6 +638,7 @@
       loadUsers();
       loadLojaProdutos();
       loadOrders();
+      checkMasterAndShowLicencas();
     })();
 
     /* ============ LOJA: PRODUTOS ============ */
@@ -695,6 +788,172 @@
           </tr>`;
         }).join('');
       } catch(e){}
+    }
+
+    /* ============ MESTRE: LICENÇAS DE SITES FILHOS ============ */
+    async function checkMasterAndShowLicencas() {
+      try {
+        const r = await fetch('/api/health');
+        const j = await r.json();
+        if (j && j.is_master) {
+          document.getElementById('licencas-panel').style.display = 'block';
+          loadLicencas();
+        }
+      } catch(e){}
+    }
+
+    async function loadLicencas() {
+      const tb = document.getElementById('lic-tbody');
+      tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Carregando...</td></tr>';
+      try {
+        const r = await fetch('/api/admin/licencas');
+        const j = await r.json();
+        if (!j.success) {
+          tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#f87171;padding:14px">${j.message || 'Erro'}</td></tr>`;
+          return;
+        }
+        if (!j.licenses.length) {
+          tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Nenhuma licença cadastrada ainda.</td></tr>';
+          return;
+        }
+        tb.innerHTML = j.licenses.map(l => {
+          const statusColors = {
+            active:'#4ade80', expired:'#f87171', disabled:'#fbbf24', no_license:'#9ca3af'
+          };
+          const statusLabels = {
+            active:'✓ Ativa', expired:'✗ Expirada', disabled:'⚠️ Desativada', no_license:'—'
+          };
+          const statColor = statusColors[l.status] || '#9ca3af';
+          const statLabel = statusLabels[l.status] || l.status;
+          const expDate = l.expires_at ? new Date(l.expires_at*1000).toLocaleDateString('pt-BR') : '—';
+          const expFmt  = l.expires_at ? new Date(l.expires_at*1000).toLocaleString('pt-BR') : '—';
+          const valor = l.plan_value ? 'R$ ' + Number(l.plan_value).toFixed(2).replace('.', ',') : '—';
+          const payStat = l.payment_status || 'pendente';
+          const payColor = payStat==='pago'?'#4ade80':(payStat==='atrasado'?'#f87171':'#fbbf24');
+          return `<tr>
+            <td style="font-family:monospace;font-size:0.78rem"><a href="https://${l.domain}" target="_blank" style="color:#a78bfa;text-decoration:none">${l.domain}</a></td>
+            <td>${l.customer_name || '—'}</td>
+            <td style="font-size:0.78rem">
+              <div>👤 <code style="color:var(--gold-light)">${l.admin_user}</code></div>
+              <div>🔑 <code style="color:var(--gold-light)">${(l.admin_pass||'').replace(/./g,'•').slice(0,8)} <button onclick="showLicPass('${l.id}','${(l.admin_pass||'').replace(/'/g,"\\'")}')" style="background:transparent;border:none;color:#a78bfa;cursor:pointer">👁️</button></code></div>
+            </td>
+            <td>
+              <div>${valor}</div>
+              <div style="font-size:0.7rem;color:${payColor}">${payStat}</div>
+              <div style="font-size:0.7rem;color:var(--tm)">${l.payment_method||''}</div>
+            </td>
+            <td><span style="color:${statColor};font-weight:700">${statLabel}</span></td>
+            <td style="font-size:0.78rem">
+              <div>${expDate}</div>
+              <div style="font-size:0.7rem;color:${l.days_remaining<=3?'#f87171':'var(--tm)'}">${l.days_remaining} dias restantes</div>
+            </td>
+            <td style="white-space:nowrap">
+              <button onclick="renewLicenca('${l.id}',30)" title="Renovar 30 dias" style="background:#10b981;color:#fff;border:none;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:0.72rem;margin:2px">+30d</button>
+              <button onclick="toggleLicenca('${l.id}')" title="${l.active?'Desativar':'Ativar'}" style="background:${l.active?'#b45309':'#0f766e'};color:#fff;border:none;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:0.72rem;margin:2px">${l.active?'⏸️':'▶️'}</button>
+              <button onclick="editLicenca('${l.id}')" title="Editar" style="background:#7e22ce;color:#fff;border:none;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:0.72rem;margin:2px">✏️</button>
+              <button onclick="deleteLicenca('${l.id}','${(l.domain||'').replace(/'/g,"\\'")}')" title="Excluir" style="background:#b91c1c;color:#fff;border:none;padding:5px 9px;border-radius:6px;cursor:pointer;font-size:0.72rem;margin:2px">🗑️</button>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch(e) {
+        tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f87171;padding:14px">Erro de conexão.</td></tr>';
+      }
+    }
+
+    function showLicPass(id, pwd) {
+      alert('Senha do admin do site:\n\n' + pwd);
+    }
+
+    async function createLicenca(ev) {
+      ev.preventDefault();
+      const payload = {
+        domain:         document.getElementById('lic-domain').value.trim(),
+        customer_name:  document.getElementById('lic-customer').value.trim(),
+        admin_user:     document.getElementById('lic-user').value.trim(),
+        admin_pass:     document.getElementById('lic-pass').value.trim(),
+        duration_days:  parseInt(document.getElementById('lic-days').value, 10),
+        plan_value:     document.getElementById('lic-value').value || 0,
+        payment_method: document.getElementById('lic-pay').value,
+        payment_status: document.getElementById('lic-pay-status').value,
+        notes:          document.getElementById('lic-notes').value.trim()
+      };
+      try {
+        const r = await fetch('/api/admin/licencas', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const j = await r.json();
+        if (j.success) {
+          showToast('✓ Licença cadastrada');
+          document.getElementById('lic-form').reset();
+          document.getElementById('lic-days').value = '30';
+          loadLicencas();
+          loadUsers(); // novo admin foi criado
+        } else {
+          showToast(j.message || 'Erro');
+        }
+      } catch(e) { showToast('Erro de conexão'); }
+    }
+
+    async function renewLicenca(id, days) {
+      try {
+        const r = await fetch(`/api/admin/licencas/${id}/renovar`, {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ days })
+        });
+        const j = await r.json();
+        if (j.success) { showToast(`✓ Renovada +${days} dias`); loadLicencas(); }
+        else showToast(j.message || 'Erro');
+      } catch(e){ showToast('Erro de conexão'); }
+    }
+
+    async function toggleLicenca(id) {
+      try {
+        const r = await fetch(`/api/admin/licencas/${id}/toggle`, { method:'POST' });
+        const j = await r.json();
+        if (j.success) { showToast(j.active ? '✓ Ativada' : '⏸️ Desativada'); loadLicencas(); }
+      } catch(e){ showToast('Erro'); }
+    }
+
+    async function deleteLicenca(id, domain) {
+      if (!confirm(`Excluir licença de ${domain}?\n\nO site filho ficará imediatamente bloqueado.`)) return;
+      try {
+        const r = await fetch(`/api/admin/licencas/${id}`, { method:'DELETE' });
+        const j = await r.json();
+        if (j.success) { showToast('✓ Excluída'); loadLicencas(); }
+      } catch(e){ showToast('Erro'); }
+    }
+
+    async function editLicenca(id) {
+      const r = await fetch('/api/admin/licencas');
+      const j = await r.json();
+      const lic = (j.licenses || []).find(l => l.id === id);
+      if (!lic) return;
+      const newName  = prompt('Nome do cliente:', lic.customer_name || '');
+      if (newName === null) return;
+      const newDays  = prompt('Duração total em dias (a expiração será recalculada da data de início):', lic.duration_days || 30);
+      if (newDays === null) return;
+      const newValue = prompt('Valor do plano (R$):', lic.plan_value || 0);
+      if (newValue === null) return;
+      const newPass  = prompt('Nova senha do admin (deixe vazio para não mudar):', '');
+      const payload = {
+        customer_name: newName,
+        duration_days: parseInt(newDays, 10) || 30,
+        plan_value: newValue
+      };
+      if (newPass && newPass.trim()) payload.admin_pass = newPass.trim();
+      try {
+        const rr = await fetch(`/api/admin/licencas/${id}`, {
+          method:'PUT',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const jj = await rr.json();
+        if (jj.success) { showToast('✓ Atualizada'); loadLicencas(); loadUsers(); }
+        else showToast(jj.message || 'Erro');
+      } catch(e){ showToast('Erro'); }
     }
 
     /* logout */
