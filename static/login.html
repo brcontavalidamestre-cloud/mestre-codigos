@@ -127,14 +127,20 @@
           logoIcon.style.boxShadow = '0 0 30px rgba(220,38,38,0.6), 0 0 60px rgba(245,158,11,0.3)';
           logoIcon.textContent = '';
         }
-        // Adiciona banner pequeno acima do card
+        // Adiciona banner pequeno acima do card — envolvendo em wrapper centralizado
         const card = document.querySelector('.card');
-        if (card && !document.getElementById('rio-banner')) {
+        if (card && !document.getElementById('rio-wrapper')) {
+          const wrapper = document.createElement('div');
+          wrapper.id = 'rio-wrapper';
+          wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:420px;margin:0 auto;position:relative;z-index:1;';
           const banner = document.createElement('div');
           banner.id = 'rio-banner';
-          banner.style.cssText = 'width:100%;max-width:420px;margin:0 auto 14px;border-radius:14px;overflow:hidden;border:1px solid rgba(245,158,11,0.4);box-shadow:0 0 30px rgba(220,38,38,0.4);';
+          banner.style.cssText = 'width:100%;margin:0 0 14px 0;border-radius:14px;overflow:hidden;border:1px solid rgba(245,158,11,0.4);box-shadow:0 0 30px rgba(220,38,38,0.4);';
           banner.innerHTML = '<img src="/static/rio-banner-1200.jpg" alt="RIO" style="width:100%;display:block"/>';
-          card.parentNode.insertBefore(banner, card);
+          // Coloca o card dentro do wrapper, e banner antes dele
+          card.parentNode.insertBefore(wrapper, card);
+          wrapper.appendChild(banner);
+          wrapper.appendChild(card);
         }
       }
     })();
