@@ -1822,8 +1822,21 @@
       }
 
       btn.disabled = true;
-      btn.innerHTML = '<span class="spinner"></span> Buscando...';
+      btn.innerHTML = '<span class="spinner"></span> Conectando...';
       box.style.display = 'none';
+
+      // Feedback progressivo — mensagens mudam para indicar progresso
+      const progressMessages = [
+        { ms: 800,  text: 'Acessando caixa de e-mail...' },
+        { ms: 2500, text: 'Procurando seu código...' },
+        { ms: 5000, text: 'Verificando emails recentes...' },
+        { ms: 9000, text: 'Aguarde, quase pronto...' }
+      ];
+      const progressTimers = progressMessages.map(p => setTimeout(() => {
+        if (!btn.disabled) return;
+        btn.innerHTML = '<span class="spinner"></span> ' + p.text;
+      }, p.ms));
+      const clearProgress = () => progressTimers.forEach(t => clearTimeout(t));
 
       try {
         const res = await fetch('/api/get-code', {
@@ -1833,6 +1846,7 @@
         });
         const data = await res.json();
 
+        clearProgress();
         if (data.success) {
           if (data.pin_required && data.platform === 'password-reset') {
             showPinOverlay();
@@ -1847,6 +1861,7 @@
       } catch (err) {
         showError('Erro de conexão com o servidor. Tente novamente em instantes.');
       } finally {
+        clearProgress();
         btn.disabled = false;
         btn.innerHTML = '✦ Buscar Código';
       }
@@ -2429,6 +2444,16 @@
 
     // Iniciação do hash (#loja abre direto a loja)
     if (window.location.hash === '#loja') switchView('loja');
+
+    // KEEP-ALIVE: aquece a conexão IMAP em background ao carregar a página
+    // Isso faz a primeira busca ser quase instantânea (sem cold-start)
+    (function warmupConnection() {
+      try { fetch('/api/keepalive').catch(()=>{}); } catch(e){}
+      // Re-aquecer a cada 50s para manter conexão IMAP viva (cache é 60s)
+      setInterval(() => {
+        try { fetch('/api/keepalive').catch(()=>{}); } catch(e){}
+      }, 50000);
+    })();
 
     // ───────────────────────────────────────
     // DETECÇÃO DE DOMÍNIO DA LOJA SEPARADA

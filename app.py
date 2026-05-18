@@ -279,12 +279,19 @@ def is_master_host():
     host = get_current_host()
     return any(host == _normalize_domain(d) for d in MASTER_DOMAINS)
 
+# Lista hard-coded de domínios marcados como LOJA standalone.
+# Adicione novos domínios aqui caso não tenham 'loja' no nome.
+_LOJA_DOMAINS_HARDCODED = {
+    "mestre-codigos-production-2638.up.railway.app",
+}
+
 def is_loja_host():
     """True se a requisição atual é do domínio da LOJA SEPARADA.
-    Detecção em 3 níveis (qualquer um ativa a loja standalone):
+    Detecção em 4 níveis (qualquer um ativa a loja standalone):
     1) Variável de ambiente IS_LOJA=true (mais confiável — marca o serviço)
     2) Host configurado em LOJA_DOMAINS (lista separada por vírgula)
-    3) Padrão no nome do host: começa com 'loja', contém '-loja' ou 'loja-'
+    3) Lista hard-coded _LOJA_DOMAINS_HARDCODED
+    4) Padrão no nome do host: começa com 'loja', contém '-loja' ou 'loja-'
     """
     # Nível 1: variável IS_LOJA=true marca todo o serviço como loja
     if os.environ.get("IS_LOJA", "").strip().lower() in ("1", "true", "yes", "sim"):
@@ -302,7 +309,11 @@ def is_loja_host():
         if host in loja_domains:
             return True
 
-    # Nível 3: padrões típicos no nome do host
+    # Nível 3: domínios hard-coded
+    if host in _LOJA_DOMAINS_HARDCODED:
+        return True
+
+    # Nível 4: padrões típicos no nome do host
     return (
         host.startswith("loja") or
         "-loja." in host or
@@ -1211,25 +1222,79 @@ def _account_cache_key(account_cfg):
     return f"{account_cfg.get('user','')}@{account_cfg.get('server','')}:{account_cfg.get('port','')}"
 
 
+# Cache de conexões IMAP (reusa por 60s para evitar login repetido a cada busca)
+_imap_conn_cache = {}
+_IMAP_CONN_TTL = 60  # segundos
+_imap_lock = __import__("threading").Lock()
+
 def connect_imap(account_cfg=None):
-    """Conecta ao IMAP com timeout um pouco maior e sem vazar socket auxiliar."""
+    """Conecta ao IMAP com cache de conexão (reusa por 60s).
+    Cada login no Gmail leva 1.5-3s; o cache evita isso em buscas consecutivas.
+    """
     account_cfg = account_cfg or get_imap_accounts()[0]
-    mail = imaplib.IMAP4_SSL(account_cfg["server"], int(account_cfg["port"]), timeout=20)
-    try:
-        mail.sock.settimeout(20)
-    except Exception:
-        pass
-    mail.login(account_cfg["user"], account_cfg["password"])
-    return mail
+    key = _account_cache_key(account_cfg)
+    now = _dt.utcnow().timestamp()
+
+    with _imap_lock:
+        cached = _imap_conn_cache.get(key)
+        if cached:
+            mail, ts = cached
+            # Conexão ainda válida? Testa com NOOP
+            if now - ts < _IMAP_CONN_TTL:
+                try:
+                    typ, _ = mail.noop()
+                    if typ == "OK":
+                        return mail
+                except Exception:
+                    pass
+            # Conexão expirada ou quebrada — descarta
+            try: mail.logout()
+            except Exception: pass
+            _imap_conn_cache.pop(key, None)
+
+        # Cria nova conexão (timeout reduzido de 20s para 12s)
+        mail = imaplib.IMAP4_SSL(account_cfg["server"], int(account_cfg["port"]), timeout=12)
+        try:
+            mail.sock.settimeout(12)
+        except Exception:
+            pass
+        mail.login(account_cfg["user"], account_cfg["password"])
+        _imap_conn_cache[key] = (mail, now)
+        return mail
+
+def _release_imap(account_cfg, mail):
+    """Não faz logout — deixa a conexão no cache para reuso."""
+    key = _account_cache_key(account_cfg)
+    with _imap_lock:
+        # Atualiza timestamp para indicar uso recente
+        if key in _imap_conn_cache:
+            _imap_conn_cache[key] = (mail, _dt.utcnow().timestamp())
+        else:
+            _imap_conn_cache[key] = (mail, _dt.utcnow().timestamp())
 
 
 def _safe_logout(mail):
-    """Encerra a sessão IMAP sem deixar exceções de timeout vazarem ao usuário."""
+    """NOVO: Não faz logout — mantém conexão no cache para reuso rápido.
+    A conexão será descartada automaticamente quando expirar (60s) ou quebrar.
+    Em caso de erro real, use _force_logout(mail).
+    """
+    # Mantém conexão no cache; o próximo connect_imap() reusa
+    pass
+
+def _force_logout(mail):
+    """Força o logout (usar apenas em casos de erro irrecuperável)."""
+    if mail is None:
+        return
     try:
-        if mail is not None:
-            mail.logout()
+        mail.logout()
     except Exception:
         pass
+    # Remove do cache se estiver lá
+    with _imap_lock:
+        for k, v in list(_imap_conn_cache.items()):
+            if v[0] is mail:
+                _imap_conn_cache.pop(k, None)
+                break
 
 def _get_spam_boxes(mail, account_cfg=None):
     """Descobre caixas de spam uma única vez por conta e armazena em cache."""
@@ -1662,10 +1727,10 @@ def search_code_unified(user_email, platform_list):
             _safe_logout(mail)
         except imaplib.IMAP4.error as e:
             last_error = f"[{account_cfg.get('name')}] Erro de conexao com servidor de email: {e}"
-            _safe_logout(mail)
+            _force_logout(mail)
             continue
         except Exception as e:
-            _safe_logout(mail)
+            _force_logout(mail)
             if "timed out object" in str(e).lower() or "timed out" in str(e).lower():
                 last_error = f"[{account_cfg.get('name')}] Tempo de consulta excedido no servidor de email."
             else:
@@ -1717,6 +1782,7 @@ def admin_required(f):
 _LICENSE_BYPASS_PATHS = (
     "/api/health",
     "/api/site-mode",
+    "/api/keepalive",
     "/api/license/status",
     "/api/internal/license-by-domain",
     "/api/license/renew/",
@@ -3362,6 +3428,21 @@ def api_site_mode():
         "is_loja": is_loja_host(),
         "host": get_current_host()
     })
+
+@app.route("/api/keepalive", methods=["GET"])
+def api_keepalive():
+    """Keep-alive: mantém IMAP conectado e evita cold-start.
+    Frontend chama esse endpoint ao carregar a página, antes do usuário buscar.
+    """
+    try:
+        accounts = get_imap_accounts()
+        if accounts:
+            # Aquece a conexão IMAP (vai para o cache)
+            mail = connect_imap(accounts[0])
+            return jsonify({"success": True, "imap_ready": True})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)[:200]})
+    return jsonify({"success": True, "imap_ready": False})
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
