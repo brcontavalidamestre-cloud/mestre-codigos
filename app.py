@@ -1785,6 +1785,7 @@ _LICENSE_BYPASS_PATHS = (
     "/api/keepalive",
     "/api/license/status",
     "/api/internal/license-by-domain",
+    "/api/internal/loja/",
     "/api/license/renew/",
     "/api/internal/renew-pix",
     "/api/internal/renew-status",
@@ -2627,8 +2628,60 @@ def api_loja_unlock():
         return jsonify({"success": True})
     return jsonify({"success": False, "message": "Senha incorreta."}), 401
 
+def _proxy_to_master(path, method="GET", json_body=None, params=None):
+    """Faz proxy de requisições da loja standalone para o mestre via HTTP.
+    Necessário pois cada serviço Railway tem disco isolado (stock.json/orders.json/products.json).
+    """
+    try:
+        import requests
+        url = f"{MASTER_API_URL}{path}"
+        headers = {
+            "X-Loja-Proxy-Token": MASTER_API_TOKEN,
+            "Content-Type": "application/json"
+        }
+        if method == "GET":
+            r = requests.get(url, headers=headers, params=params, timeout=15)
+        else:
+            r = requests.post(url, headers=headers, json=json_body or {}, timeout=15)
+        try:
+            return r.json(), r.status_code
+        except Exception:
+            return {"success": False, "message": "Resposta inválida do servidor central."}, r.status_code
+    except Exception as e:
+        return {"success": False, "message": f"Erro ao consultar servidor central: {str(e)[:200]}"}, 502
+
 @app.route("/api/loja/produtos", methods=["GET"])
 def api_loja_produtos():
+    # Se for loja standalone, consulta o mestre via HTTP (estoque compartilhado)
+    if is_loja_host() and not is_master_host():
+        data, status = _proxy_to_master("/api/internal/loja/produtos", method="GET")
+        return jsonify(data), status
+
+    # No mestre, lê direto do disco
+    products = load_products()
+    stock = load_stock()
+    result = []
+    for p in products:
+        items = stock.get(p["id"], [])
+        avail = sum(1 for i in items if not i.get("used"))
+        result.append({
+            "id": p["id"],
+            "name": p["name"],
+            "price": p.get("price", 0),
+            "emoji": p.get("emoji", "🛍️"),
+            "color": p.get("color", "#7e22ce"),
+            "description": p.get("description", ""),
+            "available": avail,
+            "has_stock": avail > 0
+        })
+    return jsonify({"success": True, "products": result})
+
+# ENDPOINT INTERNO: mestre serve dados da loja para lojas standalone
+@app.route("/api/internal/loja/produtos", methods=["GET"])
+def api_internal_loja_produtos():
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
     products = load_products()
     stock = load_stock()
     result = []
@@ -2649,12 +2702,29 @@ def api_loja_produtos():
 
 @app.route("/api/loja/checkout", methods=["POST"])
 def api_loja_checkout():
+    # Loja standalone: faz proxy para o mestre (compartilha pedidos/estoque)
+    if is_loja_host() and not is_master_host():
+        data = request.get_json(silent=True) or {}
+        result, status = _proxy_to_master("/api/internal/loja/checkout", method="POST", json_body=data)
+        return jsonify(result), status
     try:
         return _do_checkout()
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
         print(f"[checkout] erro fatal: {e}\n{tb}")
+        return jsonify({"success": False, "message": f"Erro interno: {e}"}), 500
+
+@app.route("/api/internal/loja/checkout", methods=["POST"])
+def api_internal_loja_checkout():
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    # Marca sessão como desbloqueada (loja standalone não tem senha)
+    session["loja_unlocked"] = True
+    try:
+        return _do_checkout()
+    except Exception as e:
         return jsonify({"success": False, "message": f"Erro interno: {e}"}), 500
 
 def _do_checkout():
@@ -2743,6 +2813,21 @@ def _do_checkout():
 @app.route("/api/loja/meus-pedidos", methods=["POST"])
 def api_loja_meus_pedidos():
     """Histórico de compras do cliente — busca todos os pedidos por email."""
+    # Loja standalone: consulta no mestre
+    if is_loja_host() and not is_master_host():
+        data = request.get_json(silent=True) or {}
+        result, status = _proxy_to_master("/api/internal/loja/meus-pedidos", method="POST", json_body=data)
+        return jsonify(result), status
+    return _do_meus_pedidos()
+
+@app.route("/api/internal/loja/meus-pedidos", methods=["POST"])
+def api_internal_loja_meus_pedidos():
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    return _do_meus_pedidos()
+
+def _do_meus_pedidos():
     try:
         data = request.get_json(silent=True) or {}
         email = str(data.get("email", "")).strip().lower()
@@ -2803,6 +2888,20 @@ def api_loja_meus_pedidos():
 
 @app.route("/api/loja/order-status/<order_id>", methods=["GET"])
 def api_loja_order_status(order_id):
+    # Loja standalone: consulta no mestre
+    if is_loja_host() and not is_master_host():
+        result, status = _proxy_to_master(f"/api/internal/loja/order-status/{order_id}", method="GET")
+        return jsonify(result), status
+    return _do_order_status(order_id)
+
+@app.route("/api/internal/loja/order-status/<order_id>", methods=["GET"])
+def api_internal_loja_order_status(order_id):
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    return _do_order_status(order_id)
+
+def _do_order_status(order_id):
     try:
         orders = load_orders()
         order  = next((o for o in orders if isinstance(o, dict) and o.get("id") == order_id), None)
@@ -2838,6 +2937,20 @@ def api_loja_order_status(order_id):
 
 @app.route("/api/loja/force-check/<order_id>", methods=["POST"])
 def api_loja_force_check(order_id):
+    # Loja standalone: consulta no mestre
+    if is_loja_host() and not is_master_host():
+        result, status = _proxy_to_master(f"/api/internal/loja/force-check/{order_id}", method="POST")
+        return jsonify(result), status
+    return _do_force_check(order_id)
+
+@app.route("/api/internal/loja/force-check/<order_id>", methods=["POST"])
+def api_internal_loja_force_check(order_id):
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    return _do_force_check(order_id)
+
+def _do_force_check(order_id):
     """Força a verificação de pagamento de um pedido via Efi (útil quando o webhook falha)."""
     try:
         orders = load_orders()
