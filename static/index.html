@@ -1610,6 +1610,250 @@
       });
     })();
 
+    // ── TEMA STREAM ROGER (vermelho/laranja/azul) — BASEADO NO DOMÍNIO ──
+    (function() {
+      const host = (window.location.hostname || '').toLowerCase();
+      const isRoger = host.startsWith('roger.') || host.includes('roger.up.railway.app') || host.includes('-roger') || host.includes('roger-');
+      if (!isRoger) return;
+
+      const style = document.createElement('style');
+      style.textContent = `
+        /* === TEMA STREAM ROGER — vermelho/laranja/amarelo/azul elétrico === */
+        body {
+          background: #000308 !important;
+          background-image: linear-gradient(180deg, rgba(0,3,8,0.92) 0%, rgba(0,8,20,0.94) 50%, rgba(8,0,8,0.95) 100%), url('/static/roger-bg.jpg') !important;
+          background-size: cover !important;
+          background-attachment: fixed !important;
+          background-position: center !important;
+        }
+
+        /* Título principal Stream Roger */
+        h1#site-title-h1, .site-title-h1 {
+          background: linear-gradient(135deg, #ff3838 0%, #ff8c00 22%, #ffd700 44%, #2196f3 70%, #0066ff 100%) !important;
+          background-size: 250% auto !important;
+          -webkit-background-clip: text !important;
+          -webkit-text-fill-color: transparent !important;
+          background-clip: text !important;
+          animation: roger-shimmer 4s linear infinite;
+          letter-spacing: 0.22em !important;
+          text-shadow: 0 0 40px rgba(33,150,243,0.45);
+          font-weight: 900 !important;
+        }
+        @keyframes roger-shimmer { to { background-position: 250% center; } }
+
+        .subtitle, header p { color: #a0d8ff !important; opacity: 0.92; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+
+        /* Logo redondo Stream Roger */
+        .logo-icon {
+          border: 3px solid #ffd700 !important;
+          box-shadow:
+            0 0 35px rgba(33,150,243,0.7),
+            0 0 65px rgba(255,56,56,0.4),
+            0 0 100px rgba(255,140,0,0.25),
+            inset 0 0 0 3px #000 !important;
+          background: url('/static/roger-icon.jpg') center/cover !important;
+          background-size: 130% !important;
+        }
+        .logo-icon::before, .logo-icon::after { display:none !important; }
+
+        /* BANNER STREAM ROGER no topo (acima do header) */
+        #roger-banner {
+          width:100%; max-width:1100px; margin:18px auto 12px;
+          border-radius:16px; overflow:hidden;
+          box-shadow: 0 12px 50px rgba(0,0,0,0.65), 0 0 35px rgba(33,150,243,0.35), 0 0 90px rgba(255,56,56,0.18);
+          border: 2px solid rgba(255,215,0,0.35);
+        }
+        #roger-banner img { width:100%; display:block; }
+
+        /* Botão SAIR cinematográfico (vermelho-laranja-azul) */
+        .logout-btn {
+          background: linear-gradient(135deg, #b91c1c 0%, #ea580c 35%, #ffd700 55%, #0066ff 100%) !important;
+          background-size: 220% auto !important;
+          color: #fff !important;
+          border: 2px solid #ffd700 !important;
+          box-shadow: 0 0 18px rgba(33,150,243,0.5), 0 0 35px rgba(234,88,12,0.25) !important;
+          font-weight: 800 !important;
+          letter-spacing: 0.06em !important;
+          transition: all 0.25s !important;
+        }
+        .logout-btn:hover {
+          background-position: 100% center !important;
+          transform: translateY(-2px);
+          box-shadow: 0 0 25px rgba(255,215,0,0.7), 0 0 50px rgba(33,150,243,0.45) !important;
+        }
+
+        /* Menu topo (apenas 'Consultar Códigos' nessa loja) */
+        .top-menu { background: linear-gradient(180deg, rgba(0,10,30,0.7), rgba(0,0,5,0.4)) !important; border:1px solid rgba(255,215,0,0.18) !important; border-radius:12px !important; padding:6px !important; }
+        .top-menu button {
+          background: linear-gradient(135deg, rgba(20,40,80,0.6) 0%, rgba(60,10,10,0.6) 100%) !important;
+          color: #cfe7ff !important;
+          border: 1.5px solid rgba(33,150,243,0.35) !important;
+          font-weight: 700 !important;
+          transition: all 0.25s;
+        }
+        .top-menu button:hover { border-color:#ffd700 !important; color:#fff !important; transform: translateY(-1px); }
+        .top-menu button.active {
+          background: linear-gradient(135deg, #b91c1c 0%, #ea580c 30%, #ffd700 55%, #0066ff 100%) !important;
+          background-size: 200% auto !important;
+          color:#fff !important; border-color:#ffd700 !important;
+          box-shadow: 0 0 25px rgba(33,150,243,0.55), 0 0 50px rgba(234,88,12,0.25) !important;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.9) !important;
+        }
+
+        /* Seção 'Plataformas Disponíveis' */
+        .section-title {
+          color: #ffd700 !important;
+          text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 0 25px rgba(255,140,0,0.35) !important;
+          font-weight: 900 !important;
+        }
+        .section-subtitle { color: #ffe9b8 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+
+        .platform-group-label {
+          color: #fff !important;
+          background: linear-gradient(90deg, rgba(33,150,243,0.25), rgba(185,28,28,0.18)) !important;
+          border-left: 4px solid #ffd700 !important;
+          padding: 6px 14px !important;
+          font-weight: 800 !important;
+          letter-spacing: 0.08em !important;
+          text-shadow: 0 2px 6px rgba(0,0,0,0.9), 0 0 14px rgba(255,215,0,0.35);
+        }
+
+        .platform-card {
+          background: linear-gradient(135deg, rgba(0,15,40,0.78) 0%, rgba(20,5,5,0.72) 100%) !important;
+          border: 2px solid rgba(33,150,243,0.35) !important;
+          transition: all 0.3s !important;
+        }
+        .platform-card:hover {
+          border-color: #ffd700 !important;
+          box-shadow: 0 0 25px rgba(255,215,0,0.5), 0 0 50px rgba(33,150,243,0.35) !important;
+          transform: translateY(-3px);
+        }
+        .platform-card.selected {
+          background: linear-gradient(135deg, rgba(185,28,28,0.5) 0%, rgba(234,88,12,0.4) 50%, rgba(33,150,243,0.5) 100%) !important;
+          border-color: #ffd700 !important;
+          box-shadow: 0 0 35px rgba(255,215,0,0.75), 0 0 70px rgba(33,150,243,0.45) !important;
+        }
+
+        .platform-name {
+          color: #ffffff !important;
+          text-shadow: 0 2px 6px rgba(0,0,0,0.9), 0 0 12px rgba(255,215,0,0.4) !important;
+          font-weight: 800 !important;
+        }
+        .platform-desc { color:#cfe7ff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+
+        /* Passos */
+        .step-number {
+          background: linear-gradient(135deg, #b91c1c 0%, #ea580c 35%, #ffd700 60%, #0066ff 100%) !important;
+          border: 2px solid #ffd700 !important;
+          box-shadow: 0 0 18px rgba(33,150,243,0.5) !important;
+          color: #fff !important;
+          font-weight: 900 !important;
+          text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+        }
+        .step-text { color:#ffe9b8 !important; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+
+        /* Formulário de busca */
+        .form-section {
+          background: linear-gradient(135deg, rgba(0,15,40,0.85) 0%, rgba(15,5,5,0.82) 100%) !important;
+          border: 2px solid rgba(255,215,0,0.3) !important;
+          box-shadow: 0 12px 45px rgba(0,0,0,0.6), inset 0 0 30px rgba(33,150,243,0.08) !important;
+        }
+        .platform-badge {
+          background: linear-gradient(135deg, #b91c1c, #ea580c, #ffd700, #0066ff) !important;
+          background-size: 200% auto !important;
+          color:#fff !important;
+          border: 1.5px solid #ffd700 !important;
+          text-shadow: 0 2px 5px rgba(0,0,0,0.85);
+        }
+
+        .form-section label {
+          color: #ffd700 !important;
+          text-shadow: 0 2px 5px rgba(0,0,0,0.85);
+          font-weight: 700 !important;
+          letter-spacing: 0.05em;
+        }
+
+        .form-section input[type=email], .form-section input[type=text] {
+          background: rgba(0,8,25,0.7) !important;
+          color: #fff !important;
+          border: 2px solid rgba(33,150,243,0.45) !important;
+          font-weight: 600 !important;
+          transition: all 0.25s;
+        }
+        .form-section input[type=email]::placeholder, .form-section input[type=text]::placeholder {
+          color: rgba(160,216,255,0.55) !important;
+          font-style: italic;
+        }
+        .form-section input[type=email]:focus, .form-section input[type=text]:focus {
+          outline: none !important;
+          border-color: #ffd700 !important;
+          box-shadow: 0 0 0 4px rgba(255,215,0,0.18), 0 0 25px rgba(255,140,0,0.45) !important;
+          background: rgba(0,15,40,0.85) !important;
+        }
+
+        /* Botão BUSCAR estilo Stream Roger */
+        .btn-primary, #btn-buscar {
+          background: linear-gradient(135deg, #b91c1c 0%, #ea580c 25%, #ffd700 50%, #2196f3 75%, #0066ff 100%) !important;
+          background-size: 250% auto !important;
+          color: #fff !important;
+          border: 2px solid #ffd700 !important;
+          font-weight: 900 !important;
+          letter-spacing: 0.08em !important;
+          box-shadow: 0 0 25px rgba(33,150,243,0.6), 0 0 55px rgba(255,140,0,0.35), 0 8px 25px rgba(0,0,0,0.5) !important;
+          text-shadow: 0 2px 6px rgba(0,0,0,0.9);
+          animation: roger-btn 4s linear infinite;
+          transition: transform 0.2s !important;
+        }
+        @keyframes roger-btn { to { background-position: 250% center; } }
+        .btn-primary:hover, #btn-buscar:hover { transform: translateY(-3px) !important; }
+
+        /* Result box */
+        .result-box {
+          background: linear-gradient(135deg, rgba(0,15,40,0.92) 0%, rgba(15,5,5,0.88) 100%) !important;
+          border: 2px solid #ffd700 !important;
+          box-shadow: 0 0 40px rgba(33,150,243,0.5), 0 0 80px rgba(255,140,0,0.2) !important;
+        }
+        .result-box .code-display {
+          color: #ffd700 !important;
+          text-shadow: 0 0 25px rgba(255,215,0,0.55), 0 2px 6px rgba(0,0,0,0.85);
+          font-weight: 900 !important;
+        }
+
+        footer { color: #ffd700 !important; opacity: 0.7; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+      `;
+      document.head.appendChild(style);
+
+      // Atualiza título do navegador
+      document.title = 'Stream Roger ✨';
+
+      // Atualiza título principal e subtítulo
+      document.addEventListener('DOMContentLoaded', function() {
+        const titleEl = document.querySelector('h1#site-title-h1, .site-title-h1, header h1');
+        if (titleEl) titleEl.textContent = 'STREAM ROGER';
+
+        const subEl = document.querySelector('header p, .subtitle');
+        if (subEl) subEl.textContent = 'Códigos Premium • Streaming • Pix Automático';
+
+        // Substitui icône do logo
+        const logoIcon = document.querySelector('.logo-icon');
+        if (logoIcon) { logoIcon.textContent = ''; logoIcon.innerHTML = ''; }
+
+        // Insere banner no topo (acima do header)
+        const headerEl = document.querySelector('header');
+        if (headerEl && !document.getElementById('roger-banner')) {
+          const banner = document.createElement('div');
+          banner.id = 'roger-banner';
+          banner.innerHTML = '<img src="/static/roger-banner-1200.jpg" alt="Stream Roger">';
+          headerEl.parentNode.insertBefore(banner, headerEl);
+        }
+
+        // Estrelas em tons quentes/azuis
+        if (typeof stars !== 'undefined' && stars && stars.length) {
+          stars.forEach(s => { s.gold = Math.random() < 0.55; });
+        }
+      });
+    })();
+
     // ── ESTRELAS ──
     const canvas = document.getElementById('stars-canvas');
     const ctx = canvas.getContext('2d');

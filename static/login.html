@@ -290,6 +290,198 @@
           wrapper.appendChild(card);
         }
       }
+
+      // ── TEMA STREAM ROGER (vermelho/laranja/amarelo/azul elétrico) ──
+      const isRoger = host.startsWith('roger.') || host.includes('roger.up.railway.app') || host.includes('-roger') || host.includes('roger-');
+      if (isRoger) {
+        const style = document.createElement('style');
+        style.textContent = `
+          /* Tema STREAM ROGER — cores vibrantes */
+          body { background-color:#000308 !important; }
+          .card {
+            background: linear-gradient(135deg, rgba(0,10,30,0.94), rgba(20,5,10,0.92)) !important;
+            border: 2px solid rgba(255,215,0,0.5) !important;
+            box-shadow:
+              0 0 60px rgba(33,150,243,0.45),
+              0 0 120px rgba(255,56,56,0.15),
+              inset 0 0 30px rgba(33,150,243,0.06) !important;
+          }
+          h1#site-title-h1 {
+            background: linear-gradient(135deg, #ff3838 0%, #ff8c00 22%, #ffd700 44%, #2196f3 70%, #0066ff 100%) !important;
+            background-size: 250% auto !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            background-clip: text !important;
+            animation: roger-shimmer 4s linear infinite;
+            text-shadow: 0 0 40px rgba(33,150,243,0.45);
+            letter-spacing: 0.22em !important;
+          }
+          @keyframes roger-shimmer { to { background-position: 250% center; } }
+
+          .subtitle { color: #a0d8ff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.8); }
+
+          label {
+            color: #ffd700 !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.12em !important;
+            text-shadow: 0 1px 4px rgba(33,150,243,0.35);
+          }
+
+          .form-group { position: relative; }
+          .form-group input {
+            background: rgba(0,8,25,0.85) !important;
+            border: 2px solid rgba(33,150,243,0.5) !important;
+            color: #ffffff !important;
+            padding: 14px 16px 14px 46px !important;
+            font-size: 1.02rem !important;
+            font-weight: 500 !important;
+            border-radius: 12px !important;
+            transition: all .28s ease !important;
+            box-shadow: inset 0 0 12px rgba(0,0,0,0.4);
+          }
+          .form-group input::placeholder { color: rgba(160,216,255,0.55) !important; font-style: italic; }
+          .form-group input:focus {
+            border-color: #ffd700 !important;
+            box-shadow: 0 0 0 4px rgba(255,215,0,0.2), 0 0 28px rgba(255,140,0,0.45), inset 0 0 12px rgba(33,150,243,0.15) !important;
+            background: rgba(0,15,40,0.92) !important;
+            outline: none !important;
+          }
+          .roger-input-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-top: 14px;
+            font-size: 1.2rem;
+            color: #2196f3;
+            text-shadow: 0 0 10px rgba(33,150,243,0.7);
+            pointer-events: none;
+            transition: all .25s;
+            z-index: 2;
+          }
+          .form-group input:focus + .roger-input-icon,
+          .form-group:focus-within .roger-input-icon {
+            color: #ffd700;
+            text-shadow: 0 0 14px rgba(255,215,0,0.85);
+            transform: translateY(-50%) scale(1.15);
+          }
+
+          .btn {
+            background: linear-gradient(135deg, #b91c1c 0%, #ea580c 25%, #ffd700 50%, #2196f3 75%, #0066ff 100%) !important;
+            background-size: 280% auto !important;
+            border: 2px solid #ffd700 !important;
+            color: #fff !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.18em !important;
+            text-transform: uppercase !important;
+            font-size: 1.05rem !important;
+            padding: 16px !important;
+            margin-top: 14px !important;
+            border-radius: 12px !important;
+            box-shadow:
+              0 6px 25px rgba(33,150,243,0.55),
+              0 0 45px rgba(255,140,0,0.3),
+              inset 0 1px 0 rgba(255,255,255,0.25) !important;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.75), 0 0 14px rgba(33,150,243,0.45);
+            transition: all .35s ease !important;
+            animation: roger-btn-shimmer 5s linear infinite;
+            position: relative;
+            overflow: hidden;
+          }
+          @keyframes roger-btn-shimmer { to { background-position: 280% center; } }
+          .btn:hover {
+            box-shadow: 0 10px 40px rgba(255,215,0,0.7), 0 0 70px rgba(33,150,243,0.55), inset 0 1px 0 rgba(255,255,255,0.35) !important;
+            transform: translateY(-2px);
+          }
+          .btn:active { transform: translateY(0); }
+
+          .logo-icon {
+            border: 3px solid #ffd700 !important;
+            box-shadow:
+              0 0 35px rgba(33,150,243,0.7),
+              0 0 70px rgba(255,56,56,0.4),
+              0 0 110px rgba(255,140,0,0.25),
+              inset 0 0 0 3px #000 !important;
+            background: url('/static/roger-icon.jpg') center/cover !important;
+            background-size: 130% !important;
+          }
+
+          .footer-txt { color: rgba(255,215,0,0.65) !important; letter-spacing: 0.15em !important; }
+          .error-msg {
+            background: rgba(185,28,28,0.22) !important;
+            border: 1.5px solid rgba(255,56,56,0.6) !important;
+            color: #ffb8b8 !important;
+          }
+
+          #roger-banner {
+            width:100%; margin:0 0 14px 0;
+            border-radius:14px; overflow:hidden;
+            border:1.5px solid rgba(255,215,0,0.5);
+            box-shadow: 0 0 35px rgba(33,150,243,0.45), 0 0 70px rgba(255,140,0,0.2);
+          }
+
+          @media (max-width: 480px) {
+            .form-group input { padding-left: 44px !important; }
+            .roger-input-icon { left: 12px; font-size: 1.1rem; }
+          }
+        `;
+        document.head.appendChild(style);
+
+        // Título e tab
+        const h1 = document.getElementById('site-title-h1');
+        if (h1) h1.textContent = 'STREAM ROGER';
+        document.title = 'Stream Roger ✨ — Login';
+
+        // Fundo cinematográfico
+        document.body.style.backgroundImage = "linear-gradient(rgba(0,3,8,0.88), rgba(0,5,15,0.94)), url('/static/roger-bg.jpg')";
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundAttachment = 'fixed';
+
+        // Substitui o ícone
+        const logoIcon = document.querySelector('.logo-icon');
+        if (logoIcon) { logoIcon.style.background = "url('/static/roger-icon.jpg') center/cover"; logoIcon.textContent = ''; }
+
+        // Ícones nos inputs
+        const userInput = document.getElementById('username');
+        const passInput = document.getElementById('password');
+        if (userInput && !userInput.parentNode.querySelector('.roger-input-icon')) {
+          const userLabel = document.querySelector('label[for="username"]');
+          if (userLabel) userLabel.textContent = 'Usuário';
+          const ic = document.createElement('span');
+          ic.className = 'roger-input-icon';
+          ic.textContent = '👤';
+          userInput.parentNode.appendChild(ic);
+          userInput.placeholder = 'Digite seu usuário';
+        }
+        if (passInput && !passInput.parentNode.querySelector('.roger-input-icon')) {
+          const passLabel = document.querySelector('label[for="password"]');
+          if (passLabel) passLabel.textContent = 'Senha';
+          const ic = document.createElement('span');
+          ic.className = 'roger-input-icon';
+          ic.textContent = '🔐';
+          passInput.parentNode.appendChild(ic);
+          passInput.placeholder = 'Digite sua senha';
+        }
+
+        // Botão de entrar
+        const btn = document.getElementById('btn-login');
+        if (btn) btn.innerHTML = '✨ Entrar';
+
+        // Banner acima do card
+        const card = document.querySelector('.card');
+        if (card && !document.getElementById('roger-wrapper')) {
+          const wrapper = document.createElement('div');
+          wrapper.id = 'roger-wrapper';
+          wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:420px;margin:0 auto;position:relative;z-index:1;';
+          const banner = document.createElement('div');
+          banner.id = 'roger-banner';
+          banner.innerHTML = '<img src="/static/roger-banner-1200.jpg" alt="STREAM ROGER" style="width:100%;display:block"/>';
+          card.parentNode.insertBefore(wrapper, card);
+          wrapper.appendChild(banner);
+          wrapper.appendChild(card);
+        }
+      }
     })();
 
     async function doLogin(e) {

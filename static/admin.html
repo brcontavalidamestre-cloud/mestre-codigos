@@ -622,6 +622,52 @@
           document.body.style.backgroundPosition = 'center';
         });
       }
+
+      // ── TEMA STREAM ROGER ──
+      const isRoger = host.startsWith('roger.') || host.includes('roger.up.railway.app') || host.includes('-roger') || host.includes('roger-');
+      if (isRoger) {
+        const t = document.getElementById('site-title-h1');
+        if (t) t.textContent = 'STREAM ROGER';
+        document.title = 'Stream Roger ✨ — Painel Admin';
+        // Injeta CSS tema Roger
+        const style = document.createElement('style');
+        style.textContent = `
+          body {
+            background-image: linear-gradient(rgba(0,3,8,0.93), rgba(0,5,15,0.96)), url('/static/roger-bg.jpg') !important;
+            background-size: cover !important;
+            background-attachment: fixed !important;
+            background-position: center !important;
+          }
+          .topbar {
+            background: linear-gradient(180deg, rgba(0,10,30,0.88), rgba(0,5,15,0.82)) !important;
+            border-bottom: 2px solid rgba(255,215,0,0.45) !important;
+            box-shadow: 0 4px 25px rgba(33,150,243,0.25) !important;
+          }
+          .topbar .title {
+            background: linear-gradient(135deg, #ff3838 0%, #ff8c00 22%, #ffd700 44%, #2196f3 70%, #0066ff 100%) !important;
+            background-size: 250% auto !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            background-clip: text !important;
+            animation: roger-shimmer-admin 4s linear infinite;
+            font-weight: 900 !important;
+            letter-spacing: 0.18em !important;
+          }
+          @keyframes roger-shimmer-admin { to { background-position: 250% center; } }
+        `;
+        document.head.appendChild(style);
+        document.addEventListener('DOMContentLoaded', function() {
+          const logo = document.querySelector('.topbar .logo');
+          if (logo) {
+            logo.style.background = "url('/static/roger-icon.jpg') center/cover";
+            logo.style.backgroundSize = '130%';
+            logo.style.border = '2px solid #ffd700';
+            logo.style.boxShadow = '0 0 25px rgba(33,150,243,0.55), 0 0 50px rgba(255,140,0,0.25)';
+            logo.style.fontSize = '0';
+            logo.textContent = '';
+          }
+        });
+      }
     })();
 
     let _users = [], _pwUser = null, _delUser = null;
