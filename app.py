@@ -3641,6 +3641,48 @@ def api_site_mode():
         "host": get_current_host()
     })
 
+@app.route("/api/debug/imap", methods=["GET"])
+def api_debug_imap():
+    """Debug: mostra estado de todas as caixas IMAP configuradas (admin only)."""
+    if not session.get("logged_in") or session.get("role") != "admin":
+        return jsonify({"success": False, "message": "Apenas admin."}), 403
+    result = []
+    accounts = get_imap_accounts()
+    for acc in accounts:
+        info = {
+            "name": acc.get("name"),
+            "server": acc.get("server"),
+            "user": acc.get("user"),
+        }
+        mail = None
+        try:
+            mail = imaplib.IMAP4_SSL(acc["server"], int(acc["port"]), timeout=10)
+            mail.login(acc["user"], acc["password"])
+            info["login"] = "OK"
+            # INBOX count
+            sel_st, sel_data = mail.select("INBOX", readonly=True)
+            info["inbox_total"] = int(sel_data[0]) if sel_data and sel_data[0] else 0
+            # Lista pastas
+            st, mbs = mail.list()
+            folders = []
+            if st == "OK":
+                for mb in mbs[:20]:
+                    mb_str = mb.decode("utf-8") if isinstance(mb, bytes) else str(mb)
+                    folders.append(mb_str[:120])
+            info["folders_raw"] = folders
+            # Detectar spam boxes
+            spam = _get_spam_boxes(mail, acc)
+            info["spam_boxes_detected"] = spam
+            try: mail.logout()
+            except Exception: pass
+        except Exception as e:
+            info["login"] = f"ERRO: {type(e).__name__}: {str(e)[:200]}"
+            try:
+                if mail: mail.logout()
+            except Exception: pass
+        result.append(info)
+    return jsonify({"success": True, "accounts": result})
+
 @app.route("/api/keepalive", methods=["GET"])
 def api_keepalive():
     """Keep-alive: mantém IMAP conectado e evita cold-start.
