@@ -117,6 +117,12 @@ SECOND_IMAP_PORT   = int(os.environ.get("SECOND_IMAP_PORT") or os.environ.get("I
 SECOND_EMAIL_USER  = os.environ.get("SECOND_EMAIL_USER") or os.environ.get("EMAIL_USER_2") or os.environ.get("EMAIL_USER2", "")
 SECOND_EMAIL_PASS  = os.environ.get("SECOND_EMAIL_PASS") or os.environ.get("EMAIL_PASS_2") or os.environ.get("EMAIL_PASS2", "")
 
+# 3ª caixa hard-coded (SiteGround mundial.log.br) — configurável via env
+THIRD_IMAP_SERVER  = os.environ.get("THIRD_IMAP_SERVER") or os.environ.get("IMAP_SERVER_3", "mail.mundial.log.br")
+THIRD_IMAP_PORT    = int(os.environ.get("THIRD_IMAP_PORT") or os.environ.get("IMAP_PORT_3") or 993)
+THIRD_EMAIL_USER   = os.environ.get("THIRD_EMAIL_USER") or os.environ.get("EMAIL_USER_3", "codigo@mundial.log.br")
+THIRD_EMAIL_PASS   = os.environ.get("THIRD_EMAIL_PASS") or os.environ.get("EMAIL_PASS_3", "Mestre13579@")
+
 
 def get_imap_accounts():
     accounts = [
@@ -136,6 +142,32 @@ def get_imap_accounts():
             "user": SECOND_EMAIL_USER,
             "password": SECOND_EMAIL_PASS,
         })
+    # 3ª caixa (mundial.log.br) — SiteGround
+    if THIRD_EMAIL_USER and THIRD_EMAIL_PASS:
+        # Evita duplicar caso seja igual à principal/secundária
+        already = any(a["user"].lower() == THIRD_EMAIL_USER.lower() and a["server"] == THIRD_IMAP_SERVER for a in accounts)
+        if not already:
+            accounts.append({
+                "name": "caixa-mundial",
+                "server": THIRD_IMAP_SERVER,
+                "port": THIRD_IMAP_PORT,
+                "user": THIRD_EMAIL_USER,
+                "password": THIRD_EMAIL_PASS,
+            })
+    # Caixas extras genéricas (IMAP_SERVER_4, IMAP_SERVER_5, etc) — para expansão futura
+    for i in range(4, 11):
+        srv = os.environ.get(f"IMAP_SERVER_{i}")
+        usr = os.environ.get(f"EMAIL_USER_{i}")
+        pwd = os.environ.get(f"EMAIL_PASS_{i}")
+        if srv and usr and pwd:
+            prt = int(os.environ.get(f"IMAP_PORT_{i}", 993))
+            accounts.append({
+                "name": f"caixa-{i}",
+                "server": srv,
+                "port": prt,
+                "user": usr,
+                "password": pwd,
+            })
     return accounts
 
 # ─── LOJA / EFI PIX ─────────────────────────────────────────────────────────────
