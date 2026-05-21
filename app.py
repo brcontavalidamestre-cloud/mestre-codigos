@@ -1329,37 +1329,104 @@ def _force_logout(mail):
                 break
 
 def _get_spam_boxes(mail, account_cfg=None):
-    """Descobre caixas de spam uma única vez por conta e armazena em cache."""
+    """Descobre caixas de spam/lixo eletrônico em qualquer hierarquia.
+    Detecta pastas com nomes como:
+      - Spam / SPAM / spam
+      - Junk / JUNK / Junk Email
+      - INBOX.Spam / INBOX.Junk / INBOX.spam
+      - [Gmail]/Spam / [Gmail]/Lixo Eletrônico
+      - Lixo Eletrônico / Lixeira (Português)
+      - Correo no deseado (Espanhol)
+      - Bulk Mail / Bulk
+    Também usa flags IMAP (\Junk, \Spam) para detecção automática.
+    """
     account_cfg = account_cfg or get_imap_accounts()[0]
     cache_key = _account_cache_key(account_cfg)
     if cache_key in _spam_boxes_cache:
         return _spam_boxes_cache[cache_key]
-    SPAM_CANDIDATES = ["Spam", "Junk", "SPAM", "JUNK",
-                       "[Gmail]/Spam", "[Gmail]/Lixo Eletrônico",
-                       "Junk Email", "Bulk Mail", "Lixo Eletronico"]
+
+    # Palavras-chave que indicam pasta de spam/lixo (busca por substância, case-insensitive)
+    SPAM_KEYWORDS = [
+        "spam",
+        "junk",
+        "lixo eletrônico",
+        "lixo eletronico",
+        "lixeira",
+        "correo no deseado",
+        "bulk mail",
+        "bulk",
+        "unwanted",
+    ]
+    # Palavras que indicam pastas que devem ser EXCLUÍDAS (sent, drafts, archive)
+    EXCLUDE_KEYWORDS = [
+        "sent", "enviad", "draft", "rascunh", "archive", "arquiv",
+    ]
+
     try:
         status_list, mailbox_list = mail.list()
-        available = []
+        result = []
         if status_list == "OK":
             for mb in mailbox_list:
                 try:
                     mb_str = mb.decode("utf-8") if isinstance(mb, bytes) else str(mb)
-                    parts = mb_str.split('"')
-                    if len(parts) >= 3:
-                        box_name = parts[-2].strip()
-                    else:
-                        box_name = mb_str.split()[-1].strip('"')
-                    available.append(box_name)
+                    # Extrai flags entre parênteses no início (\\HasNoChildren \\Junk)
+                    flags_part = ""
+                    end_flags = -1
+                    if mb_str.startswith("("):
+                        end_flags = mb_str.find(")")
+                        if end_flags > 0:
+                            flags_part = mb_str[1:end_flags].lower()
+                    # Extrai o nome da pasta:
+                    # Formato típico: (\HasNoChildren \Junk) "." INBOX.Junk
+                    # ou:              (\HasNoChildren) "/" "[Gmail]/Spam"
+                    # O nome da pasta é o ÚLTIMO token após o delimitador
+                    after_flags = mb_str[end_flags+1:].strip() if end_flags > 0 else mb_str.strip()
+                    # Tenta extrair pelo padrão: <delimiter>SPACE<name>
+                    box_name = ""
+                    if after_flags.startswith('"'):
+                        # delimitador entre aspas, depois um espaço, depois o nome
+                        end_delim = after_flags.find('"', 1)
+                        if end_delim > 0:
+                            rest = after_flags[end_delim+1:].strip()
+                            # O nome pode estar entre aspas ou sem aspas
+                            if rest.startswith('"') and rest.endswith('"'):
+                                box_name = rest[1:-1].strip()
+                            else:
+                                box_name = rest.strip().strip('"')
+                    if not box_name:
+                        # Fallback: pega último token
+                        toks = after_flags.split()
+                        if toks:
+                            box_name = toks[-1].strip().strip('"')
+                    if not box_name:
+                        continue
+
+                    box_lower = box_name.lower()
+
+                    # Detecção por FLAG IMAP \\Junk (mais confiável)
+                    if "\\junk" in flags_part:
+                        if box_name not in result:
+                            result.append(box_name)
+                        continue
+
+                    # Pula pastas excluídas (sent, drafts, archive)
+                    if any(ex in box_lower for ex in EXCLUDE_KEYWORDS):
+                        continue
+
+                    # Detecção por nome contendo palavra-chave de spam
+                    if any(kw in box_lower for kw in SPAM_KEYWORDS):
+                        if box_name not in result:
+                            result.append(box_name)
                 except Exception:
                     continue
-        result = []
-        for cand in SPAM_CANDIDATES:
-            for avail in available:
-                if cand.lower() == avail.lower():
-                    result.append(avail)
-                    break
         _spam_boxes_cache[cache_key] = result
-    except Exception:
+        try:
+            print(f"[spam-boxes] {account_cfg.get('name','?')}: detectadas {len(result)} pastas: {result}")
+        except Exception:
+            pass
+    except Exception as e:
+        try: print(f"[spam-boxes] erro: {e}")
+        except Exception: pass
         _spam_boxes_cache[cache_key] = []
     return _spam_boxes_cache[cache_key]
 
