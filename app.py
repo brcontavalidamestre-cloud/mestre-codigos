@@ -460,6 +460,11 @@ PLATFORM_CONFIG = {
             "netflix: seu código de acesso",
             "digo de acesso",
             "código de acesso netflix",
+            "este código vence em 15 minutos",
+            "código vence em 15 minutos",
+            "este codigo vence em 15 minutos",
+            "código de verificação",
+            "codigo de verificacao",
             # Inglês
             "your netflix access code",
             "netflix access code",
@@ -467,12 +472,21 @@ PLATFORM_CONFIG = {
             "your netflix verification code",
             "your one-time passcode for netflix",
             "netflix one-time passcode",
+            "this code expires in 15 minutes",
+            "code expires in 15 minutes",
+            "verification code",
             # Espanhol
             "tu código de acceso netflix",
             "código de acceso netflix",
             "codigo de acceso netflix",
             "tu código de verificación netflix",
-            "codigo de verificacion netflix"
+            "codigo de verificacion netflix",
+            "este código vence en 15 minutos",
+            "codigo vence en 15 minutos",
+            "código vence en 15 minutos",
+            "este codigo vence en 15 minutos",
+            "código de verificación",
+            "codigo de verificacion"
         ],
         "negative_keywords": ["temporario", "temporário", "temporal", "temporary", "acceso temporal"],
         "name": "Netflix",
@@ -487,6 +501,11 @@ PLATFORM_CONFIG = {
             "icio de sess",
             "inicio de sess",
             "código de início",
+            "este código vence em 15 minutos",
+            "código vence em 15 minutos",
+            "este codigo vence em 15 minutos",
+            "código de verificação",
+            "codigo de verificacao",
             # Inglês
             "code to sign in",
             "sign in code",
@@ -494,13 +513,22 @@ PLATFORM_CONFIG = {
             "login code",
             "your netflix sign in code",
             "netflix sign-in code",
+            "this code expires in 15 minutes",
+            "code expires in 15 minutes",
+            "verification code",
             # Espanhol
             "código de inicio de sesión",
             "codigo de inicio de sesion",
             "tu código para iniciar sesión",
             "codigo para iniciar sesion",
             "inicia sesión en netflix",
-            "código de acceso para iniciar"
+            "código de acceso para iniciar",
+            "este código vence en 15 minutos",
+            "codigo vence en 15 minutos",
+            "código vence en 15 minutos",
+            "este codigo vence en 15 minutos",
+            "código de verificación",
+            "codigo de verificacion"
         ],
         "name": "Netflix Login",
         "type": "code"
@@ -1762,6 +1790,10 @@ def search_code_unified(user_email, platform_list):
                     targeted_platforms.append(("netflix-temp", ["tempor", "temporary", "solicitacao de acesso", "solicitação de acesso", "sign-in request", "login request", "inicio de sesion", "inicio de sesión"]))
                 if "netflix-residence" in plat_configs:
                     targeted_platforms.append(("netflix-residence", ["residencia", "atualizar", "household", "hogar", "importante"]))
+                if "netflix" in plat_configs:
+                    targeted_platforms.append(("netflix", ["vence en 15", "vence em 15", "vence en quince", "vence em quinze", "expires in 15", "código de verificación", "codigo de verificacion", "código de verificação", "codigo de verificacao", "verification code", "15 minutos", "15 minutes"]))
+                if "netflix-login" in plat_configs:
+                    targeted_platforms.append(("netflix-login", ["vence en 15", "vence em 15", "expires in 15", "código de verificación", "codigo de verificacion", "código de verificação", "codigo de verificacao", "verification code", "15 minutos", "15 minutes"]))
                 if "disney" in plat_configs:
                     targeted_platforms.append(("disney", ["codigo de acesso", "acesso unico", "access code", "verification code", "passcode", "codigo de verificacion"]))
                 if "max" in plat_configs:
