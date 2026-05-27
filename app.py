@@ -3662,6 +3662,14 @@ def _read_json_safe(filepath, default=None):
         print(f"[backup] erro lendo {filepath}: {e}")
     return default if default is not None else {}
 
+def _count_users(u):
+    """Conta usuários independente de ser dict ({username: data}) ou list."""
+    if isinstance(u, dict):
+        return len(u)
+    if isinstance(u, list):
+        return len(u)
+    return 0
+
 @app.route("/api/admin/backup/export", methods=["GET"])
 @admin_required
 def api_admin_backup_export():
@@ -3669,22 +3677,22 @@ def api_admin_backup_export():
     estoque, pedidos, licenças. Para usar no /restore em outro projeto.
     """
     try:
+        # users.json é um DICT no formato {username: {password, role, name}}
         backup = {
-            "version": "1.0",
+            "version": "1.1",
             "exported_at": int(time.time()),
             "source_host": get_current_host(),
             "is_master_source": is_master_host(),
             "data": {
-                "users":     _read_json_safe(USERS_FILE, []),
+                "users":     _read_json_safe(USERS_FILE, {}),
                 "products":  _read_json_safe(PRODUCTS_FILE, []),
                 "stock":     _read_json_safe(STOCK_FILE, {}),
                 "orders":    _read_json_safe(ORDERS_FILE, []),
                 "licenses":  _read_json_safe(LICENSES_FILE, []),
             }
         }
-        # Estatísticas resumidas
         backup["summary"] = {
-            "users_count":     len(backup["data"]["users"]) if isinstance(backup["data"]["users"], list) else 0,
+            "users_count":     _count_users(backup["data"]["users"]),
             "products_count":  len(backup["data"]["products"]) if isinstance(backup["data"]["products"], list) else 0,
             "stock_items":     sum(len(v) for v in backup["data"]["stock"].values()) if isinstance(backup["data"]["stock"], dict) else 0,
             "orders_count":    len(backup["data"]["orders"]) if isinstance(backup["data"]["orders"], list) else 0,
@@ -3730,19 +3738,28 @@ def api_admin_backup_import():
         data = backup["data"]
         result = {"restored": {}}
 
-        # USERS
-        if "users" in data and isinstance(data["users"], list):
-            if mode == "replace":
-                _write_json_file(USERS_FILE, data["users"])
-                result["restored"]["users"] = len(data["users"])
-            else:  # merge por username
-                existing = _read_json_safe(USERS_FILE, [])
-                ex_by_user = {u.get("username"): u for u in existing if isinstance(u, dict)}
-                for u in data["users"]:
+        # USERS — formato é DICT {username: data} OU lista (compat)
+        if "users" in data:
+            src = data["users"]
+            # Normaliza: se vier como lista, converte para dict
+            if isinstance(src, list):
+                src_dict = {}
+                for u in src:
                     if isinstance(u, dict) and u.get("username"):
-                        ex_by_user[u["username"]] = u
-                _write_json_file(USERS_FILE, list(ex_by_user.values()))
-                result["restored"]["users"] = len(ex_by_user)
+                        src_dict[u["username"]] = u
+                src = src_dict
+            if isinstance(src, dict):
+                if mode == "replace":
+                    _write_json_file(USERS_FILE, src)
+                    result["restored"]["users"] = len(src)
+                else:  # merge por username
+                    existing = _read_json_safe(USERS_FILE, {})
+                    if isinstance(existing, list):
+                        # converte lista antiga para dict
+                        existing = {u.get("username"): u for u in existing if isinstance(u, dict) and u.get("username")}
+                    existing.update(src)
+                    _write_json_file(USERS_FILE, existing)
+                    result["restored"]["users"] = len(existing)
 
         # PRODUCTS
         if "products" in data and isinstance(data["products"], list):
@@ -3825,15 +3842,18 @@ def api_admin_backup_import():
 def api_admin_backup_summary():
     """Mostra resumo dos dados atuais sem fazer download."""
     try:
-        users    = _read_json_safe(USERS_FILE, [])
+        users    = _read_json_safe(USERS_FILE, {})
         products = _read_json_safe(PRODUCTS_FILE, [])
         stock    = _read_json_safe(STOCK_FILE, {})
         orders   = _read_json_safe(ORDERS_FILE, [])
         licenses = _read_json_safe(LICENSES_FILE, [])
+        # Lista de usernames para preview
+        users_list = list(users.keys()) if isinstance(users, dict) else [u.get("username") for u in users if isinstance(u, dict)]
         return jsonify({
             "success": True,
             "host": get_current_host(),
-            "users_count":     len(users) if isinstance(users, list) else 0,
+            "users_count":     _count_users(users),
+            "users_list":      users_list,
             "products_count":  len(products) if isinstance(products, list) else 0,
             "stock_items":     sum(len(v) for v in stock.values()) if isinstance(stock, dict) else 0,
             "orders_count":    len(orders) if isinstance(orders, list) else 0,
@@ -3841,6 +3861,77 @@ def api_admin_backup_summary():
         })
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/admin/migrate-users", methods=["POST"])
+@admin_required
+def api_admin_migrate_users():
+    """Migra usuários de outro domínio para este via HTTP.
+    Recebe: { source_url, source_admin_user, source_admin_pass, mode='merge'|'replace' }
+    """
+    try:
+        import requests
+        body = request.get_json(silent=True) or {}
+        source_url = (body.get("source_url") or "").strip().rstrip("/")
+        src_user   = body.get("source_admin_user") or "admin"
+        src_pass   = body.get("source_admin_pass") or ""
+        mode       = body.get("mode", "merge").lower()
+
+        if not source_url or not src_pass:
+            return jsonify({"success": False, "message": "Informe source_url e source_admin_pass."}), 400
+        if not source_url.startswith("http"):
+            source_url = "https://" + source_url
+
+        # 1) Login no projeto de origem
+        sess = requests.Session()
+        r = sess.post(f"{source_url}/api/auth/login",
+                      json={"username": src_user, "password": src_pass},
+                      timeout=15)
+        if not r.ok or not r.json().get("success"):
+            return jsonify({"success": False, "message": f"Falha ao logar em {source_url}: {r.text[:200]}"}), 400
+
+        # 2) Baixa backup da origem
+        r2 = sess.get(f"{source_url}/api/admin/backup/export", timeout=30)
+        if not r2.ok:
+            return jsonify({"success": False, "message": f"Falha ao baixar backup: HTTP {r2.status_code}"}), 500
+
+        backup = r2.json()
+        if "data" not in backup:
+            return jsonify({"success": False, "message": "Backup inválido."}), 500
+        src_users = backup["data"].get("users", {})
+        # Normaliza lista → dict
+        if isinstance(src_users, list):
+            src_users = {u.get("username"): u for u in src_users if isinstance(u, dict) and u.get("username")}
+        if not isinstance(src_users, dict) or not src_users:
+            return jsonify({"success": False, "message": f"Nenhum usuário encontrado em {source_url}", "source_users_count": 0}), 200
+
+        # 3) Aplica no destino (este servidor)
+        if mode == "replace":
+            _write_json_file(USERS_FILE, src_users)
+            migrated = len(src_users)
+            kept = 0
+        else:  # merge
+            existing = _read_json_safe(USERS_FILE, {})
+            if isinstance(existing, list):
+                existing = {u.get("username"): u for u in existing if isinstance(u, dict) and u.get("username")}
+            kept = len(existing)
+            existing.update(src_users)
+            _write_json_file(USERS_FILE, existing)
+            migrated = len(existing) - kept
+
+        return jsonify({
+            "success": True,
+            "source_host": backup.get("source_host"),
+            "target_host": get_current_host(),
+            "mode": mode,
+            "source_users_count": len(src_users),
+            "users_kept_in_target": kept,
+            "users_added": migrated,
+            "final_total": len(_read_json_safe(USERS_FILE, {})),
+            "users_migrated": list(src_users.keys()),
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "message": f"Erro: {e}", "trace": traceback.format_exc()[:500]}), 500
 
 @app.route("/api/health", methods=["GET"])
 def health():
