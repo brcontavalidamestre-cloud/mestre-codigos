@@ -720,6 +720,51 @@
           }
         });
       }
+
+      // ── TEMA JMP ──
+      const isJmp = host.startsWith('jmp.') || host.includes('jmp.up.railway.app') || host.includes('-jmp') || host.includes('jmp-');
+      if (isJmp) {
+        const t = document.getElementById('site-title-h1');
+        if (t) t.textContent = 'JMP';
+        document.title = 'JMP ✨ — Painel Admin';
+        const style = document.createElement('style');
+        style.textContent = `
+          body {
+            background-image: linear-gradient(rgba(2,3,10,0.93), rgba(5,0,15,0.96)), url('/static/jmp-bg.jpg') !important;
+            background-size: cover !important;
+            background-attachment: fixed !important;
+            background-position: center !important;
+          }
+          .topbar {
+            background: linear-gradient(180deg, rgba(0,10,30,0.88), rgba(15,0,25,0.82)) !important;
+            border-bottom: 2px solid rgba(0,229,255,0.5) !important;
+            box-shadow: 0 4px 25px rgba(0,229,255,0.3) !important;
+          }
+          .topbar .title {
+            background: linear-gradient(135deg, #00e5ff 0%, #00b8d4 22%, #ffffff 50%, #ff1493 78%, #ff6ec7 100%) !important;
+            background-size: 260% auto !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            background-clip: text !important;
+            animation: jmp-shimmer-admin 4s linear infinite;
+            font-weight: 900 !important;
+            letter-spacing: 0.24em !important;
+          }
+          @keyframes jmp-shimmer-admin { to { background-position: 260% center; } }
+        `;
+        document.head.appendChild(style);
+        document.addEventListener('DOMContentLoaded', function() {
+          const logo = document.querySelector('.topbar .logo');
+          if (logo) {
+            logo.style.background = "url('/static/jmp-icon.jpg') center/cover";
+            logo.style.backgroundSize = '130%';
+            logo.style.border = '2px solid #00e5ff';
+            logo.style.boxShadow = '0 0 25px rgba(0,229,255,0.6), 0 0 50px rgba(255,20,147,0.3)';
+            logo.style.fontSize = '0';
+            logo.textContent = '';
+          }
+        });
+      }
     })();
 
     let _users = [], _pwUser = null, _delUser = null;

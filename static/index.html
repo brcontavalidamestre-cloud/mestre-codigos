@@ -1854,6 +1854,247 @@
       });
     })();
 
+    // ── TEMA JMP (ciano + magenta neon) ── BASEADO NO DOMÍNIO ──
+    (function() {
+      const host = (window.location.hostname || '').toLowerCase();
+      const isJmp = host.startsWith('jmp.') || host.includes('jmp.up.railway.app') || host.includes('-jmp') || host.includes('jmp-');
+      if (!isJmp) return;
+
+      const style = document.createElement('style');
+      style.textContent = `
+        /* === TEMA JMP — ciano neon + magenta vibrante === */
+        body {
+          background: #02030a !important;
+          background-image: linear-gradient(180deg, rgba(2,3,10,0.92) 0%, rgba(5,10,30,0.94) 50%, rgba(15,0,20,0.95) 100%), url('/static/jmp-bg.jpg') !important;
+          background-size: cover !important;
+          background-attachment: fixed !important;
+          background-position: center !important;
+        }
+
+        h1#site-title-h1, .site-title-h1 {
+          background: linear-gradient(135deg, #00e5ff 0%, #00b8d4 25%, #ffffff 50%, #ff1493 75%, #ff6ec7 100%) !important;
+          background-size: 260% auto !important;
+          -webkit-background-clip: text !important;
+          -webkit-text-fill-color: transparent !important;
+          background-clip: text !important;
+          animation: jmp-shimmer 4s linear infinite;
+          letter-spacing: 0.32em !important;
+          text-shadow: 0 0 50px rgba(0,229,255,0.5);
+          font-weight: 900 !important;
+        }
+        @keyframes jmp-shimmer { to { background-position: 260% center; } }
+
+        .subtitle, header p { color: #a0e8ff !important; opacity: 0.95; text-shadow: 0 1px 3px rgba(0,0,0,0.85), 0 0 12px rgba(0,229,255,0.3); }
+
+        .logo-icon {
+          border: 3px solid #00e5ff !important;
+          box-shadow:
+            0 0 35px rgba(0,229,255,0.75),
+            0 0 65px rgba(255,20,147,0.45),
+            0 0 100px rgba(0,229,255,0.25),
+            inset 0 0 0 3px #02030a !important;
+          background: url('/static/jmp-icon.jpg') center/cover !important;
+          background-size: 130% !important;
+        }
+        .logo-icon::before, .logo-icon::after { display:none !important; }
+
+        /* BANNER JMP no topo */
+        #jmp-banner {
+          width:100%; max-width:1100px; margin:18px auto 12px;
+          border-radius:16px; overflow:hidden;
+          box-shadow:
+            0 12px 50px rgba(0,0,0,0.7),
+            0 0 40px rgba(0,229,255,0.4),
+            0 0 80px rgba(255,20,147,0.25);
+          border: 2px solid rgba(0,229,255,0.5);
+        }
+        #jmp-banner img { width:100%; display:block; }
+
+        .logout-btn {
+          background: linear-gradient(135deg, #ff1493 0%, #c2185b 25%, #00e5ff 70%, #00b8d4 100%) !important;
+          background-size: 220% auto !important;
+          color: #fff !important;
+          border: 2px solid #00e5ff !important;
+          box-shadow: 0 0 22px rgba(0,229,255,0.55), 0 0 40px rgba(255,20,147,0.3) !important;
+          font-weight: 800 !important;
+          letter-spacing: 0.06em !important;
+          transition: all 0.25s !important;
+        }
+        .logout-btn:hover {
+          background-position: 100% center !important;
+          transform: translateY(-2px);
+          box-shadow: 0 0 30px rgba(255,20,147,0.7), 0 0 60px rgba(0,229,255,0.55) !important;
+        }
+
+        .top-menu {
+          background: linear-gradient(180deg, rgba(0,15,40,0.7), rgba(15,0,25,0.5)) !important;
+          border: 1px solid rgba(0,229,255,0.25) !important;
+          border-radius: 12px !important;
+          padding: 6px !important;
+        }
+        .top-menu button {
+          background: linear-gradient(135deg, rgba(0,30,60,0.6) 0%, rgba(50,0,40,0.6) 100%) !important;
+          color: #c4f0ff !important;
+          border: 1.5px solid rgba(0,229,255,0.4) !important;
+          font-weight: 700 !important;
+          transition: all 0.25s;
+        }
+        .top-menu button:hover { border-color:#ff1493 !important; color:#fff !important; transform: translateY(-1px); }
+        .top-menu button.active {
+          background: linear-gradient(135deg, #00e5ff 0%, #00b8d4 25%, #ffffff 50%, #ff1493 75%, #c2185b 100%) !important;
+          background-size: 200% auto !important;
+          color:#000 !important;
+          border-color:#00e5ff !important;
+          box-shadow: 0 0 28px rgba(0,229,255,0.65), 0 0 55px rgba(255,20,147,0.3) !important;
+          text-shadow: 0 1px 2px rgba(255,255,255,0.4) !important;
+          font-weight: 900 !important;
+        }
+
+        .section-title {
+          color: #00e5ff !important;
+          text-shadow: 0 2px 8px rgba(0,0,0,0.9), 0 0 25px rgba(0,229,255,0.45) !important;
+          font-weight: 900 !important;
+        }
+        .section-subtitle { color: #d4f4ff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+
+        .platform-group-label {
+          color: #ffffff !important;
+          background: linear-gradient(90deg, rgba(0,229,255,0.25), rgba(255,20,147,0.18)) !important;
+          border-left: 4px solid #00e5ff !important;
+          padding: 6px 14px !important;
+          font-weight: 800 !important;
+          letter-spacing: 0.08em !important;
+          text-shadow: 0 2px 6px rgba(0,0,0,0.9), 0 0 14px rgba(0,229,255,0.4);
+        }
+
+        .platform-card {
+          background: linear-gradient(135deg, rgba(0,15,40,0.78) 0%, rgba(20,0,25,0.72) 100%) !important;
+          border: 2px solid rgba(0,229,255,0.4) !important;
+          transition: all 0.3s !important;
+        }
+        .platform-card:hover {
+          border-color: #ff1493 !important;
+          box-shadow: 0 0 25px rgba(255,20,147,0.55), 0 0 50px rgba(0,229,255,0.4) !important;
+          transform: translateY(-3px);
+        }
+        .platform-card.selected {
+          background: linear-gradient(135deg, rgba(0,229,255,0.32) 0%, rgba(255,255,255,0.06) 50%, rgba(255,20,147,0.32) 100%) !important;
+          border-color: #00e5ff !important;
+          box-shadow: 0 0 35px rgba(0,229,255,0.75), 0 0 70px rgba(255,20,147,0.45) !important;
+        }
+
+        .platform-name {
+          color: #ffffff !important;
+          text-shadow: 0 2px 6px rgba(0,0,0,0.9), 0 0 12px rgba(0,229,255,0.5) !important;
+          font-weight: 800 !important;
+        }
+        .platform-desc { color:#c4f0ff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+
+        .step-number {
+          background: linear-gradient(135deg, #00e5ff 0%, #00b8d4 30%, #ffffff 55%, #ff1493 100%) !important;
+          border: 2px solid #00e5ff !important;
+          box-shadow: 0 0 18px rgba(0,229,255,0.6) !important;
+          color: #000 !important;
+          font-weight: 900 !important;
+          text-shadow: 0 1px 2px rgba(255,255,255,0.4);
+        }
+        .step-text { color:#d4f4ff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+
+        .form-section {
+          background: linear-gradient(135deg, rgba(0,15,40,0.85) 0%, rgba(15,0,20,0.82) 100%) !important;
+          border: 2px solid rgba(0,229,255,0.4) !important;
+          box-shadow: 0 12px 45px rgba(0,0,0,0.6), inset 0 0 30px rgba(0,229,255,0.08) !important;
+        }
+        .platform-badge {
+          background: linear-gradient(135deg, #00e5ff, #00b8d4, #ffffff, #ff1493) !important;
+          background-size: 200% auto !important;
+          color:#000 !important;
+          border: 1.5px solid #00e5ff !important;
+          text-shadow: 0 1px 2px rgba(255,255,255,0.3);
+          font-weight: 900 !important;
+        }
+
+        .form-section label {
+          color: #00e5ff !important;
+          text-shadow: 0 2px 5px rgba(0,0,0,0.85);
+          font-weight: 700 !important;
+          letter-spacing: 0.05em;
+        }
+
+        .form-section input[type=email], .form-section input[type=text] {
+          background: rgba(0,8,25,0.75) !important;
+          color: #fff !important;
+          border: 2px solid rgba(0,229,255,0.5) !important;
+          font-weight: 600 !important;
+          transition: all 0.25s;
+        }
+        .form-section input[type=email]::placeholder, .form-section input[type=text]::placeholder {
+          color: rgba(160,232,255,0.5) !important;
+          font-style: italic;
+        }
+        .form-section input[type=email]:focus, .form-section input[type=text]:focus {
+          outline: none !important;
+          border-color: #ff1493 !important;
+          box-shadow: 0 0 0 4px rgba(255,20,147,0.18), 0 0 25px rgba(0,229,255,0.5) !important;
+          background: rgba(0,15,40,0.88) !important;
+        }
+
+        .btn-primary, #btn-buscar {
+          background: linear-gradient(135deg, #00e5ff 0%, #00b8d4 22%, #ffffff 50%, #ff1493 78%, #c2185b 100%) !important;
+          background-size: 270% auto !important;
+          color: #000 !important;
+          border: 2px solid #00e5ff !important;
+          font-weight: 900 !important;
+          letter-spacing: 0.08em !important;
+          box-shadow: 0 0 28px rgba(0,229,255,0.65), 0 0 55px rgba(255,20,147,0.35), 0 8px 25px rgba(0,0,0,0.5) !important;
+          text-shadow: 0 1px 3px rgba(255,255,255,0.35);
+          animation: jmp-btn 4s linear infinite;
+          transition: transform 0.2s !important;
+        }
+        @keyframes jmp-btn { to { background-position: 270% center; } }
+        .btn-primary:hover, #btn-buscar:hover { transform: translateY(-3px) !important; }
+
+        .result-box {
+          background: linear-gradient(135deg, rgba(0,15,40,0.92) 0%, rgba(15,0,20,0.88) 100%) !important;
+          border: 2px solid #00e5ff !important;
+          box-shadow: 0 0 40px rgba(0,229,255,0.55), 0 0 80px rgba(255,20,147,0.25) !important;
+        }
+        .result-box .code-display {
+          color: #00e5ff !important;
+          text-shadow: 0 0 30px rgba(0,229,255,0.7), 0 2px 6px rgba(0,0,0,0.85);
+          font-weight: 900 !important;
+        }
+
+        footer { color: #00e5ff !important; opacity: 0.7; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+      `;
+      document.head.appendChild(style);
+
+      document.title = 'JMP ✨';
+
+      document.addEventListener('DOMContentLoaded', function() {
+        const titleEl = document.querySelector('h1#site-title-h1, .site-title-h1, header h1');
+        if (titleEl) titleEl.textContent = 'JMP';
+
+        const subEl = document.querySelector('header p, .subtitle');
+        if (subEl) subEl.textContent = 'Códigos Premium • Streaming • Pix Automático';
+
+        const logoIcon = document.querySelector('.logo-icon');
+        if (logoIcon) { logoIcon.textContent = ''; logoIcon.innerHTML = ''; }
+
+        const headerEl = document.querySelector('header');
+        if (headerEl && !document.getElementById('jmp-banner')) {
+          const banner = document.createElement('div');
+          banner.id = 'jmp-banner';
+          banner.innerHTML = '<img src="/static/jmp-banner-1200.jpg" alt="JMP">';
+          headerEl.parentNode.insertBefore(banner, headerEl);
+        }
+
+        if (typeof stars !== 'undefined' && stars && stars.length) {
+          stars.forEach(s => { s.cyan = Math.random() < 0.55; });
+        }
+      });
+    })();
+
     // ── ESTRELAS ──
     const canvas = document.getElementById('stars-canvas');
     const ctx = canvas.getContext('2d');

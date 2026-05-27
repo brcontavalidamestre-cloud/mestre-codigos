@@ -482,6 +482,192 @@
           wrapper.appendChild(card);
         }
       }
+
+      // ── TEMA JMP (ciano + magenta neon) ──
+      const isJmp = host.startsWith('jmp.') || host.includes('jmp.up.railway.app') || host.includes('-jmp') || host.includes('jmp-');
+      if (isJmp) {
+        const style = document.createElement('style');
+        style.textContent = `
+          /* Tema JMP — ciano neon + magenta vibrante */
+          body { background-color:#02030a !important; }
+          .card {
+            background: linear-gradient(135deg, rgba(0,15,40,0.94), rgba(15,0,20,0.92)) !important;
+            border: 2px solid rgba(0,229,255,0.55) !important;
+            box-shadow:
+              0 0 60px rgba(0,229,255,0.5),
+              0 0 120px rgba(255,20,147,0.2),
+              inset 0 0 30px rgba(0,229,255,0.06) !important;
+          }
+          h1#site-title-h1 {
+            background: linear-gradient(135deg, #00e5ff 0%, #00b8d4 22%, #ffffff 50%, #ff1493 78%, #ff6ec7 100%) !important;
+            background-size: 260% auto !important;
+            -webkit-background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            background-clip: text !important;
+            animation: jmp-shimmer 4s linear infinite;
+            text-shadow: 0 0 40px rgba(0,229,255,0.5);
+            letter-spacing: 0.32em !important;
+          }
+          @keyframes jmp-shimmer { to { background-position: 260% center; } }
+
+          .subtitle { color: #a0e8ff !important; text-shadow: 0 1px 3px rgba(0,0,0,0.85); }
+
+          label {
+            color: #00e5ff !important;
+            font-weight: 700 !important;
+            letter-spacing: 0.12em !important;
+            text-shadow: 0 1px 4px rgba(0,229,255,0.35);
+          }
+
+          .form-group { position: relative; }
+          .form-group input {
+            background: rgba(0,8,25,0.85) !important;
+            border: 2px solid rgba(0,229,255,0.5) !important;
+            color: #ffffff !important;
+            padding: 14px 16px 14px 46px !important;
+            font-size: 1.02rem !important;
+            font-weight: 500 !important;
+            border-radius: 12px !important;
+            transition: all .28s ease !important;
+            box-shadow: inset 0 0 12px rgba(0,0,0,0.4);
+          }
+          .form-group input::placeholder { color: rgba(160,232,255,0.5) !important; font-style: italic; }
+          .form-group input:focus {
+            border-color: #ff1493 !important;
+            box-shadow: 0 0 0 4px rgba(255,20,147,0.2), 0 0 28px rgba(0,229,255,0.5), inset 0 0 12px rgba(0,229,255,0.15) !important;
+            background: rgba(0,15,40,0.92) !important;
+            outline: none !important;
+          }
+          .jmp-input-icon {
+            position: absolute;
+            left: 14px;
+            top: 50%;
+            transform: translateY(-50%);
+            margin-top: 14px;
+            font-size: 1.2rem;
+            color: #00e5ff;
+            text-shadow: 0 0 10px rgba(0,229,255,0.75);
+            pointer-events: none;
+            transition: all .25s;
+            z-index: 2;
+          }
+          .form-group input:focus + .jmp-input-icon,
+          .form-group:focus-within .jmp-input-icon {
+            color: #ff1493;
+            text-shadow: 0 0 14px rgba(255,20,147,0.85);
+            transform: translateY(-50%) scale(1.15);
+          }
+
+          .btn {
+            background: linear-gradient(135deg, #00e5ff 0%, #00b8d4 25%, #ffffff 50%, #ff1493 75%, #c2185b 100%) !important;
+            background-size: 280% auto !important;
+            border: 2px solid #00e5ff !important;
+            color: #000 !important;
+            font-weight: 900 !important;
+            letter-spacing: 0.18em !important;
+            text-transform: uppercase !important;
+            font-size: 1.05rem !important;
+            padding: 16px !important;
+            margin-top: 14px !important;
+            border-radius: 12px !important;
+            box-shadow:
+              0 6px 25px rgba(0,229,255,0.55),
+              0 0 45px rgba(255,20,147,0.3),
+              inset 0 1px 0 rgba(255,255,255,0.4) !important;
+            text-shadow: 0 1px 2px rgba(255,255,255,0.3);
+            transition: all .35s ease !important;
+            animation: jmp-btn-shimmer 5s linear infinite;
+            position: relative;
+            overflow: hidden;
+          }
+          @keyframes jmp-btn-shimmer { to { background-position: 280% center; } }
+          .btn:hover {
+            box-shadow: 0 10px 40px rgba(255,20,147,0.7), 0 0 70px rgba(0,229,255,0.55), inset 0 1px 0 rgba(255,255,255,0.5) !important;
+            transform: translateY(-2px);
+          }
+          .btn:active { transform: translateY(0); }
+
+          .logo-icon {
+            border: 3px solid #00e5ff !important;
+            box-shadow:
+              0 0 35px rgba(0,229,255,0.75),
+              0 0 70px rgba(255,20,147,0.4),
+              0 0 110px rgba(0,229,255,0.25),
+              inset 0 0 0 3px #02030a !important;
+            background: url('/static/jmp-icon.jpg') center/cover !important;
+            background-size: 130% !important;
+          }
+
+          .footer-txt { color: rgba(0,229,255,0.65) !important; letter-spacing: 0.15em !important; }
+          .error-msg {
+            background: rgba(255,20,147,0.18) !important;
+            border: 1.5px solid rgba(255,20,147,0.6) !important;
+            color: #ffb8d5 !important;
+          }
+
+          #jmp-banner {
+            width:100%; margin:0 0 14px 0;
+            border-radius:14px; overflow:hidden;
+            border:1.5px solid rgba(0,229,255,0.55);
+            box-shadow: 0 0 35px rgba(0,229,255,0.5), 0 0 70px rgba(255,20,147,0.25);
+          }
+
+          @media (max-width: 480px) {
+            .form-group input { padding-left: 44px !important; }
+            .jmp-input-icon { left: 12px; font-size: 1.1rem; }
+          }
+        `;
+        document.head.appendChild(style);
+
+        const h1 = document.getElementById('site-title-h1');
+        if (h1) h1.textContent = 'JMP';
+        document.title = 'JMP ✨ — Login';
+
+        document.body.style.backgroundImage = "linear-gradient(rgba(2,3,10,0.88), rgba(5,0,15,0.94)), url('/static/jmp-bg.jpg')";
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundPosition = 'center';
+        document.body.style.backgroundAttachment = 'fixed';
+
+        const logoIcon = document.querySelector('.logo-icon');
+        if (logoIcon) { logoIcon.style.background = "url('/static/jmp-icon.jpg') center/cover"; logoIcon.textContent = ''; }
+
+        const userInput = document.getElementById('username');
+        const passInput = document.getElementById('password');
+        if (userInput && !userInput.parentNode.querySelector('.jmp-input-icon')) {
+          const userLabel = document.querySelector('label[for="username"]');
+          if (userLabel) userLabel.textContent = 'Usuário';
+          const ic = document.createElement('span');
+          ic.className = 'jmp-input-icon';
+          ic.textContent = '👤';
+          userInput.parentNode.appendChild(ic);
+          userInput.placeholder = 'Digite seu usuário';
+        }
+        if (passInput && !passInput.parentNode.querySelector('.jmp-input-icon')) {
+          const passLabel = document.querySelector('label[for="password"]');
+          if (passLabel) passLabel.textContent = 'Senha';
+          const ic = document.createElement('span');
+          ic.className = 'jmp-input-icon';
+          ic.textContent = '🔐';
+          passInput.parentNode.appendChild(ic);
+          passInput.placeholder = 'Digite sua senha';
+        }
+
+        const btn = document.getElementById('btn-login');
+        if (btn) btn.innerHTML = '✨ Entrar';
+
+        const card = document.querySelector('.card');
+        if (card && !document.getElementById('jmp-wrapper')) {
+          const wrapper = document.createElement('div');
+          wrapper.id = 'jmp-wrapper';
+          wrapper.style.cssText = 'display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:420px;margin:0 auto;position:relative;z-index:1;';
+          const banner = document.createElement('div');
+          banner.id = 'jmp-banner';
+          banner.innerHTML = '<img src="/static/jmp-banner-1200.jpg" alt="JMP" style="width:100%;display:block"/>';
+          card.parentNode.insertBefore(wrapper, card);
+          wrapper.appendChild(banner);
+          wrapper.appendChild(card);
+        }
+      }
     })();
 
     async function doLogin(e) {
