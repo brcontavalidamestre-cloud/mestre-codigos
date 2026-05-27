@@ -3649,6 +3649,199 @@ def api_admin_delete_license(license_id):
     save_licenses(new_list)
     return jsonify({"success": True})
 
+# ─── BACKUP / RESTORE COMPLETO ───────────────────────────────────────────────
+# Permite duplicar todo o projeto para um novo domínio mantendo TUDO
+
+def _read_json_safe(filepath, default=None):
+    """Lê um arquivo JSON com fallback seguro."""
+    try:
+        if os.path.exists(filepath):
+            with open(filepath, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"[backup] erro lendo {filepath}: {e}")
+    return default if default is not None else {}
+
+@app.route("/api/admin/backup/export", methods=["GET"])
+@admin_required
+def api_admin_backup_export():
+    """Exporta TODOS os dados do sistema em um único JSON: usuários, produtos,
+    estoque, pedidos, licenças. Para usar no /restore em outro projeto.
+    """
+    try:
+        backup = {
+            "version": "1.0",
+            "exported_at": int(time.time()),
+            "source_host": get_current_host(),
+            "is_master_source": is_master_host(),
+            "data": {
+                "users":     _read_json_safe(USERS_FILE, []),
+                "products":  _read_json_safe(PRODUCTS_FILE, []),
+                "stock":     _read_json_safe(STOCK_FILE, {}),
+                "orders":    _read_json_safe(ORDERS_FILE, []),
+                "licenses":  _read_json_safe(LICENSES_FILE, []),
+            }
+        }
+        # Estatísticas resumidas
+        backup["summary"] = {
+            "users_count":     len(backup["data"]["users"]) if isinstance(backup["data"]["users"], list) else 0,
+            "products_count":  len(backup["data"]["products"]) if isinstance(backup["data"]["products"], list) else 0,
+            "stock_items":     sum(len(v) for v in backup["data"]["stock"].values()) if isinstance(backup["data"]["stock"], dict) else 0,
+            "orders_count":    len(backup["data"]["orders"]) if isinstance(backup["data"]["orders"], list) else 0,
+            "licenses_count":  len(backup["data"]["licenses"]) if isinstance(backup["data"]["licenses"], list) else 0,
+        }
+        # Headers para download direto como arquivo
+        from flask import Response
+        filename = f"backup-{get_current_host().replace('.', '-')}-{int(time.time())}.json"
+        return Response(
+            json.dumps(backup, ensure_ascii=False, indent=2),
+            mimetype="application/json",
+            headers={"Content-Disposition": f"attachment; filename={filename}"}
+        )
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "message": f"Erro: {e}", "trace": traceback.format_exc()[:500]}), 500
+
+@app.route("/api/admin/backup/import", methods=["POST"])
+@admin_required
+def api_admin_backup_import():
+    """Restaura backup completo. Aceita JSON no body ou arquivo upload.
+    Opção 'mode': 'replace' (sobrescreve tudo) ou 'merge' (mescla).
+    """
+    try:
+        mode = request.args.get("mode", "replace").lower()
+        backup = None
+        # Tenta pegar do body JSON
+        if request.is_json:
+            backup = request.get_json(silent=True)
+        # Ou de arquivo upload
+        if not backup and "file" in request.files:
+            f = request.files["file"]
+            backup = json.loads(f.read().decode("utf-8"))
+        # Ou da query string (raw body)
+        if not backup:
+            raw = request.get_data(as_text=True)
+            if raw:
+                backup = json.loads(raw)
+
+        if not backup or "data" not in backup:
+            return jsonify({"success": False, "message": "Backup inválido: estrutura não reconhecida (esperado JSON com chave 'data')."}), 400
+
+        data = backup["data"]
+        result = {"restored": {}}
+
+        # USERS
+        if "users" in data and isinstance(data["users"], list):
+            if mode == "replace":
+                _write_json_file(USERS_FILE, data["users"])
+                result["restored"]["users"] = len(data["users"])
+            else:  # merge por username
+                existing = _read_json_safe(USERS_FILE, [])
+                ex_by_user = {u.get("username"): u for u in existing if isinstance(u, dict)}
+                for u in data["users"]:
+                    if isinstance(u, dict) and u.get("username"):
+                        ex_by_user[u["username"]] = u
+                _write_json_file(USERS_FILE, list(ex_by_user.values()))
+                result["restored"]["users"] = len(ex_by_user)
+
+        # PRODUCTS
+        if "products" in data and isinstance(data["products"], list):
+            if mode == "replace":
+                _write_json_file(PRODUCTS_FILE, data["products"])
+                result["restored"]["products"] = len(data["products"])
+            else:
+                existing = _read_json_safe(PRODUCTS_FILE, [])
+                ex_by_id = {p.get("id"): p for p in existing if isinstance(p, dict)}
+                for p in data["products"]:
+                    if isinstance(p, dict) and p.get("id"):
+                        ex_by_id[p["id"]] = p
+                _write_json_file(PRODUCTS_FILE, list(ex_by_id.values()))
+                result["restored"]["products"] = len(ex_by_id)
+
+        # STOCK
+        if "stock" in data and isinstance(data["stock"], dict):
+            if mode == "replace":
+                _write_json_file(STOCK_FILE, data["stock"])
+                result["restored"]["stock_items"] = sum(len(v) for v in data["stock"].values())
+            else:
+                existing = _read_json_safe(STOCK_FILE, {})
+                for prod_id, items in data["stock"].items():
+                    if prod_id not in existing:
+                        existing[prod_id] = []
+                    # Evita duplicar pelo campo 'email' do item
+                    ex_emails = {i.get("email") for i in existing[prod_id] if isinstance(i, dict)}
+                    for item in items:
+                        if isinstance(item, dict) and item.get("email") and item["email"] not in ex_emails:
+                            existing[prod_id].append(item)
+                            ex_emails.add(item["email"])
+                _write_json_file(STOCK_FILE, existing)
+                result["restored"]["stock_items"] = sum(len(v) for v in existing.values())
+
+        # ORDERS
+        if "orders" in data and isinstance(data["orders"], list):
+            if mode == "replace":
+                _write_json_file(ORDERS_FILE, data["orders"])
+                result["restored"]["orders"] = len(data["orders"])
+            else:
+                existing = _read_json_safe(ORDERS_FILE, [])
+                ex_by_id = {o.get("id"): o for o in existing if isinstance(o, dict)}
+                for o in data["orders"]:
+                    if isinstance(o, dict) and o.get("id"):
+                        ex_by_id[o["id"]] = o
+                _write_json_file(ORDERS_FILE, list(ex_by_id.values()))
+                result["restored"]["orders"] = len(ex_by_id)
+
+        # LICENSES
+        if "licenses" in data and isinstance(data["licenses"], list):
+            if mode == "replace":
+                _write_json_file(LICENSES_FILE, data["licenses"])
+                result["restored"]["licenses"] = len(data["licenses"])
+            else:
+                existing = _read_json_safe(LICENSES_FILE, [])
+                ex_by_id = {l.get("id"): l for l in existing if isinstance(l, dict)}
+                for l in data["licenses"]:
+                    if isinstance(l, dict) and l.get("id"):
+                        ex_by_id[l["id"]] = l
+                _write_json_file(LICENSES_FILE, list(ex_by_id.values()))
+                result["restored"]["licenses"] = len(ex_by_id)
+
+        # Invalida caches
+        try:
+            _remote_license_cache.clear()
+        except Exception:
+            pass
+
+        result["success"] = True
+        result["mode"] = mode
+        result["source_host"] = backup.get("source_host")
+        result["target_host"] = get_current_host()
+        return jsonify(result)
+    except Exception as e:
+        import traceback
+        return jsonify({"success": False, "message": f"Erro: {e}", "trace": traceback.format_exc()[:500]}), 500
+
+@app.route("/api/admin/backup/summary", methods=["GET"])
+@admin_required
+def api_admin_backup_summary():
+    """Mostra resumo dos dados atuais sem fazer download."""
+    try:
+        users    = _read_json_safe(USERS_FILE, [])
+        products = _read_json_safe(PRODUCTS_FILE, [])
+        stock    = _read_json_safe(STOCK_FILE, {})
+        orders   = _read_json_safe(ORDERS_FILE, [])
+        licenses = _read_json_safe(LICENSES_FILE, [])
+        return jsonify({
+            "success": True,
+            "host": get_current_host(),
+            "users_count":     len(users) if isinstance(users, list) else 0,
+            "products_count":  len(products) if isinstance(products, list) else 0,
+            "stock_items":     sum(len(v) for v in stock.values()) if isinstance(stock, dict) else 0,
+            "orders_count":    len(orders) if isinstance(orders, list) else 0,
+            "licenses_count":  len(licenses) if isinstance(licenses, list) else 0,
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route("/api/health", methods=["GET"])
 def health():
     host = get_current_host()

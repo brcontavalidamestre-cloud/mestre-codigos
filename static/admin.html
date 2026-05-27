@@ -529,6 +529,58 @@
       </div>
     </div>
 
+    <!-- ============ BACKUP / RESTORE ============ -->
+    <div class="panel" style="margin-top:20px;">
+      <div class="phdr">
+        <div class="ptit">💾 Backup &amp; Restaurar</div>
+        <button class="btn-ref" onclick="loadBackupSummary()">🔄 Atualizar</button>
+      </div>
+      <div class="sinfo" style="margin-bottom:14px;">
+        Use para <b>duplicar este projeto</b> para outro domínio com todos os dados (usuários, estoque, pedidos, licenças).<br>
+        <b>1)</b> Aqui no projeto original: clique em “⬇️ Baixar Backup”.<br>
+        <b>2)</b> Crie um novo serviço Railway com o mesmo código.<br>
+        <b>3)</b> No novo projeto: acesse o admin e clique em “⬆️ Restaurar Backup”.
+      </div>
+
+      <div id="bkp-summary" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:18px;">
+        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
+          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">👤 Usuários</div>
+          <div id="bkp-users" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
+        </div>
+        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
+          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">📦 Produtos</div>
+          <div id="bkp-products" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
+        </div>
+        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
+          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">🔑 Estoque</div>
+          <div id="bkp-stock" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
+        </div>
+        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
+          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">🛒 Pedidos</div>
+          <div id="bkp-orders" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
+        </div>
+        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
+          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">🎰 Licenças</div>
+          <div id="bkp-licenses" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-wrap:wrap;gap:10px;">
+        <button onclick="downloadBackup()" style="background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;padding:12px 22px;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px;">
+          ⬇️ Baixar Backup (JSON)
+        </button>
+        <label style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;padding:12px 22px;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px;display:inline-block;">
+          ⬆️ Restaurar Backup (substituir)
+          <input type="file" id="bkp-file-replace" accept=".json" style="display:none" onchange="uploadBackup('replace')"/>
+        </label>
+        <label style="background:linear-gradient(135deg,#7e22ce,#6b21a8);color:#fff;border:none;padding:12px 22px;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px;display:inline-block;">
+          ➕ Restaurar (mesclar)
+          <input type="file" id="bkp-file-merge" accept=".json" style="display:none" onchange="uploadBackup('merge')"/>
+        </label>
+      </div>
+      <div id="bkp-result" style="margin-top:14px;"></div>
+    </div>
+
   </div><!-- /main -->
 
   <!-- modal: alterar senha -->
@@ -685,7 +737,96 @@
       loadLojaProdutos();
       loadOrders();
       checkMasterAndShowLicencas();
+      loadBackupSummary();
     })();
+
+    /* ============ BACKUP / RESTORE ============ */
+    async function loadBackupSummary() {
+      try {
+        const r = await fetch('/api/admin/backup/summary');
+        const j = await r.json();
+        if (j.success) {
+          document.getElementById('bkp-users').textContent     = j.users_count;
+          document.getElementById('bkp-products').textContent  = j.products_count;
+          document.getElementById('bkp-stock').textContent     = j.stock_items;
+          document.getElementById('bkp-orders').textContent    = j.orders_count;
+          document.getElementById('bkp-licenses').textContent  = j.licenses_count;
+        }
+      } catch(e) { console.error(e); }
+    }
+
+    async function downloadBackup() {
+      try {
+        showToast('⏳ Gerando backup...');
+        const r = await fetch('/api/admin/backup/export');
+        if (!r.ok) {
+          showToast('❌ Erro ao gerar backup');
+          return;
+        }
+        const blob = await r.blob();
+        const url = URL.createObjectURL(blob);
+        const cd = r.headers.get('Content-Disposition') || '';
+        const m = cd.match(/filename=([^;]+)/);
+        const filename = m ? m[1].trim() : ('backup-' + Date.now() + '.json');
+        const a = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); a.remove();
+        URL.revokeObjectURL(url);
+        showToast('✅ Backup baixado: ' + filename);
+      } catch(e) {
+        showToast('❌ Erro: ' + e.message);
+      }
+    }
+
+    async function uploadBackup(mode) {
+      const inputId = mode === 'replace' ? 'bkp-file-replace' : 'bkp-file-merge';
+      const inp = document.getElementById(inputId);
+      if (!inp.files || !inp.files[0]) return;
+      const file = inp.files[0];
+
+      const confirmMsg = mode === 'replace'
+        ? '⚠️ ATENÇÃO: Modo SUBSTITUIR vai APAGAR TODOS os dados atuais (usuários, estoque, pedidos, licenças) e instalar o backup.\n\nDeseja continuar?'
+        : 'Modo MESCLAR: vai adicionar dados do backup aos existentes (mantém o que já existe).\n\nDeseja continuar?';
+      if (!confirm(confirmMsg)) { inp.value = ''; return; }
+
+      try {
+        showToast('⏳ Restaurando backup...');
+        const text = await file.text();
+        const r = await fetch('/api/admin/backup/import?mode=' + mode, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: text
+        });
+        const j = await r.json();
+        const div = document.getElementById('bkp-result');
+        if (j.success) {
+          const items = j.restored || {};
+          let html = '<div style="background:rgba(34,197,94,0.12);border:1px solid rgba(34,197,94,0.5);border-radius:10px;padding:14px;color:#86efac;">';
+          html += '<b>✅ Backup restaurado com sucesso (' + j.mode + ')</b><br>';
+          if (j.source_host) html += '<small>Origem: ' + j.source_host + ' → Destino: ' + j.target_host + '</small><br>';
+          html += '<ul style="margin:8px 0 0 16px;line-height:1.6;">';
+          for (const k in items) html += '<li>' + k + ': <b>' + items[k] + '</b></li>';
+          html += '</ul></div>';
+          div.innerHTML = html;
+          showToast('✅ Backup restaurado!');
+          // Recarrega tudo
+          setTimeout(() => {
+            loadBackupSummary();
+            loadUsers();
+            loadLojaProdutos();
+            loadOrders();
+            if (typeof loadLicencas === 'function') loadLicencas();
+          }, 500);
+        } else {
+          div.innerHTML = '<div style="background:rgba(220,38,38,0.12);border:1px solid rgba(220,38,38,0.5);border-radius:10px;padding:14px;color:#fca5a5;"><b>❌ Erro:</b> ' + (j.message || 'desconhecido') + '</div>';
+          showToast('❌ ' + (j.message || 'Erro'));
+        }
+      } catch(e) {
+        showToast('❌ Erro: ' + e.message);
+      } finally {
+        inp.value = '';
+      }
+    }
 
     /* ============ LOJA: PRODUTOS ============ */
     let _produtos = [];
