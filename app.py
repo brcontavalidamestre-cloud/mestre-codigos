@@ -4213,37 +4213,82 @@ def api_site_mode():
 @app.route("/api/admin/kuku-status", methods=["GET"])
 @admin_required
 def api_admin_kuku_status():
-    """Diagnóstico da integração kuku.lu — mostra se login e inbox funcionam."""
+    """Diagnóstico da integração kuku.lu — mostra se login e inbox funcionam.
+    Aceita ?cookie=SHASH:xxx para usar cookie do navegador do usuário diretamente (bônus).
+    """
+    # invalida cache
+    _kuku_session_cache.update({"session": None, "expires_at": 0})
+    forced_cookie = (request.args.get("cookie") or "").strip()
     out = {
         "is_rios_host": _is_rios_host(),
         "kuku_user": KUKU_USER,
         "step1_login": None, "step2_inbox": None,
-        "uid": "", "emails_count": 0, "addresses": [], "sample_mail_ids": [],
+        "uid": "", "emails_count": 0, "unread_count": 0,
+        "addresses": [], "sample_mail_ids": [],
+        "forced_cookie": forced_cookie[:30] + "..." if forced_cookie else "",
+        "inbox_len": 0, "cookies_after_inbox": {}, "set_cookie_headers": [],
         "error": None,
     }
     try:
-        s, csrf, sub, uid = _kuku_login()
-        if not s:
-            out["step1_login"] = "FAIL"
-            out["error"] = "login kuku.lu falhou (veja logs do Railway)"
-            return jsonify(out)
-        out["step1_login"] = "OK"
-        out["uid"] = uid
+        from curl_cffi import requests as _cf_req
+        import urllib.parse as _up
 
-        html, csrf2, sub2 = _kuku_fetch_inbox_html()
-        if not html:
+        if forced_cookie:
+            # Modo 1: usar cookie fornecido (do navegador do usuário)
+            s = _cf_req.Session(impersonate="chrome120")
+            s.headers.update({"Accept-Language": "pt-BR,pt;q=0.9"})
+            # tenta decodificar SHASH%3A -> SHASH:
+            decoded = _up.unquote(forced_cookie)
+            s.cookies.set("cookie_sessionhash", decoded, domain="m.kuku.lu", path="/")
+            out["step1_login"] = "FORCED_COOKIE"
+            out["uid"] = decoded
+        else:
+            s, csrf, sub, uid = _kuku_login()
+            if not s:
+                out["step1_login"] = "FAIL"
+                out["error"] = "login kuku.lu falhou"
+                return jsonify(out)
+            out["step1_login"] = "OK"
+            out["uid"] = uid
+
+        # GET inbox e capturar headers
+        r = s.get(f"{KUKU_BASE}/recv.php", timeout=30)
+        out["inbox_http"] = r.status_code
+        out["inbox_len"] = len(r.text)
+        out["cookies_after_inbox"] = dict(s.cookies)
+        # capturar set-cookie
+        set_cookies = []
+        for h, v in r.headers.items():
+            if h.lower() == "set-cookie":
+                set_cookies.append(v[:120])
+        out["set_cookie_headers"] = set_cookies
+
+        if r.status_code == 200 and len(r.text) > 5000:
+            out["step2_inbox"] = "OK"
+            html = r.text
+            m = re.search(r"\((\d{3,5})\)\s*como\s*lid", html)
+            out["unread_count"] = int(m.group(1)) if m else 0
+            # tentar tambem em ingles e japones
+            if not out["unread_count"]:
+                m = re.search(r"\((\d{3,5})\)\s*(?:as|read)", html)
+                out["unread_count"] = int(m.group(1)) if m else 0
+            addrs = sorted(set(re.findall(r'[\w\.\-]+@(?:boxf\.uk|themail\.net|chozz\.is|prin\.cc|haren\.cc|instaddr\.uk)', html)))
+            out["addresses"] = addrs[:20]
+            ids = sorted(set(re.findall(r'area_mail_(\d+)', html)), key=int, reverse=True)
+            out["emails_count"] = len(ids)
+            out["sample_mail_ids"] = ids[:10]
+            # peek do HTML
+            # procura primeira ocorrencia de "mensagens" ou "messages"
+            out["snippet_mensagens"] = ""
+            mm = re.search(r".{0,80}mensagens.{0,80}", html)
+            if mm: out["snippet_mensagens"] = mm.group(0).strip()[:300]
+            # IP visto pelo kuku.lu
+            ipm = re.search(r'ip=([\d\.]+)', html)
+            out["server_ip_in_html"] = ipm.group(1) if ipm else ""
+        else:
             out["step2_inbox"] = "FAIL"
-            out["error"] = "não consegui ler /recv.php"
-            return jsonify(out)
-        out["step2_inbox"] = "OK"
-
-        m = re.search(r"\((\d{3,5})\)\s*como\s*lid", html)
-        out["unread_count"] = int(m.group(1)) if m else 0
-        addrs = sorted(set(re.findall(r'[\w\.\-]+@(?:boxf\.uk|themail\.net|chozz\.is|prin\.cc|haren\.cc|instaddr\.uk|kuku\.lu)', html)))
-        out["addresses"] = addrs[:20]
-        ids = sorted(set(re.findall(r'area_mail_(\d+)', html)), key=int, reverse=True)
-        out["emails_count"] = len(ids)
-        out["sample_mail_ids"] = ids[:10]
+            out["error"] = f"inbox HTTP {r.status_code}, len={len(r.text)}"
+            out["inbox_preview"] = r.text[:300]
     except Exception as e:
         out["error"] = f"{type(e).__name__}: {e}"
     return jsonify(out)
