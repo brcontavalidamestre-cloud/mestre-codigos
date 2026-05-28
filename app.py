@@ -4272,7 +4272,7 @@ def api_admin_kuku_status():
             if not out["unread_count"]:
                 m = re.search(r"\((\d{3,5})\)\s*(?:as|read)", html)
                 out["unread_count"] = int(m.group(1)) if m else 0
-            addrs = sorted(set(re.findall(r'[\w\.\-]+@(?:boxf\.uk|themail\.net|chozz\.is|prin\.cc|haren\.cc|instaddr\.uk)', html)))
+            addrs = sorted(set(re.findall(r'[\w\.\+\-]+@(?:boxf\.uk|themail\.net|chozz\.is|prin\.cc|haren\.cc|instaddr\.uk|otona\.uk|nekosan\.uk|exwa\.org|choco\.la|cross\.tv|m1y\.email|m1y\.eu|kuku\.lu)', html)))
             out["addresses"] = addrs[:20]
             ids = sorted(set(re.findall(r'area_mail_(\d+)', html)), key=int, reverse=True)
             out["emails_count"] = len(ids)
