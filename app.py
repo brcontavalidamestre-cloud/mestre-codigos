@@ -1792,10 +1792,12 @@ def _kuku_login():
         print(f"[kuku] login não retornou UID. Resposta: '{r.text[:200]}'")
         return (None, "", "", "")
 
-    # 4) Injetar cookie_sessionhash com o UID Riobrabo (URL-encoded)
-    encoded = _up.quote(new_uid, safe="")
-    s.cookies.set("cookie_sessionhash", encoded, domain="m.kuku.lu", path="/")
+    # 4) Injetar cookie_sessionhash com o UID Riobrabo
+    # IMPORTANTE: JS do site faz cookie.set('cookie_sessionhash', new_UID) SEM url-encoding
+    # Então o cookie deve conter literalmente 'SHASH:3c4f91...' (curl_cffi encoda autom no envio)
+    s.cookies.set("cookie_sessionhash", new_uid, domain="m.kuku.lu", path="/")
     print(f"[kuku] ✅ login OK — UID={new_uid}")
+    print(f"[kuku] cookies pós-login: {dict(s.cookies)}")
 
     # cache 10 min
     _kuku_session_cache.update({
