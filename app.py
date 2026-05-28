@@ -1482,9 +1482,8 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
         status, msgs = mail.search(None, *search_criteria)
         if status == "OK" and msgs[0]:
             all_ids = msgs[0].split()
-            # MELHORADO: 200 mais recentes (era 50) — captura emails de 1-2h atrás
-            # Em caixas com milhares de Netflix/dia, 50 era pouco
-            recent_ids = all_ids[-200:]
+            # 100 mais recentes (equilíbrio entre cobertura e velocidade)
+            recent_ids = all_ids[-100:]
 
             # ── BATCH FETCH de todos os headers em um único round-trip ──────
             id_str = b",".join(recent_ids)
@@ -1732,30 +1731,18 @@ def search_code_unified(user_email, platform_list):
             seen_ids   = set()
 
             for sender, plat_configs in by_sender.items():
-                # 1ª passagem: SOMENTE HOJE (busca mais rápida)
+                # 1ª passagem: Últimos 2 dias na INBOX (caixa principal)
                 matched = _batch_search_mailbox(
                     mail, "INBOX", sender, plat_configs, seen_ids,
-                    use_date_filter=True, since_date=today)
+                    use_date_filter=True, since_date=since_2d)
 
-                # 2ª passagem: Últimos 2 dias
-                if not matched:
-                    matched = _batch_search_mailbox(
-                        mail, "INBOX", sender, plat_configs, seen_ids,
-                        use_date_filter=True, since_date=since_2d)
-
-                # 3ª passagem: Últimos 7 dias (NOVO - antes pulava direto pra sem-data)
+                # 2ª passagem: Últimos 7 dias se não achou
                 if not matched:
                     matched = _batch_search_mailbox(
                         mail, "INBOX", sender, plat_configs, seen_ids,
                         use_date_filter=True, since_date=since_7d)
 
-                # 4ª passagem: SEM filtro de data (mais lenta)
-                if not matched:
-                    matched = _batch_search_mailbox(
-                        mail, "INBOX", sender, plat_configs, seen_ids,
-                        use_date_filter=False)
-
-                # 5ª passagem: PASTAS DE SPAM (com filtro 7d para acelerar)
+                # 3ª passagem: PASTAS DE SPAM (últimos 7 dias)
                 if not matched:
                     for mb in spam_boxes:
                         matched.extend(_batch_search_mailbox(
@@ -1763,14 +1750,6 @@ def search_code_unified(user_email, platform_list):
                             use_date_filter=True, since_date=since_7d))
                         if matched:
                             break
-                    # Se ainda não achou, busca no spam SEM filtro de data
-                    if not matched:
-                        for mb in spam_boxes:
-                            matched.extend(_batch_search_mailbox(
-                                mail, mb, sender, plat_configs, seen_ids,
-                                use_date_filter=False))
-                            if matched:
-                                break
 
                 # NOVO: Busca tambem por FROM = email do usuario (Fw: encaminhados)
                 # Caso o cliente encaminhe o email original para a caixa do sistema,
