@@ -9,6 +9,7 @@ import os
 import json
 import unicodedata
 import time
+import threading
 from datetime import timedelta
 
 app = Flask(__name__, static_folder='static')
@@ -1700,111 +1701,147 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
 # ╔══════════════════════════════════════════════════════════════════════╗
 # ║  INTEGRAÇÃO KUKU.LU (InstAddr) — usada SOMENTE em rios.up.railway.app ║
 # ║  Credenciais: Riobrabo / 40111312                                    ║
+# ║  Estratégia: Playwright (Chromium real) para login, depois curl_cffi  ║
 # ╚══════════════════════════════════════════════════════════════════════╝
 KUKU_USER     = os.environ.get("KUKU_USER", "Riobrabo")
 KUKU_PASS     = os.environ.get("KUKU_PASS", "40111312")
 KUKU_BASE     = "https://m.kuku.lu"
-_kuku_session_cache = {"session": None, "csrf": "", "sub": "", "uid": "", "expires_at": 0}
+_kuku_session_cache = {"session": None, "csrf": "", "sub": "", "uid": "", "cookies": {}, "expires_at": 0}
+_kuku_login_lock = threading.Lock()
+
+def _kuku_login_playwright():
+    """Faz login real via Chromium headless (Playwright).
+    Retorna dict de cookies da sessão autenticada."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        print("[kuku] playwright não instalado!")
+        return {}
+
+    cookies_dict = {}
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=True,
+                args=[
+                    "--no-sandbox",
+                    "--disable-blink-features=AutomationControlled",
+                    "--disable-dev-shm-usage",
+                ],
+            )
+            context = browser.new_context(
+                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                locale="pt-BR",
+                viewport={"width": 1366, "height": 768},
+            )
+            page = context.new_page()
+
+            # 1) Ir para login
+            print("[kuku-pw] abrindo página de login...")
+            page.goto(f"{KUKU_BASE}/index.php?action=login", wait_until="domcontentloaded", timeout=45000)
+            page.wait_for_selector("#user_number", timeout=15000)
+
+            # 2) Preencher e submit
+            print("[kuku-pw] preenchendo credenciais...")
+            page.fill("#user_number", KUKU_USER)
+            page.fill("#user_password", KUKU_PASS)
+            page.evaluate("checkLogin()")
+
+            # 3) Lidar com confirmação de sync (clica em "No" para não mesclar a conta atual)
+            # Aguardar o diálogo aparecer
+            page.wait_for_timeout(3000)
+            # Tenta achar o botão "No"/"Não" do confirm dialog
+            try:
+                # O dialog tem 2 botões: o segundo (cancelar) chama syncconfirm=no
+                # Geralmente é .ui-popup .ui-btn:last-child ou similar
+                no_btn = page.locator("div[role='dialog'] a, .ui-popup a.ui-btn").last
+                if no_btn.is_visible(timeout=2000):
+                    print("[kuku-pw] clicando em 'No' do sync dialog...")
+                    no_btn.click()
+            except Exception as e:
+                print(f"[kuku-pw] sem dialog ou erro: {e}")
+
+            # 4) Aguardar redirect / carregamento da página logada
+            page.wait_for_timeout(5000)
+            # Tentar ir direto para recv.php
+            page.goto(f"{KUKU_BASE}/recv.php", wait_until="domcontentloaded", timeout=45000)
+            page.wait_for_timeout(3000)
+
+            # 5) Capturar cookies
+            pw_cookies = context.cookies(KUKU_BASE)
+            for c in pw_cookies:
+                cookies_dict[c["name"]] = c["value"]
+            print(f"[kuku-pw] cookies capturados: {list(cookies_dict.keys())}")
+            # Validar: ver se a página logada tem emails (procurar 'mensagens')
+            html = page.content()
+            m = re.search(r"(\d+)\+?\s*mensagens", html)
+            print(f"[kuku-pw] mensagens na página: {m.group(0) if m else 'AUSENTE'}")
+
+            browser.close()
+    except Exception as e:
+        print(f"[kuku-pw] erro: {type(e).__name__}: {e}")
+        return {}
+    return cookies_dict
+
 
 def _kuku_login():
-    """Faz login no kuku.lu via curl_cffi (bypass Cloudflare) e retorna sessão autenticada.
-    Cache de ~10 minutos para evitar logins repetidos."""
-    import time as _t, urllib.parse as _up
-    now = _t.time()
-    if _kuku_session_cache["session"] and now < _kuku_session_cache["expires_at"]:
-        return (_kuku_session_cache["session"], _kuku_session_cache["csrf"],
-                _kuku_session_cache["sub"], _kuku_session_cache["uid"])
+    """Faz login no kuku.lu. Usa Playwright (Chromium real) para evitar bloqueios.
+    Cache de 30 minutos. Thread-safe."""
+    import time as _t
+    with _kuku_login_lock:
+        now = _t.time()
+        if _kuku_session_cache["session"] and now < _kuku_session_cache["expires_at"]:
+            return (_kuku_session_cache["session"], _kuku_session_cache["csrf"],
+                    _kuku_session_cache["sub"], _kuku_session_cache["uid"])
+        return _kuku_do_login(now)
+
+def _kuku_do_login(now):
+    import time as _t
     try:
         from curl_cffi import requests as _cf_req
     except ImportError:
-        print("[kuku] curl_cffi não instalado! pip install curl_cffi")
+        print("[kuku] curl_cffi não instalado!")
         return (None, "", "", "")
 
+    # ╔═ PASSO 1: Login via Playwright ═╗
+    cookies_dict = _kuku_login_playwright()
+    if not cookies_dict.get("cookie_sessionhash"):
+        print("[kuku] Playwright não retornou cookie de sessão")
+        return (None, "", "", "")
+
+    # ╔═ PASSO 2: Transferir cookies do Playwright -> curl_cffi (mais rápido p/ requests futuros) ═╗
     s = _cf_req.Session(impersonate="chrome120")
     s.headers.update({
         "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     })
+    for k, v in cookies_dict.items():
+        s.cookies.set(k, v, domain="m.kuku.lu", path="/")
 
-    # 1) GET inicial para criar sessão e pegar cookie_csrf_token
+    uid = cookies_dict.get("cookie_sessionhash", "")
+    csrf = cookies_dict.get("cookie_csrf_token", "")
+
+    # ╔═ PASSO 3: GET recv.php para pegar csrf_subtoken_check ═╗
+    sub = ""
     try:
         r = s.get(f"{KUKU_BASE}/recv.php", timeout=30)
-        print(f"[kuku] GET /recv.php inicial: HTTP {r.status_code}, len={len(r.text)}")
+        print(f"[kuku] GET recv.php logado: HTTP {r.status_code}, len={len(r.text)}")
+        m = re.search(r'csrf_subtoken_check=([a-f0-9]{32})', r.text)
+        if m: sub = m.group(1)
+        m2 = re.search(r'csrf_token_check=([a-f0-9]{32})', r.text)
+        if m2: csrf = m2.group(1)
     except Exception as e:
-        print(f"[kuku] erro GET inicial: {e}")
-        return (None, "", "", "")
+        print(f"[kuku] erro GET recv.php: {e}")
 
-    csrf_cookie = s.cookies.get("cookie_csrf_token") or ""
-    if not csrf_cookie:
-        print("[kuku] cookie_csrf_token AUSENTE")
-        return (None, "", "", "")
+    print(f"[kuku] ✅ sessão pronta — uid={uid}, csrf={csrf[:8]}..., sub={sub[:8]}...")
 
-    # 2) Tentar até 4x pegar a página de login com csrf_subtoken_check
-    csrf_h = ""
-    sub = ""
-    for attempt in range(4):
-        try:
-            r = s.get(f"{KUKU_BASE}/index.php?action=login", timeout=30)
-        except Exception as e:
-            print(f"[kuku] erro tentativa {attempt+1}: {e}")
-            _t.sleep(2 + attempt)
-            continue
-        if r.status_code == 200 and len(r.text) > 30000:
-            m1 = re.search(r'csrf_token_check=([a-f0-9]{32})', r.text)
-            m2 = re.search(r'csrf_subtoken_check=([a-f0-9]{32})', r.text)
-            if m1 and m2:
-                csrf_h = m1.group(1)
-                sub = m2.group(1)
-                break
-        print(f"[kuku] tentativa {attempt+1}: HTTP {r.status_code}, len={len(r.text)} — aguardando")
-        _t.sleep(3 + attempt*2)
-
-    if not (csrf_h and sub):
-        print(f"[kuku] FALHA ao obter CSRF tokens. csrf={csrf_h}, sub={sub}")
-        return (None, "", "", "")
-
-    # 3) POST checkLogin (sem syncconfirm primeiro)
-    def _login_post(syncconfirm):
-        return s.post(f"{KUKU_BASE}/index.php", data={
-            "action": "checkLogin", "nopost": "1", "confirmcode": "",
-            "csrf_token_check": csrf_h, "csrf_subtoken_check": sub,
-            "number": KUKU_USER, "password": KUKU_PASS,
-            "syncconfirm": syncconfirm,
-        }, headers={
-            "X-Requested-With": "XMLHttpRequest",
-            "Referer": f"{KUKU_BASE}/index.php?action=login",
-        }, timeout=30)
-
-    try:
-        r = _login_post("")
-        print(f"[kuku] login 1: '{r.text[:120]}'")
-        if "SYNC_CONFIRM" in r.text:
-            r = _login_post("no")
-            print(f"[kuku] login 2 (no): '{r.text[:200]}'")
-    except Exception as e:
-        print(f"[kuku] erro no POST login: {e}")
-        return (None, "", "", "")
-
-    new_uid = ""
-    if r.text.startswith("OK:"):
-        new_uid = r.text.split("OK:", 1)[1].strip()
-    if not new_uid:
-        print(f"[kuku] login não retornou UID. Resposta: '{r.text[:200]}'")
-        return (None, "", "", "")
-
-    # 4) Injetar cookie_sessionhash com o UID Riobrabo
-    # IMPORTANTE: JS do site faz cookie.set('cookie_sessionhash', new_UID) SEM url-encoding
-    # Então o cookie deve conter literalmente 'SHASH:3c4f91...' (curl_cffi encoda autom no envio)
-    s.cookies.set("cookie_sessionhash", new_uid, domain="m.kuku.lu", path="/")
-    print(f"[kuku] ✅ login OK — UID={new_uid}")
-    print(f"[kuku] cookies pós-login: {dict(s.cookies)}")
-
-    # cache 10 min
+    # cache 30 min
     _kuku_session_cache.update({
-        "session": s, "csrf": csrf_h, "sub": sub, "uid": new_uid,
-        "expires_at": now + 600,
+        "session": s, "csrf": csrf, "sub": sub, "uid": uid,
+        "cookies": cookies_dict, "expires_at": now + 1800,
     })
-    return (s, csrf_h, sub, new_uid)
+    return (s, csrf, sub, uid)
 
 
 def _kuku_fetch_inbox_html():
