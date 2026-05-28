@@ -2312,10 +2312,13 @@
 
       // Feedback progressivo — mensagens mudam para indicar progresso
       const progressMessages = [
-        { ms: 800,  text: 'Acessando caixa de e-mail...' },
-        { ms: 2500, text: 'Procurando seu código...' },
-        { ms: 5000, text: 'Verificando emails recentes...' },
-        { ms: 9000, text: 'Aguarde, quase pronto...' }
+        { ms: 800,  text: 'Acessando caixas de e-mail...' },
+        { ms: 3000, text: 'Procurando seu código (hoje)...' },
+        { ms: 8000, text: 'Verificando últimos 2 dias...' },
+        { ms: 15000, text: 'Buscando em emails antigos...' },
+        { ms: 25000, text: 'Verificando pasta de spam...' },
+        { ms: 40000, text: 'Aguarde, processando caixas grandes...' },
+        { ms: 60000, text: 'Quase lá, finalizando busca...' }
       ];
       const progressTimers = progressMessages.map(p => setTimeout(() => {
         if (!btn.disabled) return;
@@ -2323,28 +2326,83 @@
       }, p.ms));
       const clearProgress = () => progressTimers.forEach(t => clearTimeout(t));
 
-      try {
-        const res = await fetch('/api/get-code', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email: emailVal, platform: currentPlatform })
-        });
-        const data = await res.json();
+      // Função de fetch com timeout configurável
+      const fetchWithTimeout = (url, options, timeoutMs) => {
+        const controller = new AbortController();
+        const tid = setTimeout(() => controller.abort(), timeoutMs);
+        return fetch(url, { ...options, signal: controller.signal })
+          .finally(() => clearTimeout(tid));
+      };
 
-        clearProgress();
-        if (data.success) {
-          if (data.pin_required && data.platform === 'password-reset') {
-            showPinOverlay();
-          } else if (data.code || data.link) {
-            showSuccess(data);
-          } else {
-            showError(data.message || 'Código não encontrado.');
+      const MAX_RETRIES = 2;
+      let attempt = 0;
+      let lastError = null;
+
+      try {
+        while (attempt <= MAX_RETRIES) {
+          attempt++;
+          try {
+            const res = await fetchWithTimeout('/api/get-code', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ email: emailVal, platform: currentPlatform })
+            }, 90000); // 90s de timeout
+
+            // Se for 5xx, tenta de novo
+            if (res.status >= 500 && res.status < 600 && attempt <= MAX_RETRIES) {
+              btn.innerHTML = '<span class="spinner"></span> Tentativa ' + (attempt+1) + '...';
+              await new Promise(r => setTimeout(r, 2000));
+              continue;
+            }
+
+            const data = await res.json();
+            clearProgress();
+
+            if (data.success) {
+              if (data.pin_required && data.platform === 'password-reset') {
+                showPinOverlay();
+              } else if (data.code || data.link) {
+                showSuccess(data);
+              } else {
+                showError(data.message || 'Código não encontrado.');
+              }
+            } else {
+              const msg = data.message || 'Código não encontrado.';
+              if (msg.toLowerCase().includes('não encontrado') || msg.toLowerCase().includes('nao encontrado') || msg.toLowerCase().includes('nenhum email')) {
+                showError('⚠️ Nenhum código encontrado para <b>' + emailVal + '</b>.<br><br>' +
+                  '<b>Verifique:</b><br>' +
+                  '• O e-mail está correto?<br>' +
+                  '• A plataforma escolhida está correta?<br>' +
+                  '• O e-mail foi enviado nos últimos 7 dias?<br>' +
+                  '• Tente novamente em alguns segundos se acabou de chegar', true);
+              } else {
+                showError(msg);
+              }
+            }
+            return; // sucesso ou erro tratado, sai do retry loop
+          } catch (err) {
+            lastError = err;
+            if (err.name === 'AbortError') {
+              if (attempt <= MAX_RETRIES) {
+                btn.innerHTML = '<span class="spinner"></span> Timeout, tentando de novo...';
+                await new Promise(r => setTimeout(r, 1500));
+                continue;
+              }
+              throw new Error('Tempo de busca excedido. Tente novamente.');
+            }
+            // Erro de rede — tenta de novo se ainda houver tentativas
+            if (attempt <= MAX_RETRIES) {
+              btn.innerHTML = '<span class="spinner"></span> Reconectando (tentativa ' + (attempt+1) + ')...';
+              await new Promise(r => setTimeout(r, 2000));
+              continue;
+            }
+            throw err;
           }
-        } else {
-          showError(data.message || 'Código não encontrado.');
         }
       } catch (err) {
-        showError('Erro de conexão com o servidor. Tente novamente em instantes.');
+        clearProgress();
+        const errMsg = (err && err.message) ? err.message : 'Erro desconhecido';
+        showError('⚠️ ' + errMsg + '<br><small>Servidor pode estar lento. Tente novamente em 10 segundos.</small>', true);
       } finally {
         clearProgress();
         btn.disabled = false;
@@ -2480,13 +2538,15 @@
       box.style.display = 'block';
     }
 
-    function showError(msg) {
+    function showError(msg, isHtml) {
       const box = document.getElementById('result-box');
       box.className = 'result-box error';
+      // Se a mensagem já vem com HTML formatado, não escapa
+      const safeMsg = isHtml ? msg : String(msg).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       box.innerHTML = `
         <span class="result-emoji">⚠️</span>
         <div class="error-title">Código não localizado</div>
-        <div class="error-msg">${msg}</div>
+        <div class="error-msg">${safeMsg}</div>
       `;
       box.style.display = 'block';
     }
