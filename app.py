@@ -1697,6 +1697,223 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
     return matched
 
 
+# ╔══════════════════════════════════════════════════════════════════════╗
+# ║  INTEGRAÇÃO KUKU.LU (InstAddr) — usada SOMENTE em rios.up.railway.app ║
+# ║  Credenciais: Riobrabo / 40111312                                    ║
+# ╚══════════════════════════════════════════════════════════════════════╝
+KUKU_USER     = os.environ.get("KUKU_USER", "Riobrabo")
+KUKU_PASS     = os.environ.get("KUKU_PASS", "40111312")
+KUKU_BASE     = "https://m.kuku.lu"
+_kuku_session_cache = {"session": None, "csrf": "", "sub": "", "uid": "", "expires_at": 0}
+
+def _kuku_login():
+    """Faz login no kuku.lu via curl_cffi (bypass Cloudflare) e retorna sessão autenticada.
+    Cache de ~10 minutos para evitar logins repetidos."""
+    import time as _t, urllib.parse as _up
+    now = _t.time()
+    if _kuku_session_cache["session"] and now < _kuku_session_cache["expires_at"]:
+        return (_kuku_session_cache["session"], _kuku_session_cache["csrf"],
+                _kuku_session_cache["sub"], _kuku_session_cache["uid"])
+    try:
+        from curl_cffi import requests as _cf_req
+    except ImportError:
+        print("[kuku] curl_cffi não instalado! pip install curl_cffi")
+        return (None, "", "", "")
+
+    s = _cf_req.Session(impersonate="chrome120")
+    s.headers.update({
+        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    })
+
+    # 1) GET inicial para criar sessão e pegar cookie_csrf_token
+    try:
+        r = s.get(f"{KUKU_BASE}/recv.php", timeout=30)
+        print(f"[kuku] GET /recv.php inicial: HTTP {r.status_code}, len={len(r.text)}")
+    except Exception as e:
+        print(f"[kuku] erro GET inicial: {e}")
+        return (None, "", "", "")
+
+    csrf_cookie = s.cookies.get("cookie_csrf_token") or ""
+    if not csrf_cookie:
+        print("[kuku] cookie_csrf_token AUSENTE")
+        return (None, "", "", "")
+
+    # 2) Tentar até 4x pegar a página de login com csrf_subtoken_check
+    csrf_h = ""
+    sub = ""
+    for attempt in range(4):
+        try:
+            r = s.get(f"{KUKU_BASE}/index.php?action=login", timeout=30)
+        except Exception as e:
+            print(f"[kuku] erro tentativa {attempt+1}: {e}")
+            _t.sleep(2 + attempt)
+            continue
+        if r.status_code == 200 and len(r.text) > 30000:
+            m1 = re.search(r'csrf_token_check=([a-f0-9]{32})', r.text)
+            m2 = re.search(r'csrf_subtoken_check=([a-f0-9]{32})', r.text)
+            if m1 and m2:
+                csrf_h = m1.group(1)
+                sub = m2.group(1)
+                break
+        print(f"[kuku] tentativa {attempt+1}: HTTP {r.status_code}, len={len(r.text)} — aguardando")
+        _t.sleep(3 + attempt*2)
+
+    if not (csrf_h and sub):
+        print(f"[kuku] FALHA ao obter CSRF tokens. csrf={csrf_h}, sub={sub}")
+        return (None, "", "", "")
+
+    # 3) POST checkLogin (sem syncconfirm primeiro)
+    def _login_post(syncconfirm):
+        return s.post(f"{KUKU_BASE}/index.php", data={
+            "action": "checkLogin", "nopost": "1", "confirmcode": "",
+            "csrf_token_check": csrf_h, "csrf_subtoken_check": sub,
+            "number": KUKU_USER, "password": KUKU_PASS,
+            "syncconfirm": syncconfirm,
+        }, headers={
+            "X-Requested-With": "XMLHttpRequest",
+            "Referer": f"{KUKU_BASE}/index.php?action=login",
+        }, timeout=30)
+
+    try:
+        r = _login_post("")
+        print(f"[kuku] login 1: '{r.text[:120]}'")
+        if "SYNC_CONFIRM" in r.text:
+            r = _login_post("no")
+            print(f"[kuku] login 2 (no): '{r.text[:200]}'")
+    except Exception as e:
+        print(f"[kuku] erro no POST login: {e}")
+        return (None, "", "", "")
+
+    new_uid = ""
+    if r.text.startswith("OK:"):
+        new_uid = r.text.split("OK:", 1)[1].strip()
+    if not new_uid:
+        print(f"[kuku] login não retornou UID. Resposta: '{r.text[:200]}'")
+        return (None, "", "", "")
+
+    # 4) Injetar cookie_sessionhash com o UID Riobrabo (URL-encoded)
+    encoded = _up.quote(new_uid, safe="")
+    s.cookies.set("cookie_sessionhash", encoded, domain="m.kuku.lu", path="/")
+    print(f"[kuku] ✅ login OK — UID={new_uid}")
+
+    # cache 10 min
+    _kuku_session_cache.update({
+        "session": s, "csrf": csrf_h, "sub": sub, "uid": new_uid,
+        "expires_at": now + 600,
+    })
+    return (s, csrf_h, sub, new_uid)
+
+
+def _kuku_fetch_inbox_html():
+    """Pega o HTML do recv.php COM a conta logada (que tem 7000+ emails).
+    Retorna (html, csrf, sub) ou (None, '', '')."""
+    s, csrf, sub, uid = _kuku_login()
+    if not s:
+        return (None, "", "")
+    try:
+        r = s.get(f"{KUKU_BASE}/recv.php", timeout=30)
+        print(f"[kuku] GET /recv.php logado: HTTP {r.status_code}, len={len(r.text)}")
+        if r.status_code != 200 or len(r.text) < 5000:
+            return (None, csrf, sub)
+        # Atualiza tokens se possível
+        m1 = re.search(r'csrf_token_check=([a-f0-9]{32})', r.text)
+        m2 = re.search(r'csrf_subtoken_check=([a-f0-9]{32})', r.text)
+        if m1: csrf = m1.group(1)
+        if m2: sub = m2.group(1)
+        return (r.text, csrf, sub)
+    except Exception as e:
+        print(f"[kuku] erro GET inbox: {e}")
+        return (None, csrf, sub)
+
+
+def _kuku_fetch_mail_content(mail_num):
+    """Busca o CONTEÚDO COMPLETO de um email específico via smphone.app.recv.view.php"""
+    s, csrf, sub, _ = _kuku_login()
+    if not s:
+        return ""
+    try:
+        r = s.post(f"{KUKU_BASE}/smphone.app.recv.view.php", data={
+            "num": str(mail_num), "key": "", "noscroll": "1",
+            "csrf_token_check": csrf, "csrf_subtoken_check": sub,
+        }, headers={"Referer": f"{KUKU_BASE}/recv.php"}, timeout=30)
+        if r.status_code == 200 and len(r.text) > 100:
+            return r.text
+    except Exception as e:
+        print(f"[kuku] erro fetch mail {mail_num}: {e}")
+    return ""
+
+
+def kuku_search_code(user_email, platform):
+    """Procura código/link na caixa kuku.lu para um email destinatário específico.
+    Retorna (code, link, error)."""
+    print(f"[kuku] busca: email='{user_email}' platform='{platform}'")
+    html, csrf, sub = _kuku_fetch_inbox_html()
+    if not html:
+        return (None, None, "Não foi possível acessar a caixa kuku.lu. Tente novamente em alguns segundos.")
+
+    # Estratégia: percorrer os DIVs area_mail_NUM no HTML do inbox e filtrar pelo destinatário
+    # Cada bloco contém: para_email, remetente, assunto, link p/ smphone.app.recv.view.php?num=NUM
+    mail_ids = sorted(set(re.findall(r'area_mail_(\d+)', html)), key=int, reverse=True)
+    print(f"[kuku] {len(mail_ids)} IDs de email no inbox")
+    if not mail_ids:
+        return (None, None, "Caixa kuku.lu está vazia ou inacessível no momento.")
+
+    # PLATFORM_CONFIG (definido em outra parte): pega senders + negative + positive keywords
+    pcfg = PLATFORM_CONFIG.get(platform, {})
+    senders = [s.lower() for s in pcfg.get("senders", [])]
+    positive_kw = [k.lower() for k in pcfg.get("positive_keywords", [])]
+    negative_kw = [k.lower() for k in pcfg.get("negative_keywords", [])]
+    is_link_platform = pcfg.get("return_type") == "link"
+
+    ulow = user_email.strip().lower()
+    checked = 0
+    # Limita a 150 emails mais recentes para velocidade
+    for mid in mail_ids[:150]:
+        checked += 1
+        body = _kuku_fetch_mail_content(mid)
+        if not body:
+            continue
+        body_low = body.lower()
+        # 1) Filtro destinatário
+        if ulow not in body_low:
+            continue
+        # 2) Filtro sender (se configurado)
+        if senders and not any(snd in body_low for snd in senders):
+            continue
+        # 3) Filtro negative keywords
+        if any(nk in body_low for nk in negative_kw):
+            continue
+        # 4) Filtro positive keywords (se configurado, precisa pelo menos 1)
+        if positive_kw and not any(pk in body_low for pk in positive_kw):
+            continue
+
+        print(f"[kuku] ✅ match em mail #{mid}")
+        # Se é plataforma de link, procura link específico
+        if is_link_platform:
+            link_pat = pcfg.get("link_pattern")
+            if link_pat:
+                m = re.search(link_pat, body)
+                if m:
+                    return (None, m.group(0), None)
+        # Senão extrai o código
+        code = extract_code_from_html(body)
+        if code:
+            return (code, None, None)
+
+    print(f"[kuku] {checked} emails checados, sem match")
+    return (None, None, f"Nenhum email {platform} encontrado para {user_email} na caixa kuku.lu.")
+
+
+def _is_rios_host():
+    """True se o request atual vem de rios.up.railway.app"""
+    try:
+        host = request.host.lower()
+        return "rios" in host
+    except Exception:
+        return False
+
+
 def search_code_unified(user_email, platform_list):
     """
     Busca múltiplas plataformas do mesmo remetente em UMA ÚNICA passagem IMAP.
@@ -2710,6 +2927,42 @@ def get_code():
     }
     username = session.get("username")
     _clear_pending_reset_link(username)
+
+    # ╔═══ RIOS: usar APENAS kuku.lu ═══╗
+    if _is_rios_host():
+        print(f"[get-code] RIOS detectado — usando kuku.lu para email={user_email} platform={platform}")
+        # Expandir platform-all em UNIFIED_MAP
+        if platform in UNIFIED_MAP:
+            subs, err_msg = UNIFIED_MAP[platform]
+            for sub_plat in subs:
+                code, link, error = kuku_search_code(user_email, sub_plat)
+                if code:
+                    return jsonify({"success": True, "code": code, "platform": sub_plat, "type": "code"})
+                if link:
+                    if sub_plat == "password-reset":
+                        _set_pending_reset_link(username, link)
+                        return jsonify({
+                            "success": True, "platform": "password-reset",
+                            "type": "pin_required", "pin_required": True,
+                            "message": "PIN necessário para liberar o link de redefinição."
+                        })
+                    return jsonify({"success": True, "link": link, "platform": sub_plat, "type": "link"})
+            return jsonify({"success": False, "message": err_msg})
+        # Plataforma simples
+        code, link, error = kuku_search_code(user_email, platform)
+        if code:
+            return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})
+        if link:
+            if platform == "password-reset":
+                _set_pending_reset_link(username, link)
+                return jsonify({
+                    "success": True, "platform": "password-reset",
+                    "type": "pin_required", "pin_required": True,
+                    "message": "PIN necessário."
+                })
+            return jsonify({"success": True, "link": link, "platform": platform, "type": "link"})
+        return jsonify({"success": False, "message": error or "Não encontrado na caixa kuku.lu."})
+    # ╚═══ FIM RIOS ═══╝
 
     if platform in UNIFIED_MAP:
         subs, err_msg = UNIFIED_MAP[platform]
@@ -3954,6 +4207,44 @@ def api_site_mode():
         "is_loja": is_loja_host(),
         "host": get_current_host()
     })
+
+@app.route("/api/admin/kuku-status", methods=["GET"])
+@admin_required
+def api_admin_kuku_status():
+    """Diagnóstico da integração kuku.lu — mostra se login e inbox funcionam."""
+    out = {
+        "is_rios_host": _is_rios_host(),
+        "kuku_user": KUKU_USER,
+        "step1_login": None, "step2_inbox": None,
+        "uid": "", "emails_count": 0, "addresses": [], "sample_mail_ids": [],
+        "error": None,
+    }
+    try:
+        s, csrf, sub, uid = _kuku_login()
+        if not s:
+            out["step1_login"] = "FAIL"
+            out["error"] = "login kuku.lu falhou (veja logs do Railway)"
+            return jsonify(out)
+        out["step1_login"] = "OK"
+        out["uid"] = uid
+
+        html, csrf2, sub2 = _kuku_fetch_inbox_html()
+        if not html:
+            out["step2_inbox"] = "FAIL"
+            out["error"] = "não consegui ler /recv.php"
+            return jsonify(out)
+        out["step2_inbox"] = "OK"
+
+        m = re.search(r"\((\d{3,5})\)\s*como\s*lid", html)
+        out["unread_count"] = int(m.group(1)) if m else 0
+        addrs = sorted(set(re.findall(r'[\w\.\-]+@(?:boxf\.uk|themail\.net|chozz\.is|prin\.cc|haren\.cc|instaddr\.uk|kuku\.lu)', html)))
+        out["addresses"] = addrs[:20]
+        ids = sorted(set(re.findall(r'area_mail_(\d+)', html)), key=int, reverse=True)
+        out["emails_count"] = len(ids)
+        out["sample_mail_ids"] = ids[:10]
+    except Exception as e:
+        out["error"] = f"{type(e).__name__}: {e}"
+    return jsonify(out)
 
 @app.route("/api/debug/imap", methods=["GET"])
 def api_debug_imap():
