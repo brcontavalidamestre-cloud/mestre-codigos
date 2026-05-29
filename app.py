@@ -124,8 +124,33 @@ THIRD_IMAP_PORT    = int(os.environ.get("THIRD_IMAP_PORT") or os.environ.get("IM
 THIRD_EMAIL_USER   = os.environ.get("THIRD_EMAIL_USER") or os.environ.get("EMAIL_USER_3", "codigo@mundial.log.br")
 THIRD_EMAIL_PASS   = os.environ.get("THIRD_EMAIL_PASS") or os.environ.get("EMAIL_PASS_3", "Mestre13579@")
 
+# ╔══ Caixa EXCLUSIVA do RIOS (SiteGround ggtv.net.br) ══╗
+# Só é incluída quando o host é rios.up.railway.app
+RIOS_IMAP_SERVER = os.environ.get("RIOS_IMAP_SERVER", "mail.ggtv.net.br")
+RIOS_IMAP_PORT   = int(os.environ.get("RIOS_IMAP_PORT", 993))
+RIOS_EMAIL_USER  = os.environ.get("RIOS_EMAIL_USER", "mestre@ggtv.net.br")
+RIOS_EMAIL_PASS  = os.environ.get("RIOS_EMAIL_PASS", "Mestre13579@")
+
+
+def _is_rios_request():
+    """True se o request atual vem de rios.up.railway.app"""
+    try:
+        return "rios" in (request.host or "").lower()
+    except Exception:
+        return False
+
 
 def get_imap_accounts():
+    # ╔══ RIOS: usa SOMENTE a caixa ggtv.net.br ══╗
+    if _is_rios_request() and RIOS_EMAIL_USER and RIOS_EMAIL_PASS:
+        return [{
+            "name": "caixa-rios-ggtv",
+            "server": RIOS_IMAP_SERVER,
+            "port": RIOS_IMAP_PORT,
+            "user": RIOS_EMAIL_USER,
+            "password": RIOS_EMAIL_PASS,
+        }]
+
     accounts = [
         {
             "name": "caixa-principal",
@@ -1697,262 +1722,6 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
     matched.reverse()
     return matched
 
-
-# ╔══════════════════════════════════════════════════════════════════════╗
-# ║  INTEGRAÇÃO KUKU.LU (InstAddr) — usada SOMENTE em rios.up.railway.app ║
-# ║  Credenciais: Riobrabo / 40111312                                    ║
-# ║  Estratégia: Playwright (Chromium real) para login, depois curl_cffi  ║
-# ╚══════════════════════════════════════════════════════════════════════╝
-KUKU_USER     = os.environ.get("KUKU_USER", "Riobrabo")
-KUKU_PASS     = os.environ.get("KUKU_PASS", "40111312")
-KUKU_BASE     = "https://m.kuku.lu"
-_kuku_session_cache = {"session": None, "csrf": "", "sub": "", "uid": "", "cookies": {}, "expires_at": 0}
-_kuku_login_lock = threading.Lock()
-
-def _kuku_login_playwright():
-    """Faz login real via Chromium headless (Playwright).
-    Retorna dict de cookies da sessão autenticada."""
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        print("[kuku] playwright não instalado!")
-        return {}
-
-    cookies_dict = {}
-    try:
-        with sync_playwright() as p:
-            browser = p.chromium.launch(
-                headless=True,
-                args=[
-                    "--no-sandbox",
-                    "--disable-blink-features=AutomationControlled",
-                    "--disable-dev-shm-usage",
-                ],
-            )
-            context = browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                           "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-                locale="pt-BR",
-                viewport={"width": 1366, "height": 768},
-            )
-            page = context.new_page()
-
-            # 1) Ir para login
-            print("[kuku-pw] abrindo página de login...")
-            page.goto(f"{KUKU_BASE}/index.php?action=login", wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_selector("#user_number", timeout=15000)
-
-            # 2) Preencher e submit
-            print("[kuku-pw] preenchendo credenciais...")
-            page.fill("#user_number", KUKU_USER)
-            page.fill("#user_password", KUKU_PASS)
-            page.evaluate("checkLogin()")
-
-            # 3) Lidar com confirmação de sync (clica em "No" para não mesclar a conta atual)
-            # Aguardar o diálogo aparecer
-            page.wait_for_timeout(3000)
-            # Tenta achar o botão "No"/"Não" do confirm dialog
-            try:
-                # O dialog tem 2 botões: o segundo (cancelar) chama syncconfirm=no
-                # Geralmente é .ui-popup .ui-btn:last-child ou similar
-                no_btn = page.locator("div[role='dialog'] a, .ui-popup a.ui-btn").last
-                if no_btn.is_visible(timeout=2000):
-                    print("[kuku-pw] clicando em 'No' do sync dialog...")
-                    no_btn.click()
-            except Exception as e:
-                print(f"[kuku-pw] sem dialog ou erro: {e}")
-
-            # 4) Aguardar redirect / carregamento da página logada
-            page.wait_for_timeout(5000)
-            # Tentar ir direto para recv.php
-            page.goto(f"{KUKU_BASE}/recv.php", wait_until="domcontentloaded", timeout=45000)
-            page.wait_for_timeout(3000)
-
-            # 5) Capturar cookies
-            pw_cookies = context.cookies(KUKU_BASE)
-            for c in pw_cookies:
-                cookies_dict[c["name"]] = c["value"]
-            print(f"[kuku-pw] cookies capturados: {list(cookies_dict.keys())}")
-            # Validar: ver se a página logada tem emails (procurar 'mensagens')
-            html = page.content()
-            m = re.search(r"(\d+)\+?\s*mensagens", html)
-            print(f"[kuku-pw] mensagens na página: {m.group(0) if m else 'AUSENTE'}")
-
-            browser.close()
-    except Exception as e:
-        print(f"[kuku-pw] erro: {type(e).__name__}: {e}")
-        return {}
-    return cookies_dict
-
-
-def _kuku_login():
-    """Faz login no kuku.lu. Usa Playwright (Chromium real) para evitar bloqueios.
-    Cache de 30 minutos. Thread-safe."""
-    import time as _t
-    with _kuku_login_lock:
-        now = _t.time()
-        if _kuku_session_cache["session"] and now < _kuku_session_cache["expires_at"]:
-            return (_kuku_session_cache["session"], _kuku_session_cache["csrf"],
-                    _kuku_session_cache["sub"], _kuku_session_cache["uid"])
-        return _kuku_do_login(now)
-
-def _kuku_do_login(now):
-    import time as _t
-    try:
-        from curl_cffi import requests as _cf_req
-    except ImportError:
-        print("[kuku] curl_cffi não instalado!")
-        return (None, "", "", "")
-
-    # ╔═ PASSO 1: Login via Playwright ═╗
-    cookies_dict = _kuku_login_playwright()
-    if not cookies_dict.get("cookie_sessionhash"):
-        print("[kuku] Playwright não retornou cookie de sessão")
-        return (None, "", "", "")
-
-    # ╔═ PASSO 2: Transferir cookies do Playwright -> curl_cffi (mais rápido p/ requests futuros) ═╗
-    s = _cf_req.Session(impersonate="chrome120")
-    s.headers.update({
-        "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8",
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    })
-    for k, v in cookies_dict.items():
-        s.cookies.set(k, v, domain="m.kuku.lu", path="/")
-
-    uid = cookies_dict.get("cookie_sessionhash", "")
-    csrf = cookies_dict.get("cookie_csrf_token", "")
-
-    # ╔═ PASSO 3: GET recv.php para pegar csrf_subtoken_check ═╗
-    sub = ""
-    try:
-        r = s.get(f"{KUKU_BASE}/recv.php", timeout=30)
-        print(f"[kuku] GET recv.php logado: HTTP {r.status_code}, len={len(r.text)}")
-        m = re.search(r'csrf_subtoken_check=([a-f0-9]{32})', r.text)
-        if m: sub = m.group(1)
-        m2 = re.search(r'csrf_token_check=([a-f0-9]{32})', r.text)
-        if m2: csrf = m2.group(1)
-    except Exception as e:
-        print(f"[kuku] erro GET recv.php: {e}")
-
-    print(f"[kuku] ✅ sessão pronta — uid={uid}, csrf={csrf[:8]}..., sub={sub[:8]}...")
-
-    # cache 30 min
-    _kuku_session_cache.update({
-        "session": s, "csrf": csrf, "sub": sub, "uid": uid,
-        "cookies": cookies_dict, "expires_at": now + 1800,
-    })
-    return (s, csrf, sub, uid)
-
-
-def _kuku_fetch_inbox_html():
-    """Pega o HTML do recv.php COM a conta logada (que tem 7000+ emails).
-    Retorna (html, csrf, sub) ou (None, '', '')."""
-    s, csrf, sub, uid = _kuku_login()
-    if not s:
-        return (None, "", "")
-    try:
-        r = s.get(f"{KUKU_BASE}/recv.php", timeout=30)
-        print(f"[kuku] GET /recv.php logado: HTTP {r.status_code}, len={len(r.text)}")
-        if r.status_code != 200 or len(r.text) < 5000:
-            return (None, csrf, sub)
-        # Atualiza tokens se possível
-        m1 = re.search(r'csrf_token_check=([a-f0-9]{32})', r.text)
-        m2 = re.search(r'csrf_subtoken_check=([a-f0-9]{32})', r.text)
-        if m1: csrf = m1.group(1)
-        if m2: sub = m2.group(1)
-        return (r.text, csrf, sub)
-    except Exception as e:
-        print(f"[kuku] erro GET inbox: {e}")
-        return (None, csrf, sub)
-
-
-def _kuku_fetch_mail_content(mail_num):
-    """Busca o CONTEÚDO COMPLETO de um email específico via smphone.app.recv.view.php"""
-    s, csrf, sub, _ = _kuku_login()
-    if not s:
-        return ""
-    try:
-        r = s.post(f"{KUKU_BASE}/smphone.app.recv.view.php", data={
-            "num": str(mail_num), "key": "", "noscroll": "1",
-            "csrf_token_check": csrf, "csrf_subtoken_check": sub,
-        }, headers={"Referer": f"{KUKU_BASE}/recv.php"}, timeout=30)
-        if r.status_code == 200 and len(r.text) > 100:
-            return r.text
-    except Exception as e:
-        print(f"[kuku] erro fetch mail {mail_num}: {e}")
-    return ""
-
-
-def kuku_search_code(user_email, platform):
-    """Procura código/link na caixa kuku.lu para um email destinatário específico.
-    Retorna (code, link, error)."""
-    print(f"[kuku] busca: email='{user_email}' platform='{platform}'")
-    html, csrf, sub = _kuku_fetch_inbox_html()
-    if not html:
-        return (None, None, "Não foi possível acessar a caixa kuku.lu. Tente novamente em alguns segundos.")
-
-    # Estratégia: percorrer os DIVs area_mail_NUM no HTML do inbox e filtrar pelo destinatário
-    # Cada bloco contém: para_email, remetente, assunto, link p/ smphone.app.recv.view.php?num=NUM
-    mail_ids = sorted(set(re.findall(r'area_mail_(\d+)', html)), key=int, reverse=True)
-    print(f"[kuku] {len(mail_ids)} IDs de email no inbox")
-    if not mail_ids:
-        return (None, None, "Caixa kuku.lu está vazia ou inacessível no momento.")
-
-    # PLATFORM_CONFIG (definido em outra parte): pega senders + negative + positive keywords
-    pcfg = PLATFORM_CONFIG.get(platform, {})
-    senders = [s.lower() for s in pcfg.get("senders", [])]
-    positive_kw = [k.lower() for k in pcfg.get("positive_keywords", [])]
-    negative_kw = [k.lower() for k in pcfg.get("negative_keywords", [])]
-    is_link_platform = pcfg.get("return_type") == "link"
-
-    ulow = user_email.strip().lower()
-    checked = 0
-    # Limita a 150 emails mais recentes para velocidade
-    for mid in mail_ids[:150]:
-        checked += 1
-        body = _kuku_fetch_mail_content(mid)
-        if not body:
-            continue
-        body_low = body.lower()
-        # 1) Filtro destinatário
-        if ulow not in body_low:
-            continue
-        # 2) Filtro sender (se configurado)
-        if senders and not any(snd in body_low for snd in senders):
-            continue
-        # 3) Filtro negative keywords
-        if any(nk in body_low for nk in negative_kw):
-            continue
-        # 4) Filtro positive keywords (se configurado, precisa pelo menos 1)
-        if positive_kw and not any(pk in body_low for pk in positive_kw):
-            continue
-
-        print(f"[kuku] ✅ match em mail #{mid}")
-        # Se é plataforma de link, procura link específico
-        if is_link_platform:
-            link_pat = pcfg.get("link_pattern")
-            if link_pat:
-                m = re.search(link_pat, body)
-                if m:
-                    return (None, m.group(0), None)
-        # Senão extrai o código
-        code = extract_code_from_html(body)
-        if code:
-            return (code, None, None)
-
-    print(f"[kuku] {checked} emails checados, sem match")
-    return (None, None, f"Nenhum email {platform} encontrado para {user_email} na caixa kuku.lu.")
-
-
-def _is_rios_host():
-    """True se o request atual vem de rios.up.railway.app"""
-    try:
-        host = request.host.lower()
-        return "rios" in host
-    except Exception:
-        return False
-
-
 def search_code_unified(user_email, platform_list):
     """
     Busca múltiplas plataformas do mesmo remetente em UMA ÚNICA passagem IMAP.
@@ -2967,41 +2736,8 @@ def get_code():
     username = session.get("username")
     _clear_pending_reset_link(username)
 
-    # ╔═══ RIOS: usar APENAS kuku.lu ═══╗
-    if _is_rios_host():
-        print(f"[get-code] RIOS detectado — usando kuku.lu para email={user_email} platform={platform}")
-        # Expandir platform-all em UNIFIED_MAP
-        if platform in UNIFIED_MAP:
-            subs, err_msg = UNIFIED_MAP[platform]
-            for sub_plat in subs:
-                code, link, error = kuku_search_code(user_email, sub_plat)
-                if code:
-                    return jsonify({"success": True, "code": code, "platform": sub_plat, "type": "code"})
-                if link:
-                    if sub_plat == "password-reset":
-                        _set_pending_reset_link(username, link)
-                        return jsonify({
-                            "success": True, "platform": "password-reset",
-                            "type": "pin_required", "pin_required": True,
-                            "message": "PIN necessário para liberar o link de redefinição."
-                        })
-                    return jsonify({"success": True, "link": link, "platform": sub_plat, "type": "link"})
-            return jsonify({"success": False, "message": err_msg})
-        # Plataforma simples
-        code, link, error = kuku_search_code(user_email, platform)
-        if code:
-            return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})
-        if link:
-            if platform == "password-reset":
-                _set_pending_reset_link(username, link)
-                return jsonify({
-                    "success": True, "platform": "password-reset",
-                    "type": "pin_required", "pin_required": True,
-                    "message": "PIN necessário."
-                })
-            return jsonify({"success": True, "link": link, "platform": platform, "type": "link"})
-        return jsonify({"success": False, "message": error or "Não encontrado na caixa kuku.lu."})
-    # ╚═══ FIM RIOS ═══╝
+    # NOTA: o RIOS usa automaticamente a caixa ggtv.net.br via get_imap_accounts()
+    # (detecção por host). A busca IMAP padrão abaixo já funciona normalmente.
 
     if platform in UNIFIED_MAP:
         subs, err_msg = UNIFIED_MAP[platform]
@@ -4247,88 +3983,6 @@ def api_site_mode():
         "host": get_current_host()
     })
 
-@app.route("/api/admin/kuku-status", methods=["GET"])
-@admin_required
-def api_admin_kuku_status():
-    """Diagnóstico da integração kuku.lu — mostra se login e inbox funcionam.
-    Aceita ?cookie=SHASH:xxx para usar cookie do navegador do usuário diretamente (bônus).
-    """
-    # invalida cache
-    _kuku_session_cache.update({"session": None, "expires_at": 0})
-    forced_cookie = (request.args.get("cookie") or "").strip()
-    out = {
-        "is_rios_host": _is_rios_host(),
-        "kuku_user": KUKU_USER,
-        "step1_login": None, "step2_inbox": None,
-        "uid": "", "emails_count": 0, "unread_count": 0,
-        "addresses": [], "sample_mail_ids": [],
-        "forced_cookie": forced_cookie[:30] + "..." if forced_cookie else "",
-        "inbox_len": 0, "cookies_after_inbox": {}, "set_cookie_headers": [],
-        "error": None,
-    }
-    try:
-        from curl_cffi import requests as _cf_req
-        import urllib.parse as _up
-
-        if forced_cookie:
-            # Modo 1: usar cookie fornecido (do navegador do usuário)
-            s = _cf_req.Session(impersonate="chrome120")
-            s.headers.update({"Accept-Language": "pt-BR,pt;q=0.9"})
-            # tenta decodificar SHASH%3A -> SHASH:
-            decoded = _up.unquote(forced_cookie)
-            s.cookies.set("cookie_sessionhash", decoded, domain="m.kuku.lu", path="/")
-            out["step1_login"] = "FORCED_COOKIE"
-            out["uid"] = decoded
-        else:
-            s, csrf, sub, uid = _kuku_login()
-            if not s:
-                out["step1_login"] = "FAIL"
-                out["error"] = "login kuku.lu falhou"
-                return jsonify(out)
-            out["step1_login"] = "OK"
-            out["uid"] = uid
-
-        # GET inbox e capturar headers
-        r = s.get(f"{KUKU_BASE}/recv.php", timeout=30)
-        out["inbox_http"] = r.status_code
-        out["inbox_len"] = len(r.text)
-        out["cookies_after_inbox"] = dict(s.cookies)
-        # capturar set-cookie
-        set_cookies = []
-        for h, v in r.headers.items():
-            if h.lower() == "set-cookie":
-                set_cookies.append(v[:120])
-        out["set_cookie_headers"] = set_cookies
-
-        if r.status_code == 200 and len(r.text) > 5000:
-            out["step2_inbox"] = "OK"
-            html = r.text
-            m = re.search(r"\((\d{3,5})\)\s*como\s*lid", html)
-            out["unread_count"] = int(m.group(1)) if m else 0
-            # tentar tambem em ingles e japones
-            if not out["unread_count"]:
-                m = re.search(r"\((\d{3,5})\)\s*(?:as|read)", html)
-                out["unread_count"] = int(m.group(1)) if m else 0
-            addrs = sorted(set(re.findall(r'[\w\.\+\-]+@(?:boxf\.uk|themail\.net|chozz\.is|prin\.cc|haren\.cc|instaddr\.uk|otona\.uk|nekosan\.uk|exwa\.org|choco\.la|cross\.tv|m1y\.email|m1y\.eu|kuku\.lu)', html)))
-            out["addresses"] = addrs[:20]
-            ids = sorted(set(re.findall(r'area_mail_(\d+)', html)), key=int, reverse=True)
-            out["emails_count"] = len(ids)
-            out["sample_mail_ids"] = ids[:10]
-            # peek do HTML
-            # procura primeira ocorrencia de "mensagens" ou "messages"
-            out["snippet_mensagens"] = ""
-            mm = re.search(r".{0,80}mensagens.{0,80}", html)
-            if mm: out["snippet_mensagens"] = mm.group(0).strip()[:300]
-            # IP visto pelo kuku.lu
-            ipm = re.search(r'ip=([\d\.]+)', html)
-            out["server_ip_in_html"] = ipm.group(1) if ipm else ""
-        else:
-            out["step2_inbox"] = "FAIL"
-            out["error"] = f"inbox HTTP {r.status_code}, len={len(r.text)}"
-            out["inbox_preview"] = r.text[:300]
-    except Exception as e:
-        out["error"] = f"{type(e).__name__}: {e}"
-    return jsonify(out)
 
 @app.route("/api/debug/imap", methods=["GET"])
 def api_debug_imap():

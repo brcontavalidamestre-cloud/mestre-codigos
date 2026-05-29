@@ -3,5 +3,3 @@ flask-cors==4.0.0
 gunicorn==21.2.0
 Werkzeug==3.0.1
 efipay==1.0.7
-curl_cffi==0.7.4
-playwright==1.48.0
