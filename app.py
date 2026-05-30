@@ -489,6 +489,14 @@ PLATFORM_CONFIG = {
             "este código vence em 15 minutos",
             "código vence em 15 minutos",
             "este codigo vence em 15 minutos",
+            "o código expira após 15 minutos",
+            "o codigo expira apos 15 minutos",
+            "código expira após 15 minutos",
+            "codigo expira apos 15 minutos",
+            "expira após 15 minutos",
+            "expira apos 15 minutos",
+            "verifique com este código",
+            "verifique com este codigo",
             "código de verificação",
             "codigo de verificacao",
             # Inglês
@@ -530,6 +538,14 @@ PLATFORM_CONFIG = {
             "este código vence em 15 minutos",
             "código vence em 15 minutos",
             "este codigo vence em 15 minutos",
+            "o código expira após 15 minutos",
+            "o codigo expira apos 15 minutos",
+            "código expira após 15 minutos",
+            "codigo expira apos 15 minutos",
+            "expira após 15 minutos",
+            "expira apos 15 minutos",
+            "verifique com este código",
+            "verifique com este codigo",
             "código de verificação",
             "codigo de verificacao",
             # Inglês
@@ -1814,9 +1830,9 @@ def search_code_unified(user_email, platform_list):
                 if "netflix-residence" in plat_configs:
                     targeted_platforms.append(("netflix-residence", ["residencia", "atualizar", "household", "hogar", "importante"]))
                 if "netflix" in plat_configs:
-                    targeted_platforms.append(("netflix", ["vence en 15", "vence em 15", "vence en quince", "vence em quinze", "expires in 15", "código de verificación", "codigo de verificacion", "código de verificação", "codigo de verificacao", "verification code", "15 minutos", "15 minutes"]))
+                    targeted_platforms.append(("netflix", ["vence en 15", "vence em 15", "vence en quince", "vence em quinze", "expires in 15", "expira ap", "expira após 15", "expira apos 15", "verifique com este", "código de verificación", "codigo de verificacion", "código de verificação", "codigo de verificacao", "verification code", "15 minutos", "15 minutes"]))
                 if "netflix-login" in plat_configs:
-                    targeted_platforms.append(("netflix-login", ["vence en 15", "vence em 15", "expires in 15", "código de verificación", "codigo de verificacion", "código de verificação", "codigo de verificacao", "verification code", "15 minutos", "15 minutes"]))
+                    targeted_platforms.append(("netflix-login", ["vence en 15", "vence em 15", "expires in 15", "expira ap", "expira após 15", "expira apos 15", "verifique com este", "código de verificación", "codigo de verificacion", "código de verificação", "codigo de verificacao", "verification code", "15 minutos", "15 minutes"]))
                 if "disney" in plat_configs:
                     targeted_platforms.append(("disney", ["codigo de acesso", "acesso unico", "access code", "verification code", "passcode", "codigo de verificacion"]))
                 if "max" in plat_configs:
