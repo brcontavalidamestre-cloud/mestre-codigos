@@ -257,6 +257,10 @@ PRODUCTS_FILE       = os.environ.get("PRODUCTS_FILE", os.path.join(_data_dir, "p
 STOCK_FILE          = os.environ.get("STOCK_FILE", os.path.join(_data_dir, "stock.json"))
 ORDERS_FILE         = os.environ.get("ORDERS_FILE", os.path.join(_data_dir, "orders.json"))
 LICENSES_FILE       = os.environ.get("LICENSES_FILE", os.path.join(_data_dir, "licenses.json"))
+# Caixa de emails recebidos via WEBHOOK do kuku.lu (apenas rios)
+KUKU_WEBHOOK_FILE   = os.environ.get("KUKU_WEBHOOK_FILE", os.path.join(_data_dir, "kuku_webhook_mails.json"))
+# Token simples p/ validar o webhook (configurável via env)
+KUKU_WEBHOOK_TOKEN  = os.environ.get("KUKU_WEBHOOK_TOKEN", "rios2026kuku")
 
 # Domínio do painel MESTRE (só ele pode gerenciar licenças).
 # Pode incluir múltiplos separados por vírgula via env MASTER_DOMAINS.
@@ -1793,6 +1797,76 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
     matched.reverse()
     return matched
 
+
+def _search_kuku_webhook(user_email, platform):
+    """Procura código/link nos emails recebidos via webhook do kuku.lu.
+    Retorna (code, link, matched_platform). Usado apenas no rios.
+    """
+    try:
+        mails = _read_json_safe(KUKU_WEBHOOK_FILE, [])
+    except Exception:
+        return (None, None, None)
+    if not mails:
+        return (None, None, None)
+
+    ulow = (user_email or "").strip().lower()
+
+    # Determina lista de plataformas a verificar
+    UNIFIED = {
+        "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"],
+        "disney-all":  ["disney", "disney-residence"],
+        "globo-all":   ["bug-globo", "codigo-globo", "senha-globo"],
+        "streaming-all": ["max", "prime-video"],
+    }
+    plats = UNIFIED.get(platform, [platform])
+
+    # Percorre emails do mais recente p/ o mais antigo
+    for mail in reversed(mails):
+        to_addr = (mail.get("to") or "").lower()
+        # Filtro destinatário (precisa bater)
+        if ulow and ulow not in to_addr and to_addr not in ulow:
+            # também verifica se o email aparece no corpo (forward pode mudar o To)
+            if ulow not in (mail.get("body") or "").lower():
+                continue
+        subject = (mail.get("subject") or "")
+        body    = (mail.get("body") or "")
+        frm     = (mail.get("from") or "")
+        combined = f"{subject}\n{frm}\n{body}"
+        clow = combined.lower()
+
+        for plat in plats:
+            pcfg = PLATFORM_CONFIG.get(plat, {})
+            if not pcfg:
+                continue
+            from_kw = (pcfg.get("from_keyword") or "").lower()
+            subj_kws = [k.lower() for k in pcfg.get("subject_keywords", [])]
+            neg_kws  = [k.lower() for k in pcfg.get("negative_keywords", [])]
+            # 1) remetente
+            if from_kw and from_kw not in clow:
+                continue
+            # 2) negative
+            if any(nk in clow for nk in neg_kws):
+                continue
+            # 3) subject keyword (pelo menos 1, se configurado)
+            if subj_kws and not any(sk in clow for sk in subj_kws):
+                continue
+            # match! extrai código ou link
+            if pcfg.get("type") == "link" or plat in ("netflix-temp", "netflix-residence", "password-reset", "disney-residence"):
+                link_pat = pcfg.get("link_pattern")
+                if link_pat:
+                    m = re.search(link_pat, combined)
+                    if m:
+                        return (None, m.group(0), plat)
+                # fallback: qualquer link netflix
+                m = re.search(r'https?://[^\s"\'<>]+', combined)
+                if m:
+                    return (None, m.group(0), plat)
+            code = extract_code_from_html(combined)
+            if code:
+                return (code, None, plat)
+    return (None, None, None)
+
+
 def search_code_unified(user_email, platform_list):
     """
     Busca múltiplas plataformas do mesmo remetente em UMA ÚNICA passagem IMAP.
@@ -2819,6 +2893,20 @@ def get_code():
 
     # NOTA: o RIOS usa automaticamente a caixa ggtv.net.br via get_imap_accounts()
     # (detecção por host). A busca IMAP padrão abaixo já funciona normalmente.
+
+    # ╔══ RIOS: tentar PRIMEIRO os emails recebidos via webhook kuku.lu ══╗
+    if _is_rios_request():
+        wh_code, wh_link, wh_plat = _search_kuku_webhook(user_email, platform)
+        if wh_code:
+            return jsonify({"success": True, "code": wh_code, "platform": wh_plat or platform, "type": "code"})
+        if wh_link:
+            if wh_plat == "password-reset":
+                _set_pending_reset_link(username, wh_link)
+                return jsonify({"success": True, "platform": "password-reset",
+                                "type": "pin_required", "pin_required": True,
+                                "message": "PIN necessário para liberar o link de redefinição."})
+            return jsonify({"success": True, "link": wh_link, "platform": wh_plat or platform, "type": "link"})
+        # se não achou no webhook, continua para a busca IMAP (ggtv) abaixo
 
     if platform in UNIFIED_MAP:
         subs, err_msg = UNIFIED_MAP[platform]
@@ -4039,6 +4127,104 @@ def api_admin_migrate_users():
     except Exception as e:
         import traceback
         return jsonify({"success": False, "message": f"Erro: {e}", "trace": traceback.format_exc()[:500]}), 500
+
+# ╔═══════════════════════════════════════════════════════════════╗
+# ║  WEBHOOK KUKU.LU — recebe emails encaminhados do InstAddr (apenas rios) ║
+# ╚═══════════════════════════════════════════════════════════════╝
+def _load_kuku_mails():
+    return _read_json_safe(KUKU_WEBHOOK_FILE, [])
+
+def _save_kuku_mails(mails):
+    try:
+        parent = os.path.dirname(KUKU_WEBHOOK_FILE)
+        if parent:
+            os.makedirs(parent, exist_ok=True)
+        with open(KUKU_WEBHOOK_FILE, "w") as f:
+            json.dump(mails, f, ensure_ascii=False)
+    except Exception as e:
+        print(f"[kuku-webhook] erro salvar: {e}")
+
+@app.route("/api/kuku-webhook", methods=["POST", "GET"])
+def api_kuku_webhook():
+    """Recebe emails encaminhados do kuku.lu via webhook.
+    Aceita JSON, form-data ou query params. Campos flexíveis:
+      - to / para / recipient / address  -> destinatário
+      - from / de / sender                -> remetente
+      - subject / assunto                 -> assunto
+      - body / text / html / message      -> corpo
+      - token                             -> validação (opcional)
+    Armazena os últimos 500 emails para consulta.
+    """
+    # Coletar dados de qualquer formato
+    data = {}
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+    if not data:
+        data = request.form.to_dict() if request.form else {}
+    if not data:
+        data = request.args.to_dict() if request.args else {}
+    # raw body fallback
+    raw_body = ""
+    try:
+        raw_body = request.get_data(as_text=True) or ""
+    except Exception:
+        pass
+
+    # token opcional
+    token = data.get("token") or request.args.get("token") or request.headers.get("X-Webhook-Token", "")
+    if KUKU_WEBHOOK_TOKEN and token != KUKU_WEBHOOK_TOKEN:
+        # não bloqueia totalmente (kuku pode não mandar token), mas loga
+        print(f"[kuku-webhook] token ausente/invalido (recebido: '{token[:10]}')")
+
+    def _pick(*keys):
+        for k in keys:
+            v = data.get(k)
+            if v:
+                return str(v)
+        return ""
+
+    to_addr  = _pick("to", "para", "recipient", "address", "mailaddr", "endereco").lower()
+    from_addr = _pick("from", "de", "sender", "remetente")
+    subject  = _pick("subject", "assunto", "titulo", "title")
+    body     = _pick("body", "text", "html", "message", "conteudo", "content") or raw_body
+
+    # Se nada veio estruturado, tenta extrair do raw
+    if not (to_addr or subject or body):
+        body = raw_body
+
+    entry = {
+        "to": to_addr,
+        "from": from_addr,
+        "subject": subject,
+        "body": body[:20000],   # limita tamanho
+        "received_at": int(time.time()),
+    }
+
+    mails = _load_kuku_mails()
+    mails.append(entry)
+    # mantém só os últimos 500
+    if len(mails) > 500:
+        mails = mails[-500:]
+    _save_kuku_mails(mails)
+    print(f"[kuku-webhook] ✅ email recebido: to={to_addr} subj='{subject[:40]}'")
+    return jsonify({"success": True, "stored": True, "total": len(mails)})
+
+@app.route("/api/admin/kuku-webhook-status", methods=["GET"])
+@admin_required
+def api_kuku_webhook_status():
+    """Mostra os últimos emails recebidos via webhook (diagnóstico)."""
+    mails = _load_kuku_mails()
+    recent = mails[-15:][::-1]
+    return jsonify({
+        "total": len(mails),
+        "webhook_url": f"https://rios.up.railway.app/api/kuku-webhook?token={KUKU_WEBHOOK_TOKEN}",
+        "recent": [{
+            "to": m.get("to", ""),
+            "from": m.get("from", ""),
+            "subject": m.get("subject", "")[:60],
+            "received_at": m.get("received_at", 0),
+        } for m in recent]
+    })
 
 @app.route("/api/health", methods=["GET"])
 def health():
