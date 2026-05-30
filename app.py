@@ -95,6 +95,61 @@ def load_users():
     save_users(default)
     return default
 
+
+# ╔═══ AUTO-RESTAURAÇÃO DE USUÁRIOS (apenas JMP) ═══╗
+# Se o JMP perder os usuários (redeploy sem volume), restaura automaticamente
+# do web-production-ea8b3 no primeiro acesso. Roda 1x por processo.
+JMP_AUTO_RESTORE_SOURCE = os.environ.get(
+    "JMP_AUTO_RESTORE_SOURCE",
+    "https://web-production-ea8b3.up.railway.app"
+)
+JMP_AUTO_RESTORE_PASS = os.environ.get("JMP_AUTO_RESTORE_PASS", "admin123")
+_jmp_autorestore_done = False
+
+def _jmp_auto_restore_users():
+    """Restaura usuários do source se a base local estiver quase vazia.
+    Só roda no host jmp.up.railway.app, 1x por processo."""
+    global _jmp_autorestore_done
+    if _jmp_autorestore_done:
+        return
+    try:
+        host = (request.host or "").lower()
+    except Exception:
+        return
+    if "jmp" not in host:
+        return
+    _jmp_autorestore_done = True  # marca antes de tentar (evita loop)
+    try:
+        users = load_users()
+        # Se já tem usuários suficientes (>5), não precisa restaurar
+        if len(users) > 5:
+            print(f"[jmp-autorestore] {len(users)} usuarios presentes, OK")
+            return
+        print(f"[jmp-autorestore] apenas {len(users)} usuarios — restaurando de {JMP_AUTO_RESTORE_SOURCE}")
+        import urllib.request as _ur, urllib.parse as _upp, http.cookiejar as _cj
+        cookies = _cj.CookieJar()
+        opener = _ur.build_opener(_ur.HTTPCookieProcessor(cookies))
+        # 1) login no source
+        login_data = json.dumps({"username": "admin", "password": JMP_AUTO_RESTORE_PASS}).encode()
+        req = _ur.Request(f"{JMP_AUTO_RESTORE_SOURCE}/api/auth/login", data=login_data,
+                          headers={"Content-Type": "application/json"})
+        opener.open(req, timeout=20).read()
+        # 2) pegar export de usuários (endpoint backup/export retorna data.users)
+        req = _ur.Request(f"{JMP_AUTO_RESTORE_SOURCE}/api/admin/backup/export")
+        resp = opener.open(req, timeout=25).read()
+        data = json.loads(resp)
+        src_users = (data.get("data") or {}).get("users") or {}
+        if not src_users:
+            print("[jmp-autorestore] source sem usuarios, abortando")
+            return
+        # 3) merge (mantém os locais, adiciona os do source)
+        merged = dict(src_users)
+        merged.update(users)  # locais têm prioridade
+        save_users(merged)
+        print(f"[jmp-autorestore] ✅ restaurado: {len(merged)} usuarios totais")
+    except Exception as e:
+        print(f"[jmp-autorestore] erro: {type(e).__name__}: {e}")
+
 def save_users(users):
     try:
         parent = os.path.dirname(USERS_FILE)
@@ -1964,6 +2019,16 @@ _LICENSE_BYPASS_PATHS = (
     "/static/",
     "/favicon.ico",
 )
+
+@app.before_request
+def _jmp_autorestore_hook():
+    """Dispara auto-restauração de usuários no JMP (1x por processo)."""
+    if not _jmp_autorestore_done:
+        try:
+            _jmp_auto_restore_users()
+        except Exception:
+            pass
+    return None
 
 @app.before_request
 def _license_gate():
