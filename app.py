@@ -4234,6 +4234,27 @@ def api_kuku_webhook():
     if len(mails) > 500:
         mails = mails[-500:]
     _save_kuku_mails(mails)
+
+    # ╔═ MODO DEBUG: salva a ÚLTIMA requisição crua para diagnóstico ═╗
+    try:
+        debug_info = {
+            "received_at": int(time.time()),
+            "method": request.method,
+            "content_type": request.content_type or "",
+            "headers": {k: v for k, v in request.headers.items()},
+            "args": request.args.to_dict(),
+            "form": request.form.to_dict(),
+            "is_json": request.is_json,
+            "json_parsed": data if isinstance(data, dict) else {},
+            "raw_body": raw_body[:5000],
+            "parsed_result": {"to": to_addr, "from": from_addr, "subject": subject, "body": body[:500]},
+        }
+        dbg_path = os.path.join(os.path.dirname(KUKU_WEBHOOK_FILE), "kuku_webhook_debug.json")
+        with open(dbg_path, "w") as f:
+            json.dump(debug_info, f, ensure_ascii=False, indent=2)
+    except Exception as _e:
+        print(f"[kuku-webhook] erro debug: {_e}")
+
     print(f"[kuku-webhook] ✅ email recebido: to={to_addr} subj='{subject[:40]}'")
     return jsonify({"success": True, "stored": True, "total": len(mails)})
 
@@ -4253,6 +4274,13 @@ def api_kuku_webhook_status():
             "received_at": m.get("received_at", 0),
         } for m in recent]
     })
+
+@app.route("/api/admin/kuku-webhook-debug", methods=["GET"])
+@admin_required
+def api_kuku_webhook_debug():
+    """Mostra a ÚLTIMA requisição crua recebida no webhook (para diagnosticar formato)."""
+    dbg_path = os.path.join(os.path.dirname(KUKU_WEBHOOK_FILE), "kuku_webhook_debug.json")
+    return jsonify(_read_json_safe(dbg_path, {"message": "nenhuma requisição capturada ainda"}))
 
 @app.route("/api/health", methods=["GET"])
 def health():
