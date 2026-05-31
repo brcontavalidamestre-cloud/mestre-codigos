@@ -1610,6 +1610,85 @@
       });
     })();
 
+
+    // ── TEMA RIO APPS (La Casa de Papel) — vitrine lojario ──
+    (function() {
+      const host = (window.location.hostname || '').toLowerCase();
+      const isLojaRio = host.includes('lojario') || host.includes('loja-rio') || host.includes('rioapps');
+      if (!isLojaRio) return;
+
+      const style = document.createElement('style');
+      style.textContent = `
+        /* === TEMA RIO APPS — vermelho Casa de Papel + dourado === */
+        body { background-color:#0a0000 !important; }
+        h1#site-title-h1, .site-title-h1, header h1 {
+          background: linear-gradient(135deg, #fcd34d 0%, #f59e0b 25%, #dc2626 50%, #b91c1c 70%, #fcd34d 100%) !important;
+          background-size: 240% auto !important;
+          -webkit-background-clip: text !important;
+          -webkit-text-fill-color: transparent !important;
+          background-clip: text !important;
+          animation: rioapps-shimmer 3.5s linear infinite;
+          letter-spacing: 0.18em !important;
+          text-shadow: 0 0 45px rgba(220,38,38,0.4);
+          font-weight: 900 !important;
+        }
+        @keyframes rioapps-shimmer { to { background-position: 240% center; } }
+        .subtitle, header p { color: #fca5a5 !important; opacity: 0.92; }
+        .logo-icon {
+          border: 2.5px solid #fcd34d !important;
+          box-shadow: 0 0 35px rgba(220,38,38,0.75), 0 0 80px rgba(245,158,11,0.3), inset 0 0 0 3px #0a0000 !important;
+          background: url('/static/rio-icon.jpg') center/cover !important;
+          font-size: 0 !important;
+        }
+        .logo-icon::after { content: '' !important; }
+        .gold-divider {
+          background: linear-gradient(90deg, transparent, #dc2626, #fcd34d, #dc2626, transparent) !important;
+          box-shadow: 0 0 15px rgba(245,158,11,0.4);
+        }
+        /* Cards de produto com vibe Casa de Papel */
+        .product-card, .prod-card, .card {
+          border: 1.5px solid rgba(252,211,77,0.35) !important;
+          box-shadow: 0 0 25px rgba(220,38,38,0.25) !important;
+        }
+        /* Botões vermelho/dourado */
+        button, .btn, .btn-buy, .buy-btn {
+          background: linear-gradient(135deg, #dc2626, #b91c1c) !important;
+          border: 1px solid #fcd34d !important;
+          color: #fff !important;
+        }
+      `;
+      document.head.appendChild(style);
+
+      document.addEventListener('DOMContentLoaded', function() {
+        // Título RIO APPS
+        const h1 = document.querySelector('h1#site-title-h1, .site-title-h1, header h1');
+        if (h1) h1.textContent = 'RIO APPS';
+        const sub = document.querySelector('header p, .subtitle');
+        if (sub) sub.textContent = '🎭 A casa dos melhores acessos — pague no Pix e receba na hora 🎭';
+        document.title = 'RIO APPS — La Casa de los Apps';
+
+        // Banner cinematográfico
+        const header = document.querySelector('header');
+        if (header && !document.getElementById('rioapps-banner')) {
+          const banner = document.createElement('div');
+          banner.id = 'rioapps-banner';
+          banner.style.cssText = 'width:100%;max-width:700px;margin:14px auto 0;border-radius:16px;overflow:hidden;border:1.5px solid rgba(252,211,77,0.5);box-shadow:0 0 35px rgba(220,38,38,0.5), 0 0 70px rgba(245,158,11,0.2);position:relative;z-index:1;';
+          banner.innerHTML = '<img src="/static/rio-banner-1200.jpg" alt="RIO APPS" style="width:100%;display:block"/>';
+          header.parentNode.insertBefore(banner, header);
+        }
+
+        // Fundo cinematográfico
+        document.body.style.backgroundImage = "linear-gradient(rgba(10,0,0,0.93), rgba(10,0,0,0.97)), url('/static/rio-bg.jpg')";
+        document.body.style.backgroundSize = 'cover';
+        document.body.style.backgroundAttachment = 'fixed';
+        document.body.style.backgroundPosition = 'center';
+
+        if (typeof stars !== 'undefined' && stars && stars.length) {
+          stars.forEach(s => { s.gold = Math.random() < 0.7; });
+        }
+      });
+    })();
+
     // ── TEMA STREAM ROGER (vermelho/laranja/azul) — BASEADO NO DOMÍNIO ──
     (function() {
       const host = (window.location.hostname || '').toLowerCase();
