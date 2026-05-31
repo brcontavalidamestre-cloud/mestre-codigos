@@ -3037,6 +3037,10 @@ def _proxy_to_master(path, method="GET", json_body=None, params=None):
 
 @app.route("/api/loja/produtos", methods=["GET"])
 def api_loja_produtos():
+    # ╔═ VITRINE LOJA 2: puxa produtos da Loja 2 (do rios), não da loja antiga ═╗
+    if _is_loja2_vitrine() and not _is_rios_request():
+        data, status = _proxy_loja2("/api/internal/loja2/produtos", method="GET")
+        return jsonify(data), status
     # Se for loja standalone, consulta o mestre via HTTP (estoque compartilhado)
     if is_loja_host() and not is_master_host():
         data, status = _proxy_to_master("/api/internal/loja/produtos", method="GET")
@@ -3087,6 +3091,11 @@ def api_internal_loja_produtos():
 
 @app.route("/api/loja/checkout", methods=["POST"])
 def api_loja_checkout():
+    # ╔═ VITRINE LOJA 2: checkout na Loja 2 (do rios), com Pix próprio ═╗
+    if _is_loja2_vitrine() and not _is_rios_request():
+        data = request.get_json(silent=True) or {}
+        result, status = _proxy_loja2("/api/internal/loja2/checkout", method="POST", json_body=data)
+        return jsonify(result), status
     # Loja standalone: faz proxy para o mestre (compartilha pedidos/estoque)
     if is_loja_host() and not is_master_host():
         data = request.get_json(silent=True) or {}
@@ -3198,6 +3207,11 @@ def _do_checkout():
 @app.route("/api/loja/meus-pedidos", methods=["POST"])
 def api_loja_meus_pedidos():
     """Histórico de compras do cliente — busca todos os pedidos por email."""
+    # ╔═ VITRINE LOJA 2: pedidos da Loja 2 ═╗
+    if _is_loja2_vitrine() and not _is_rios_request():
+        data = request.get_json(silent=True) or {}
+        result, status = _proxy_loja2("/api/internal/loja2/meus-pedidos", method="POST", json_body=data)
+        return jsonify(result), status
     # Loja standalone: consulta no mestre
     if is_loja_host() and not is_master_host():
         data = request.get_json(silent=True) or {}
