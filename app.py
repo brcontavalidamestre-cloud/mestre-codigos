@@ -2902,6 +2902,10 @@ def get_code():
     # NOTA: o RIOS usa automaticamente a caixa ggtv.net.br via get_imap_accounts()
     # (detecção por host). A busca IMAP padrão abaixo já funciona normalmente.
 
+    # ╔══ RIOS: mover spam->inbox automaticamente (throttle 2min, em thread) ══╗
+    if _is_rios_request():
+        _maybe_move_spam_async()
+
     # ╔══ RIOS: tentar PRIMEIRO os emails recebidos via webhook kuku.lu ══╗
     if _is_rios_request():
         wh_code, wh_link, wh_plat = _search_kuku_webhook(user_email, platform)
@@ -4346,6 +4350,82 @@ def api_kuku_webhook_debug():
     """Mostra a ÚLTIMA requisição crua recebida no webhook (para diagnosticar formato)."""
     dbg_path = os.path.join(os.path.dirname(KUKU_WEBHOOK_FILE), "kuku_webhook_debug.json")
     return jsonify(_read_json_safe(dbg_path, {"message": "nenhuma requisição capturada ainda"}))
+
+
+_last_spam_move = {"ts": 0}
+
+def _maybe_move_spam_async():
+    """Dispara mover_spam em thread, no máximo 1x a cada 2 minutos (throttle)."""
+    import time as _t
+    now = _t.time()
+    if now - _last_spam_move["ts"] < 120:
+        return
+    _last_spam_move["ts"] = now
+    accs = get_imap_accounts()
+    def _job():
+        for acc in accs:
+            try:
+                _move_spam_to_inbox(acc)
+            except Exception as e:
+                print(f"[spam-auto] erro: {e}")
+    try:
+        threading.Thread(target=_job, daemon=True).start()
+    except Exception as e:
+        print(f"[spam-auto] erro thread: {e}")
+
+
+def _move_spam_to_inbox(account_cfg, max_msgs=200):
+    """Move todos os emails das pastas de spam/junk para a INBOX.
+    Retorna (movidos, erro)."""
+    moved = 0
+    mail = None
+    try:
+        mail = connect_imap(account_cfg)
+        spam_boxes = _get_spam_boxes(mail, account_cfg)
+        for sbox in spam_boxes:
+            try:
+                st, _ = mail.select(sbox)
+                if st != "OK":
+                    continue
+                typ, data = mail.search(None, "ALL")
+                if typ != "OK" or not data[0]:
+                    continue
+                ids = data[0].split()[-max_msgs:]
+                if not ids:
+                    continue
+                id_str = b",".join(ids)
+                # COPY para INBOX e marca como deletado na pasta spam
+                try:
+                    mail.copy(id_str, "INBOX")
+                    mail.store(id_str, "+FLAGS", "\\Deleted")
+                    mail.expunge()
+                    moved += len(ids)
+                    print(f"[spam->inbox] movidos {len(ids)} de {sbox}")
+                except Exception as ce:
+                    print(f"[spam->inbox] erro copiar de {sbox}: {ce}")
+            except Exception as se:
+                print(f"[spam->inbox] erro pasta {sbox}: {se}")
+        _safe_logout(mail)
+        return moved, None
+    except Exception as e:
+        try:
+            if mail: _safe_logout(mail)
+        except Exception:
+            pass
+        return moved, f"{type(e).__name__}: {e}"
+
+
+@app.route("/api/admin/mover-spam", methods=["POST", "GET"])
+@admin_required
+def api_admin_mover_spam():
+    """Move manualmente todos os emails de spam/junk para a INBOX (todas as caixas do host)."""
+    total = 0
+    detalhes = []
+    for acc in get_imap_accounts():
+        moved, err = _move_spam_to_inbox(acc)
+        total += moved
+        detalhes.append({"caixa": acc.get("name"), "movidos": moved, "erro": err})
+    return jsonify({"success": True, "total_movidos": total, "detalhes": detalhes})
 
 @app.route("/api/health", methods=["GET"])
 def health():
