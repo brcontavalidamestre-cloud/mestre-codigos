@@ -258,6 +258,13 @@ PRODUCTS_FILE       = os.environ.get("PRODUCTS_FILE", os.path.join(_data_dir, "p
 STOCK_FILE          = os.environ.get("STOCK_FILE", os.path.join(_data_dir, "stock.json"))
 ORDERS_FILE         = os.environ.get("ORDERS_FILE", os.path.join(_data_dir, "orders.json"))
 LICENSES_FILE       = os.environ.get("LICENSES_FILE", os.path.join(_data_dir, "licenses.json"))
+
+# ╔══ LOJA 2 (nova loja vitrine, dados SEPARADOS, gerenciada pelo admin do rios) ══╗
+PRODUCTS_FILE_2     = os.environ.get("PRODUCTS_FILE_2", os.path.join(_data_dir, "products_loja2.json"))
+STOCK_FILE_2        = os.environ.get("STOCK_FILE_2", os.path.join(_data_dir, "stock_loja2.json"))
+ORDERS_FILE_2       = os.environ.get("ORDERS_FILE_2", os.path.join(_data_dir, "orders_loja2.json"))
+# Token que a nova loja usa para puxar dados do rios
+LOJA2_PROXY_TOKEN   = os.environ.get("LOJA2_PROXY_TOKEN", "rios-loja2-token-2026")
 # Caixa de emails recebidos via WEBHOOK do kuku.lu (apenas rios)
 KUKU_WEBHOOK_FILE   = os.environ.get("KUKU_WEBHOOK_FILE", os.path.join(_data_dir, "kuku_webhook_mails.json"))
 # Token simples p/ validar o webhook (configurável via env)
@@ -293,6 +300,46 @@ DEFAULT_PRODUCTS = [
     {"id": "max-premium",      "name": "Max Premium",           "price": 25.00, "emoji": "🎬", "color": "#7e22ce", "description": "Acesso Max Premium - liberação automática"},
     {"id": "prime-premium",    "name": "Prime Video Premium",   "price": 25.00, "emoji": "📺", "color": "#00a8e1", "description": "Acesso Prime Video - liberação automática"},
 ]
+
+# Produtos padrão da LOJA 2 (começa vazia — o admin cadastra)
+DEFAULT_PRODUCTS_2 = []
+
+def load_products2():
+    data = _read_json_file(PRODUCTS_FILE_2, None)
+    if data is None:
+        _write_json_file(PRODUCTS_FILE_2, DEFAULT_PRODUCTS_2)
+        return list(DEFAULT_PRODUCTS_2)
+    return data
+
+def save_products2(products):
+    return _write_json_file(PRODUCTS_FILE_2, products)
+
+def load_stock2():
+    data = _read_json_file(STOCK_FILE_2, {})
+    if not isinstance(data, dict):
+        data = {}
+    return data
+
+def save_stock2(stock):
+    if not isinstance(stock, dict):
+        stock = {}
+    return _write_json_file(STOCK_FILE_2, stock)
+
+def load_orders2():
+    data = _read_json_file(ORDERS_FILE_2, [])
+    if isinstance(data, dict):
+        try:
+            data = list(data.values())
+        except Exception:
+            data = []
+    if not isinstance(data, list):
+        data = []
+    return data
+
+def save_orders2(orders):
+    if not isinstance(orders, list):
+        orders = []
+    return _write_json_file(ORDERS_FILE_2, orders)
 
 def _read_json_file(path, default):
     if os.path.exists(path):
@@ -3645,6 +3692,189 @@ def api_admin_list_orders():
         import traceback
         print(f"[admin/pedidos] erro: {e}\n{traceback.format_exc()}")
         return jsonify({"success": False, "message": f"Erro: {e}", "orders": []})
+
+
+# ╔══════════════════════════════════════════════════════════════╗
+# ║  ADMIN LOJA 2 — gerenciar produtos/estoque/pedidos da NOVA loja (só no rios) ║
+# ║  Dados SEPARADOS (products_loja2.json, stock_loja2.json, orders_loja2.json)  ║
+# ╚══════════════════════════════════════════════════════════════╝
+@app.route("/api/admin/loja2/produtos", methods=["GET"])
+@admin_required
+def api_admin_loja2_list_products():
+    products = load_products2()
+    stock = load_stock2()
+    for p in products:
+        items = stock.get(p["id"], [])
+        p["available"] = sum(1 for i in items if not i.get("used"))
+        p["total"]     = len(items)
+        p["delivered"] = sum(1 for i in items if i.get("used"))
+    return jsonify({"success": True, "products": products})
+
+@app.route("/api/admin/loja2/produtos", methods=["POST"])
+@admin_required
+def api_admin_loja2_create_product():
+    """Cria um novo produto na Loja 2."""
+    data = request.get_json(silent=True) or {}
+    name = str(data.get("name", "")).strip()[:80]
+    if not name:
+        return jsonify({"success": False, "message": "Informe o nome do produto."}), 400
+    try:
+        price = float(str(data.get("price", "0")).replace(",", "."))
+    except Exception:
+        price = 0.0
+    import re as _re
+    base_id = _re.sub(r'[^a-z0-9]+', '-', name.lower()).strip('-') or "produto"
+    products = load_products2()
+    # garante id único
+    pid = base_id
+    n = 1
+    while any(p["id"] == pid for p in products):
+        n += 1
+        pid = f"{base_id}-{n}"
+    new_p = {
+        "id": pid,
+        "name": name,
+        "price": price,
+        "emoji": str(data.get("emoji", "🛍️")).strip()[:4] or "🛍️",
+        "color": str(data.get("color", "#7e22ce")).strip()[:20] or "#7e22ce",
+        "description": str(data.get("description", "")).strip()[:200],
+    }
+    products.append(new_p)
+    save_products2(products)
+    return jsonify({"success": True, "product": new_p})
+
+@app.route("/api/admin/loja2/produtos/<product_id>", methods=["PUT"])
+@admin_required
+def api_admin_loja2_update_product(product_id):
+    data = request.get_json(silent=True) or {}
+    products = load_products2()
+    product = next((p for p in products if p["id"] == product_id), None)
+    if not product:
+        return jsonify({"success": False, "message": "Produto não encontrado."}), 404
+    if "name" in data:
+        product["name"] = str(data["name"]).strip()[:80] or product["name"]
+    if "price" in data:
+        try:
+            product["price"] = float(str(data["price"]).replace(",", "."))
+        except Exception:
+            return jsonify({"success": False, "message": "Preço inválido."}), 400
+    if "description" in data:
+        product["description"] = str(data["description"]).strip()[:200]
+    if "emoji" in data:
+        product["emoji"] = str(data["emoji"]).strip()[:4]
+    if "color" in data:
+        product["color"] = str(data["color"]).strip()[:20]
+    save_products2(products)
+    return jsonify({"success": True, "product": product})
+
+@app.route("/api/admin/loja2/produtos/<product_id>", methods=["DELETE"])
+@admin_required
+def api_admin_loja2_delete_product(product_id):
+    products = load_products2()
+    new_products = [p for p in products if p["id"] != product_id]
+    if len(new_products) == len(products):
+        return jsonify({"success": False, "message": "Produto não encontrado."}), 404
+    save_products2(new_products)
+    # remove estoque associado
+    stock = load_stock2()
+    if product_id in stock:
+        del stock[product_id]
+        save_stock2(stock)
+    return jsonify({"success": True})
+
+@app.route("/api/admin/loja2/estoque/<product_id>", methods=["GET"])
+@admin_required
+def api_admin_loja2_list_stock(product_id):
+    stock = load_stock2()
+    return jsonify({"success": True, "items": stock.get(product_id, [])})
+
+@app.route("/api/admin/loja2/estoque/<product_id>", methods=["POST"])
+@admin_required
+def api_admin_loja2_add_stock(product_id):
+    data = request.get_json(silent=True) or {}
+    email_acc = str(data.get("email", "")).strip()
+    password  = str(data.get("password", "")).strip()
+    note      = str(data.get("note", "")).strip()
+    if not email_acc or not password:
+        return jsonify({"success": False, "message": "Informe email e senha do acesso."}), 400
+    products = load_products2()
+    if not any(p["id"] == product_id for p in products):
+        return jsonify({"success": False, "message": "Produto não encontrado."}), 404
+    stock = load_stock2()
+    items = stock.get(product_id, [])
+    new_item = {
+        "id":       f"acc2-{int(time.time()*1000)}",
+        "email":    email_acc,
+        "password": password,
+        "note":     note,
+        "used":     False,
+        "used_at":  None,
+        "delivered_to": None,
+        "order_id": None,
+        "created_at": int(time.time())
+    }
+    items.append(new_item)
+    stock[product_id] = items
+    save_stock2(stock)
+    return jsonify({"success": True, "item": new_item})
+
+@app.route("/api/admin/loja2/estoque/<product_id>/<item_id>", methods=["DELETE"])
+@admin_required
+def api_admin_loja2_delete_stock(product_id, item_id):
+    stock = load_stock2()
+    items = stock.get(product_id, [])
+    new_items = [i for i in items if i.get("id") != item_id]
+    if len(new_items) == len(items):
+        return jsonify({"success": False, "message": "Item não encontrado."}), 404
+    stock[product_id] = new_items
+    save_stock2(stock)
+    return jsonify({"success": True})
+
+@app.route("/api/admin/loja2/estoque/<product_id>/<item_id>/reset", methods=["POST"])
+@admin_required
+def api_admin_loja2_reset_stock(product_id, item_id):
+    stock = load_stock2()
+    items = stock.get(product_id, [])
+    for it in items:
+        if it.get("id") == item_id:
+            it["used"] = False
+            it["used_at"] = None
+            it["delivered_to"] = None
+            it["order_id"] = None
+            save_stock2(stock)
+            return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Item não encontrado."}), 404
+
+@app.route("/api/admin/loja2/pedidos", methods=["GET"])
+@admin_required
+def api_admin_loja2_list_orders():
+    try:
+        orders = load_orders2()
+        clean = [o for o in orders if isinstance(o, dict) and o.get("id")]
+        clean_sorted = sorted(clean, key=lambda o: o.get("created_at", 0) or 0, reverse=True)
+        return jsonify({"success": True, "orders": clean_sorted[:200]})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro: {e}", "orders": []})
+
+# ── Endpoints INTERNOS: rios serve dados da Loja 2 para a nova loja vitrine ──
+@app.route("/api/internal/loja2/produtos", methods=["GET"])
+def api_internal_loja2_produtos():
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != LOJA2_PROXY_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    products = load_products2()
+    stock = load_stock2()
+    result = []
+    for p in products:
+        items = stock.get(p["id"], [])
+        avail = sum(1 for i in items if not i.get("used"))
+        result.append({
+            "id": p["id"], "name": p["name"], "price": p.get("price", 0),
+            "emoji": p.get("emoji", "🛍️"), "color": p.get("color", "#7e22ce"),
+            "description": p.get("description", ""),
+            "available": avail, "has_stock": avail > 0
+        })
+    return jsonify({"success": True, "products": result})
 
 # ─── ROTAS ADMIN: LICENÇAS DE SITES FILHOS (só disponível no MESTRE) ────────────────
 def _master_admin_required(f):
