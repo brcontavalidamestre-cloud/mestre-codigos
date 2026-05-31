@@ -4184,13 +4184,41 @@ def api_kuku_webhook():
         return ""
 
     to_addr  = _pick("to", "para", "recipient", "address", "mailaddr", "endereco").lower()
-    from_addr = _pick("from", "de", "sender", "remetente")
+    from_addr = _pick("from", "de", "sender", "remetente", "username")
     subject  = _pick("subject", "assunto", "titulo", "title")
-    body     = _pick("body", "text", "html", "message", "conteudo", "content") or raw_body
+    body     = _pick("body", "text", "textbody", "html", "message", "conteudo", "content") or raw_body
+
+    # ╔═ Formato PADRÃO do kuku.lu: {"content": "#subject#\n#textbody#", "username": "#from#"} ═╗
+    # Nesse caso 'content' traz assunto+corpo juntos e não há 'to' nem 'subject' separados.
+    content_field = _pick("content")
+    if content_field:
+        # primeira linha = assunto, resto = corpo
+        parts = content_field.split("\n", 1)
+        if not subject:
+            subject = parts[0].strip()
+        if len(parts) > 1 and (not body or body == content_field):
+            body = content_field  # mantém tudo para extração
+        else:
+            body = content_field
 
     # Se nada veio estruturado, tenta extrair do raw
     if not (to_addr or subject or body):
         body = raw_body
+
+    # ╔═ Tentar achar o destinatário dentro do corpo/raw se não veio em 'to' ═╗
+    if not to_addr:
+        search_src = f"{body}\n{raw_body}\n{from_addr}"
+        # procura padrão 'Para: xxx@yyy' ou qualquer email de domínio descartável conhecido
+        m = re.search(r'(?:para|to)[:\s]+([\w\.\+\-]+@[\w\.\-]+)', search_src, re.IGNORECASE)
+        if m:
+            to_addr = m.group(1).lower()
+        else:
+            # pega qualquer email que NÃO seja de remetente conhecido (netflix/disney/etc)
+            for em in re.findall(r'[\w\.\+\-]+@[\w\.\-]+\.[a-z]+', search_src):
+                eml = em.lower()
+                if not any(b in eml for b in ["netflix", "disney", "account", "noreply", "no-reply", "info@", "mail2"]):
+                    to_addr = eml
+                    break
 
     entry = {
         "to": to_addr,
