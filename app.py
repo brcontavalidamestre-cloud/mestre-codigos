@@ -3876,6 +3876,225 @@ def api_internal_loja2_produtos():
         })
     return jsonify({"success": True, "products": result})
 
+
+def _get_next_stock_item2(product_id):
+    """Pega o proximo acesso nao usado da Loja 2 e marca como usado."""
+    stock = load_stock2()
+    for item in stock.get(product_id, []):
+        if not item.get("used"):
+            item["used"] = True
+            item["used_at"] = int(time.time())
+            save_stock2(stock)
+            return item
+    return None
+
+
+def _mark_order2_paid_and_deliver(order_id):
+    """Marca pedido da Loja 2 como pago e entrega o proximo acesso do estoque."""
+    orders = load_orders2()
+    order = next((o for o in orders if isinstance(o, dict) and o.get("id") == order_id), None)
+    if not order or order.get("status") != "pending":
+        return order
+    stock_item = _get_next_stock_item2(order.get("product_id"))
+    order["status"]  = "paid"
+    order["paid_at"] = int(time.time())
+    if stock_item:
+        order["delivered_email"]    = stock_item.get("email")
+        order["delivered_password"] = stock_item.get("password")
+        order["delivered_note"]     = stock_item.get("note")
+        st = load_stock2()
+        for it in st.get(order.get("product_id"), []):
+            if isinstance(it, dict) and it.get("id") == stock_item.get("id"):
+                it["delivered_to"] = order.get("customer_email")
+                it["order_id"]     = order_id
+                break
+        save_stock2(st)
+    else:
+        order["delivered_note"] = "Pagamento confirmado. Aguarde - entrega manual."
+    save_orders2(orders)
+    return order
+
+
+def _do_checkout2():
+    """Checkout da Loja 2 (dados separados). Cria pedido + cobranca Pix."""
+    data = request.get_json(silent=True) or {}
+    product_id = str(data.get("product_id", "")).strip()
+    customer_name  = str(data.get("name", "")).strip()
+    customer_email = str(data.get("email", "")).strip().lower()
+    customer_phone = str(data.get("phone", "")).strip()
+    if not product_id:
+        return jsonify({"success": False, "message": "Produto invalido."}), 400
+    if not customer_name or not customer_email:
+        return jsonify({"success": False, "message": "Informe nome e email."}), 400
+    products = load_products2()
+    product = next((p for p in products if p["id"] == product_id), None)
+    if not product:
+        return jsonify({"success": False, "message": "Produto nao encontrado."}), 404
+    stock = load_stock2()
+    items = stock.get(product_id, [])
+    avail = sum(1 for i in items if not i.get("used"))
+    if avail <= 0:
+        return jsonify({"success": False, "message": "Produto temporariamente sem estoque."}), 409
+    order_id = f"L2-{int(time.time())}-{product_id[:6].upper()}"
+    order = {
+        "id": order_id, "product_id": product_id, "product_name": product["name"],
+        "price": product.get("price", 0), "customer_name": customer_name,
+        "customer_email": customer_email, "customer_phone": customer_phone,
+        "status": "pending", "created_at": int(time.time()), "paid_at": None,
+        "delivered_email": None, "delivered_password": None, "delivered_note": None,
+        "pix_txid": None, "pix_qrcode": None, "pix_copia_cola": None,
+    }
+    try:
+        pix_data = efi_create_pix_charge(order)
+    except Exception as e:
+        print(f"[checkout2] excecao efi: {e}")
+        pix_data = {"success": False, "message": f"Erro Efi: {e}"}
+    if pix_data.get("success"):
+        order["pix_txid"]      = pix_data.get("txid")
+        order["pix_qrcode"]    = pix_data.get("qrcode_image")
+        order["pix_copia_cola"]= pix_data.get("copia_cola")
+        order["pix_expires_at"]= pix_data.get("expires_at")
+    else:
+        order["pix_txid"]    = order_id
+        order["pix_warning"] = pix_data.get("message", "Gateway Pix nao configurado.")
+    orders = load_orders2()
+    orders.append(order)
+    save_orders2(orders)
+    return jsonify({
+        "success": True, "order_id": order_id, "product_name": product["name"],
+        "price": product.get("price", 0), "pix_qrcode": order.get("pix_qrcode"),
+        "pix_copia_cola": order.get("pix_copia_cola"), "pix_warning": order.get("pix_warning")
+    })
+
+
+LOJA2_MASTER_URL = os.environ.get("LOJA2_MASTER_URL", "https://rios.up.railway.app").rstrip("/")
+
+def _is_loja2_vitrine():
+    """True se este servico e a loja vitrine 2 (env LOJA2_VITRINE=true ou host com loja2)."""
+    if os.environ.get("LOJA2_VITRINE", "").strip().lower() in ("1", "true", "yes", "sim"):
+        return True
+    try:
+        return "loja2" in (request.host or "").lower()
+    except Exception:
+        return False
+
+def _proxy_loja2(path, method="GET", json_body=None, params=None):
+    """A loja vitrine 2 faz proxy para o rios (servidor central da loja 2)."""
+    try:
+        import requests
+        url = f"{LOJA2_MASTER_URL}{path}"
+        headers = {"X-Loja-Proxy-Token": LOJA2_PROXY_TOKEN, "Content-Type": "application/json"}
+        if method == "GET":
+            r = requests.get(url, headers=headers, params=params, timeout=15)
+        else:
+            r = requests.post(url, headers=headers, json=json_body or {}, timeout=15)
+        try:
+            return r.json(), r.status_code
+        except Exception:
+            return {"success": False, "message": "Resposta invalida do servidor central."}, r.status_code
+    except Exception as e:
+        return {"success": False, "message": f"Erro ao consultar servidor central: {str(e)[:200]}"}, 502
+
+
+@app.route("/api/loja2/produtos", methods=["GET"])
+def api_loja2_produtos():
+    if _is_loja2_vitrine() and not _is_rios_request():
+        data, status = _proxy_loja2("/api/internal/loja2/produtos", method="GET")
+        return jsonify(data), status
+    products = load_products2()
+    stock = load_stock2()
+    result = []
+    for p in products:
+        items = stock.get(p["id"], [])
+        avail = sum(1 for i in items if not i.get("used"))
+        result.append({
+            "id": p["id"], "name": p["name"], "price": p.get("price", 0),
+            "emoji": p.get("emoji", "\U0001f6cd\ufe0f"), "color": p.get("color", "#7e22ce"),
+            "description": p.get("description", ""), "available": avail, "has_stock": avail > 0
+        })
+    return jsonify({"success": True, "products": result})
+
+
+@app.route("/api/loja2/checkout", methods=["POST"])
+def api_loja2_checkout():
+    if _is_loja2_vitrine() and not _is_rios_request():
+        data = request.get_json(silent=True) or {}
+        result, status = _proxy_loja2("/api/internal/loja2/checkout", method="POST", json_body=data)
+        return jsonify(result), status
+    try:
+        return _do_checkout2()
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro interno: {e}"}), 500
+
+
+@app.route("/api/internal/loja2/checkout", methods=["POST"])
+def api_internal_loja2_checkout():
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != LOJA2_PROXY_TOKEN:
+        return jsonify({"success": False, "message": "Token invalido."}), 403
+    try:
+        return _do_checkout2()
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro interno: {e}"}), 500
+
+
+def _do_meus_pedidos2():
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    if not email:
+        return jsonify({"success": False, "message": "Informe o email usado na compra."}), 400
+    orders = load_orders2()
+    my = [o for o in orders if isinstance(o, dict) and (o.get("customer_email", "") or "").lower() == email]
+    now = int(time.time())
+    for o in my[:20]:
+        if o.get("status") == "pending" and o.get("pix_txid") and (now - (o.get("created_at") or 0)) < 7200:
+            try:
+                check = efi_check_pix_status(o["pix_txid"])
+                if check.get("paid"):
+                    _mark_order2_paid_and_deliver(o["id"])
+            except Exception:
+                pass
+    orders = load_orders2()
+    my = [o for o in orders if isinstance(o, dict) and (o.get("customer_email", "") or "").lower() == email]
+    my.sort(key=lambda o: o.get("created_at", 0) or 0, reverse=True)
+    return jsonify({"success": True, "orders": my[:20]})
+
+
+@app.route("/api/loja2/meus-pedidos", methods=["POST"])
+def api_loja2_meus_pedidos():
+    if _is_loja2_vitrine() and not _is_rios_request():
+        data = request.get_json(silent=True) or {}
+        result, status = _proxy_loja2("/api/internal/loja2/meus-pedidos", method="POST", json_body=data)
+        return jsonify(result), status
+    return _do_meus_pedidos2()
+
+
+@app.route("/api/internal/loja2/meus-pedidos", methods=["POST"])
+def api_internal_loja2_meus_pedidos():
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != LOJA2_PROXY_TOKEN:
+        return jsonify({"success": False, "message": "Token invalido."}), 403
+    return _do_meus_pedidos2()
+
+
+@app.route("/api/loja2/webhook/efi", methods=["POST", "GET"])
+@app.route("/api/loja2/webhook/efi/pix", methods=["POST", "GET"])
+def api_loja2_webhook_efi():
+    if request.method == "GET":
+        return jsonify({"success": True}), 200
+    data = request.get_json(silent=True) or {}
+    for px in data.get("pix", []):
+        txid = px.get("txid")
+        if not txid:
+            continue
+        orders = load_orders2()
+        order = next((o for o in orders if o.get("pix_txid") == txid), None)
+        if order and order["status"] == "pending":
+            _mark_order2_paid_and_deliver(order["id"])
+    return jsonify({"success": True})
+
+
+
 # ─── ROTAS ADMIN: LICENÇAS DE SITES FILHOS (só disponível no MESTRE) ────────────────
 def _master_admin_required(f):
     """Decorator: exige admin E que esteja no domínio MESTRE."""
