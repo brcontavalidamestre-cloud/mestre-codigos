@@ -437,6 +437,62 @@
       </div>
     </div>
 
+        <!-- ============ LOJA 2 (NOVA LOJA) — só no rios ============ -->
+    <div class="panel" id="loja2-panel" style="display:none;margin-top:30px;border:2px solid #00e5ff;">
+      <div class="phdr">
+        <div class="ptit">🆕 Loja 2 — Produtos (Nova Loja)</div>
+        <button class="btn-ref" onclick="loadLoja2Produtos()">🔄 Atualizar</button>
+      </div>
+      <div class="sinfo" style="margin-bottom:10px;">Loja independente com estoque próprio. Crie produtos, defina preços e cadastre os logins. A vitrine puxa daqui automaticamente.</div>
+      <!-- Criar novo produto -->
+      <form id="l2-prod-form" onsubmit="createLoja2Product(event)" style="margin-bottom:16px;background:rgba(0,229,255,0.06);padding:14px;border-radius:10px;">
+        <div class="fgrid">
+          <div class="fgrp"><label class="flbl">🏷️ Nome do produto</label><input class="fi" id="l2-name" placeholder="ex: Netflix 4 Telas" required/></div>
+          <div class="fgrp"><label class="flbl">💰 Preço (R$)</label><input class="fi" id="l2-price" placeholder="ex: 30.00" required/></div>
+          <div class="fgrp"><label class="flbl">😀 Emoji</label><input class="fi" id="l2-emoji" placeholder="🎬" maxlength="4"/></div>
+          <div class="fgrp"><label class="flbl">🎨 Cor (hex)</label><input class="fi" id="l2-color" placeholder="#e50914"/></div>
+          <div class="fgrp" style="grid-column:1/-1;"><label class="flbl">📝 Descrição</label><input class="fi" id="l2-desc" placeholder="Acesso liberado automaticamente"/></div>
+        </div>
+        <button type="submit" class="btn-p">➕ Criar Produto</button>
+      </form>
+      <div id="loja2-prod-list" style="display:grid;gap:14px;"></div>
+    </div>
+
+    <!-- LOJA 2: ESTOQUE -->
+    <div class="panel" id="loja2-stock-panel" style="display:none;margin-top:20px;border:1px solid #00e5ff;">
+      <div class="phdr">
+        <div class="ptit">🔑 Loja 2 — Estoque de Acessos</div>
+        <div class="srow">
+          <select class="sin" id="l2-stk-prod-sel" onchange="loadLoja2Stock()" style="padding:9px 14px;"></select>
+          <button class="btn-ref" onclick="loadLoja2Stock()">🔄</button>
+        </div>
+      </div>
+      <div class="sinfo" style="margin-bottom:10px;">Email + senha entregues automaticamente ao cliente após o Pix (estoque exclusivo da Loja 2).</div>
+      <form id="l2-stk-form" onsubmit="addLoja2Stock(event)">
+        <div class="fgrid">
+          <div class="fgrp"><label class="flbl">✉ Email da conta</label><input class="fi" id="l2-stk-email" placeholder="conta@exemplo.com" required/></div>
+          <div class="fgrp"><label class="flbl">🔑 Senha</label><input class="fi" id="l2-stk-pass" placeholder="senha de acesso" required/></div>
+          <div class="fgrp" style="grid-column:1/-1;"><label class="flbl">📝 Observação (opcional)</label><input class="fi" id="l2-stk-note" placeholder="perfil 1 / pin 0000"/></div>
+        </div>
+        <button type="submit" class="btn-p">➕ Adicionar Acesso</button>
+      </form>
+      <div class="twrap" style="margin-top:14px;">
+        <table><thead><tr><th>Email</th><th>Senha</th><th>Obs</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="l2-stk-tbody"></tbody></table>
+      </div>
+    </div>
+
+    <!-- LOJA 2: PEDIDOS -->
+    <div class="panel" id="loja2-orders-panel" style="display:none;margin-top:20px;border:1px solid #00e5ff;">
+      <div class="phdr">
+        <div class="ptit">💳 Loja 2 — Pedidos</div>
+        <button class="btn-ref" onclick="loadLoja2Orders()">🔄 Atualizar</button>
+      </div>
+      <div class="twrap"><table><thead><tr><th>Pedido</th><th>Produto</th><th>Cliente</th><th>Valor</th><th>Status</th><th>Data</th></tr></thead>
+      <tbody id="l2-ord-tbody"></tbody></table></div>
+    </div>
+
+
     <!-- ============ MESTRE: LICENÇAS DE SITES FILHOS ============ -->
     <!-- Visivel APENAS no domínio MESTRE -->
     <div class="panel" id="licencas-panel" style="display:none;margin-top:20px;">
@@ -782,6 +838,7 @@
       loadLojaProdutos();
       loadOrders();
       checkMasterAndShowLicencas();
+      showLoja2IfRios();
       loadBackupSummary();
     })();
 
@@ -1021,6 +1078,149 @@
         }).join('');
       } catch(e){}
     }
+
+    
+    /* ============ LOJA 2 (NOVA LOJA) — só no rios ============ */
+    function showLoja2IfRios() {
+      const host = (window.location.hostname || '').toLowerCase();
+      const isRios = host.startsWith('rios.') || host.includes('rios.up.railway.app') || host.includes('-rios') || host.includes('rios-');
+      if (isRios) {
+        ['loja2-panel','loja2-stock-panel','loja2-orders-panel'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = 'block';
+        });
+        loadLoja2Produtos();
+        loadLoja2Orders();
+      }
+    }
+
+    async function loadLoja2Produtos() {
+      try {
+        const r = await fetch('/api/admin/loja2/produtos');
+        const j = await r.json();
+        if (!j.success) return;
+        const list = document.getElementById('loja2-prod-list');
+        const sel = document.getElementById('l2-stk-prod-sel');
+        if (!j.products.length) {
+          list.innerHTML = '<div style="color:#888;padding:14px;text-align:center;">Nenhum produto ainda. Crie o primeiro acima ☝️</div>';
+        } else {
+          list.innerHTML = j.products.map(p => `
+            <div style="display:flex;gap:12px;align-items:center;background:rgba(255,255,255,0.03);padding:12px;border-radius:10px;border-left:4px solid ${p.color||'#00e5ff'};">
+              <div style="font-size:2rem;">${p.emoji||'🛍️'}</div>
+              <div style="flex:1;">
+                <input class="fi" value="${(p.name||'').replace(/"/g,'&quot;')}" id="l2pn-${p.id}" style="font-weight:700;margin-bottom:4px;"/>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <input class="fi" value="${p.price||0}" id="l2pp-${p.id}" style="max-width:110px;" placeholder="Preço"/>
+                  <input class="fi" value="${(p.description||'').replace(/"/g,'&quot;')}" id="l2pd-${p.id}" style="flex:1;min-width:160px;" placeholder="Descrição"/>
+                </div>
+                <div style="font-size:.8rem;color:#888;margin-top:5px;">Disponível: <b style="color:#00e5ff;">${p.available||0}</b> / Total: ${p.total||0} / Vendidos: ${p.delivered||0}</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <button class="btn-ref" onclick="saveLoja2Product('${p.id}')">💾 Salvar</button>
+                <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="deleteLoja2Product('${p.id}','${(p.name||'').replace(/'/g,'')}')">🗑️</button>
+              </div>
+            </div>`).join('');
+        }
+        if (sel) {
+          sel.innerHTML = j.products.map(p => `<option value="${p.id}">${p.emoji||''} ${p.name}</option>`).join('');
+          if (j.products.length) loadLoja2Stock();
+        }
+      } catch(e) { console.log('loja2 prod err', e); }
+    }
+
+    async function createLoja2Product(ev) {
+      ev.preventDefault();
+      const body = {
+        name: document.getElementById('l2-name').value,
+        price: document.getElementById('l2-price').value,
+        emoji: document.getElementById('l2-emoji').value,
+        color: document.getElementById('l2-color').value,
+        description: document.getElementById('l2-desc').value,
+      };
+      const r = await fetch('/api/admin/loja2/produtos', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const j = await r.json();
+      if (j.success) { showToast('✓ Produto criado'); document.getElementById('l2-prod-form').reset(); loadLoja2Produtos(); }
+      else showToast('✗ ' + (j.message||'Erro'));
+    }
+
+    async function saveLoja2Product(id) {
+      const body = {
+        name: document.getElementById('l2pn-'+id).value,
+        price: document.getElementById('l2pp-'+id).value,
+        description: document.getElementById('l2pd-'+id).value,
+      };
+      const r = await fetch('/api/admin/loja2/produtos/'+id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const j = await r.json();
+      if (j.success) { showToast('✓ Salvo'); loadLoja2Produtos(); } else showToast('✗ '+(j.message||'Erro'));
+    }
+
+    async function deleteLoja2Product(id, name) {
+      if (!confirm('Excluir o produto "'+name+'" e todo o seu estoque?')) return;
+      const r = await fetch('/api/admin/loja2/produtos/'+id, {method:'DELETE'});
+      const j = await r.json();
+      if (j.success) { showToast('✓ Excluído'); loadLoja2Produtos(); } else showToast('✗ '+(j.message||'Erro'));
+    }
+
+    async function loadLoja2Stock() {
+      const sel = document.getElementById('l2-stk-prod-sel');
+      if (!sel || !sel.value) return;
+      const r = await fetch('/api/admin/loja2/estoque/'+sel.value);
+      const j = await r.json();
+      const tb = document.getElementById('l2-stk-tbody');
+      if (!j.success || !j.items.length) { tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Sem acessos cadastrados</td></tr>'; return; }
+      tb.innerHTML = j.items.map(it => `
+        <tr>
+          <td>${it.email||''}</td><td>${it.password||''}</td><td>${it.note||''}</td>
+          <td>${it.used ? '<span style="color:#ff9800;">Entregue</span>' : '<span style="color:#4caf50;">Disponível</span>'}</td>
+          <td>
+            ${it.used ? `<button class="btn-ref" onclick="resetLoja2Stock('${sel.value}','${it.id}')">♻️</button>` : ''}
+            <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="delLoja2Stock('${sel.value}','${it.id}')">🗑️</button>
+          </td>
+        </tr>`).join('');
+    }
+
+    async function addLoja2Stock(ev) {
+      ev.preventDefault();
+      const sel = document.getElementById('l2-stk-prod-sel');
+      if (!sel || !sel.value) { showToast('✗ Crie um produto primeiro'); return; }
+      const body = {
+        email: document.getElementById('l2-stk-email').value,
+        password: document.getElementById('l2-stk-pass').value,
+        note: document.getElementById('l2-stk-note').value,
+      };
+      const r = await fetch('/api/admin/loja2/estoque/'+sel.value, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const j = await r.json();
+      if (j.success) { showToast('✓ Acesso adicionado'); document.getElementById('l2-stk-form').reset(); loadLoja2Stock(); loadLoja2Produtos(); }
+      else showToast('✗ '+(j.message||'Erro'));
+    }
+
+    async function delLoja2Stock(pid, iid) {
+      if (!confirm('Remover este acesso?')) return;
+      const r = await fetch('/api/admin/loja2/estoque/'+pid+'/'+iid, {method:'DELETE'});
+      const j = await r.json();
+      if (j.success) { showToast('✓ Removido'); loadLoja2Stock(); loadLoja2Produtos(); }
+    }
+
+    async function resetLoja2Stock(pid, iid) {
+      const r = await fetch('/api/admin/loja2/estoque/'+pid+'/'+iid+'/reset', {method:'POST'});
+      const j = await r.json();
+      if (j.success) { showToast('✓ Reativado'); loadLoja2Stock(); loadLoja2Produtos(); }
+    }
+
+    async function loadLoja2Orders() {
+      try {
+        const r = await fetch('/api/admin/loja2/pedidos');
+        const j = await r.json();
+        const tb = document.getElementById('l2-ord-tbody');
+        if (!j.success || !j.orders.length) { tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">Nenhum pedido ainda</td></tr>'; return; }
+        tb.innerHTML = j.orders.map(o => {
+          const d = o.created_at ? new Date(o.created_at*1000).toLocaleString('pt-BR') : '';
+          const st = o.status === 'paid' ? '<span style="color:#4caf50;">Pago</span>' : '<span style="color:#ff9800;">Pendente</span>';
+          return `<tr><td>${o.id||''}</td><td>${o.product_name||''}</td><td>${o.customer_name||''}<br><small>${o.customer_email||''}</small></td><td>R$ ${(o.price||0).toFixed ? (o.price).toFixed(2) : o.price}</td><td>${st}</td><td><small>${d}</small></td></tr>`;
+        }).join('');
+      } catch(e) { console.log('loja2 ord err', e); }
+    }
+
 
     /* ============ MESTRE: LICENÇAS DE SITES FILHOS ============ */
     async function checkMasterAndShowLicencas() {
