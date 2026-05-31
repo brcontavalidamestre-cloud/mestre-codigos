@@ -3983,12 +3983,21 @@ def _do_checkout2():
 
 LOJA2_MASTER_URL = os.environ.get("LOJA2_MASTER_URL", "https://rios.up.railway.app").rstrip("/")
 
+# Hosts hard-coded reconhecidos como vitrine da Loja 2
+_LOJA2_VITRINE_HOSTS = {
+    "lojario.up.railway.app",
+}
+
 def _is_loja2_vitrine():
-    """True se este servico e a loja vitrine 2 (env LOJA2_VITRINE=true ou host com loja2)."""
+    """True se este servico e a loja vitrine 2.
+    Detecção: env LOJA2_VITRINE=true OU host contendo 'loja2'/'lojario' OU host na lista."""
     if os.environ.get("LOJA2_VITRINE", "").strip().lower() in ("1", "true", "yes", "sim"):
         return True
     try:
-        return "loja2" in (request.host or "").lower()
+        h = (request.host or "").lower()
+        if h in _LOJA2_VITRINE_HOSTS:
+            return True
+        return ("loja2" in h) or ("lojario" in h)
     except Exception:
         return False
 
@@ -4911,6 +4920,7 @@ def api_site_mode():
     return jsonify({
         "is_master": is_master_host(),
         "is_loja": is_loja_host(),
+        "is_loja2_vitrine": _is_loja2_vitrine(),
         "host": get_current_host()
     })
 
