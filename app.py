@@ -3927,7 +3927,9 @@ def api_admin_loja2_list_orders():
 @app.route("/api/admin/assinaturas", methods=["GET"])
 @admin_required
 def api_admin_list_subscriptions():
-    """Lista todas as assinaturas, com status ativo/vencido calculado."""
+    """Lista assinaturas. Por padrão mostra SOMENTE as PAGAS/ATIVAS.
+    Use ?all=1 para listar todas (inclusive vencidas)."""
+    show_all = request.args.get("all", "") in ("1", "true", "yes")
     subs = load_subscriptions()
     now = int(time.time())
     out = []
@@ -3935,12 +3937,16 @@ def api_admin_list_subscriptions():
         if not isinstance(s, dict):
             continue
         exp = s.get("expires_at") or 0
+        active = now < exp
+        # Por padrão, só mostra as ATIVAS (pagas)
+        if not show_all and not active:
+            continue
         s2 = dict(s)
-        s2["active"] = now < exp
+        s2["active"] = active
         s2["days_left"] = max(0, int((exp - now) / 86400)) if exp else 0
         out.append(s2)
-    # ordena: vencidos primeiro, depois por vencimento
-    out.sort(key=lambda x: (x.get("active", False), x.get("expires_at", 0)))
+    # ordena: as que vencem antes primeiro
+    out.sort(key=lambda x: x.get("expires_at", 0))
     return jsonify({"success": True, "subscriptions": out, "default_days": SUB_DEFAULT_DAYS, "renew_value": SUB_RENEW_VALUE})
 
 
@@ -3955,6 +3961,7 @@ def api_admin_add_subscription():
     plataforma = str(data.get("plataforma", "Netflix")).strip()[:40]
     cliente = str(data.get("cliente", "")).strip()[:80]
     telefone = str(data.get("telefone", "")).strip()[:30]
+    senha = str(data.get("senha", "")).strip()[:80]  # senha do login da conta
     try:
         valor = float(str(data.get("valor", SUB_RENEW_VALUE)).replace(",", "."))
     except Exception:
@@ -3982,12 +3989,15 @@ def api_admin_add_subscription():
     # se ja existe, atualiza
     existing, idx = _find_subscription(email)
     sub = {
-        "email": email, "plataforma": plataforma, "cliente": cliente,
+        "email": email, "senha": senha, "plataforma": plataforma, "cliente": cliente,
         "telefone": telefone, "valor": valor, "dur_days": dur_days,
         "start_at": start_at, "expires_at": expires_at,
         "created_at": (existing.get("created_at") if existing else now),
         "renew_pix_txid": None, "renew_count": (existing.get("renew_count", 0) if existing else 0),
     }
+    # mantém senha antiga se não enviou nova
+    if not senha and existing and existing.get("senha"):
+        sub["senha"] = existing.get("senha")
     if idx >= 0:
         subs[idx] = sub
     else:

@@ -493,41 +493,62 @@
     </div>
 
 
-        <!-- ============ PAINEL DE COBRANÇA (assinaturas) — só no MESTRE ============ -->
-    <div class="panel" id="cobranca-panel" style="display:none;margin-top:30px;border:2px solid #fcd34d;">
-      <div class="phdr">
-        <div class="ptit">💳 Painel de Cobrança — Assinaturas</div>
-        <button class="btn-ref" onclick="loadAssinaturas()">🔄 Atualizar</button>
+        <!-- ============ BOTÃO QUE ABRE O PAINEL DE COBRANÇA (só no MESTRE) ============ -->
+    <div id="cobranca-launch" onclick="abrirCobranca()" style="display:none;cursor:pointer;align-items:center;gap:14px;margin-top:30px;padding:20px 24px;border-radius:16px;background:linear-gradient(135deg,#1a1407,#2a2008);border:2px solid #fcd34d;box-shadow:0 6px 24px rgba(252,211,77,0.18);transition:transform .15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+      <div style="font-size:2.4rem;">💳</div>
+      <div style="flex:1;">
+        <div style="font-weight:800;font-size:1.15rem;color:#fcd34d;">Painel de Cobrança</div>
+        <div style="font-size:.9rem;color:#cbb765;">Contas pagas, logins, renovações e compras por data — clique para abrir</div>
       </div>
-      <div class="sinfo" style="margin-bottom:10px;">Cadastre as contas (logins) com vencimento. Conta vencida = códigos bloqueados até renovar.</div>
-      <form id="assin-form" onsubmit="addAssinatura(event)" style="margin-bottom:16px;background:rgba(252,211,77,0.06);padding:14px;border-radius:10px;">
-        <div class="fgrid">
-          <div class="fgrp"><label class="flbl">✉ Email da conta</label><input class="fi" id="as-email" placeholder="conta@cliente.com" required/></div>
-          <div class="fgrp"><label class="flbl">🎬 Plataforma</label><input class="fi" id="as-plat" placeholder="Netflix" value="Netflix"/></div>
-          <div class="fgrp"><label class="flbl">👤 Cliente (opcional)</label><input class="fi" id="as-cliente" placeholder="Nome do cliente"/></div>
-          <div class="fgrp"><label class="flbl">📱 Telefone (opcional)</label><input class="fi" id="as-tel" placeholder="WhatsApp"/></div>
-          <div class="fgrp"><label class="flbl">💰 Valor renovação (R$)</label><input class="fi" id="as-valor" placeholder="35.00"/></div>
-          <div class="fgrp"><label class="flbl">📅 Dias de validade</label><input class="fi" id="as-dias" placeholder="30" value="30"/></div>
-          <div class="fgrp"><label class="flbl">📆 OU vencimento exato (opcional)</label><input class="fi" id="as-vencdate" type="date"/></div>
-        </div>
-        <button type="submit" class="btn-p">➕ Cadastrar / Atualizar Conta</button>
-      </form>
-      <div class="twrap">
-        <table>
-          <thead><tr><th>Email</th><th>Plataforma</th><th>Cliente</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead>
-          <tbody id="assin-tbody"></tbody>
-        </table>
-      </div>
+      <div style="font-size:1.6rem;color:#fcd34d;">→</div>
     </div>
 
-    <!-- COMPRAS POR DATA -->
-    <div class="panel" id="compras-data-panel" style="display:none;margin-top:20px;border:1px solid #fcd34d;">
-      <div class="phdr">
-        <div class="ptit">📅 Compras por Data</div>
-        <button class="btn-ref" onclick="loadComprasPorData()">🔄 Atualizar</button>
+    <!-- ============ MODAL EM TELA CHEIA DO PAINEL DE COBRANÇA ============ -->
+    <div id="cobranca-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,5,10,0.92);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 14px;flex-direction:column;align-items:center;">
+      <div style="width:100%;max-width:1100px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;position:sticky;top:0;background:rgba(5,5,10,0.95);padding:8px 0;z-index:2;">
+          <div style="font-weight:800;font-size:1.4rem;color:#fcd34d;">💳 Painel de Cobrança</div>
+          <button onclick="fecharCobranca()" style="background:#ff5252;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:1rem;">✕ Fechar</button>
+        </div>
+
+        <!-- Assinaturas (somente PAGAS/ATIVAS) -->
+        <div class="panel" id="cobranca-panel" style="margin-bottom:24px;border:2px solid #fcd34d;">
+          <div class="phdr">
+            <div class="ptit">📋 Contas Pagas — Logins Ativos</div>
+            <button class="btn-ref" onclick="loadAssinaturas()">🔄 Atualizar</button>
+          </div>
+          <div class="sinfo" style="margin-bottom:10px;">Apenas contas pagas (ativas) aparecem aqui. Conta vencida = códigos bloqueados até renovar.</div>
+          <form id="assin-form" onsubmit="addAssinatura(event)" style="margin-bottom:16px;background:rgba(252,211,77,0.06);padding:14px;border-radius:10px;">
+            <div class="fgrid">
+              <div class="fgrp"><label class="flbl">✉ Email da conta (login)</label><input class="fi" id="as-email" placeholder="conta@cliente.com" required/></div>
+              <div class="fgrp"><label class="flbl">🔒 Senha do login</label><input class="fi" id="as-senha" placeholder="senha da conta"/></div>
+              <div class="fgrp"><label class="flbl">🎬 Plataforma</label><input class="fi" id="as-plat" placeholder="Netflix" value="Netflix"/></div>
+              <div class="fgrp"><label class="flbl">👤 Cliente (opcional)</label><input class="fi" id="as-cliente" placeholder="Nome do cliente"/></div>
+              <div class="fgrp"><label class="flbl">📱 Telefone (opcional)</label><input class="fi" id="as-tel" placeholder="WhatsApp"/></div>
+              <div class="fgrp"><label class="flbl">💰 Valor renovação (R$)</label><input class="fi" id="as-valor" placeholder="35.00"/></div>
+              <div class="fgrp"><label class="flbl">📅 Dias de validade</label><input class="fi" id="as-dias" placeholder="30" value="30"/></div>
+              <div class="fgrp"><label class="flbl">📆 OU vencimento exato (opcional)</label><input class="fi" id="as-vencdate" type="date"/></div>
+            </div>
+            <button type="submit" class="btn-p">➕ Cadastrar / Atualizar Conta Paga</button>
+          </form>
+          <div class="twrap">
+            <table>
+              <thead><tr><th>Login (Email + Senha)</th><th>Plataforma</th><th>Cliente</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead>
+              <tbody id="assin-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- COMPRAS POR DATA -->
+        <div class="panel" id="compras-data-panel" style="border:1px solid #fcd34d;">
+          <div class="phdr">
+            <div class="ptit">📅 Compras por Data</div>
+            <button class="btn-ref" onclick="loadComprasPorData()">🔄 Atualizar</button>
+          </div>
+          <div class="sinfo" style="margin-bottom:10px;">Todas as compras agrupadas por dia. Cada bloco mostra o total do dia.</div>
+          <div id="compras-data-list" style="display:flex;flex-direction:column;gap:16px;"></div>
+        </div>
       </div>
-      <div class="sinfo" style="margin-bottom:10px;">Todas as compras agrupadas por dia. Cada bloco mostra o total do dia.</div>
-      <div id="compras-data-list" style="display:flex;flex-direction:column;gap:16px;"></div>
     </div>
 
 
@@ -1268,14 +1289,26 @@
         const r = await fetch('/api/site-mode');
         const j = await r.json();
         if (j && j.is_master) {
-          ['cobranca-panel','compras-data-panel'].forEach(id => {
-            const el = document.getElementById(id);
-            if (el) el.style.display = 'block';
-          });
-          loadAssinaturas();
-          loadComprasPorData();
+          // mostra apenas o BOTÃO de acesso ao painel de cobrança
+          const btn = document.getElementById('cobranca-launch');
+          if (btn) btn.style.display = 'flex';
         }
       } catch(e) {}
+    }
+
+    // Abre o modal de cobrança em tela cheia e carrega os dados
+    function abrirCobranca() {
+      const m = document.getElementById('cobranca-modal');
+      if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+      loadAssinaturas();
+      loadComprasPorData();
+    }
+    function fecharCobranca() {
+      const m = document.getElementById('cobranca-modal');
+      if (m) { m.style.display = 'none'; document.body.style.overflow = ''; }
+    }
+    function copiarLogin(txt) {
+      navigator.clipboard.writeText(txt).then(()=>showToast('📋 Login copiado')).catch(()=>showToast('✗ Falha ao copiar'));
     }
 
     async function loadAssinaturas() {
@@ -1292,8 +1325,14 @@
           const st = s.active
             ? `<span style="color:#4caf50;">✓ Ativa (${s.days_left}d)</span>`
             : '<span style="color:#ff5252;font-weight:700;">✗ VENCIDA</span>';
+          const senhaTxt = s.senha ? s.senha : '<span style="color:#888;">—</span>';
+          const loginCopy = (s.email||'') + (s.senha ? ' | '+s.senha : '');
           return `<tr>
-            <td>${s.email||''}</td>
+            <td>
+              <div style="font-weight:600;">${s.email||''}</div>
+              <div style="font-size:.85rem;color:#fcd34d;">🔑 ${senhaTxt}</div>
+              <button class="btn-ref" style="margin-top:4px;font-size:.72rem;padding:2px 8px;" onclick="copiarLogin('${loginCopy.replace(/'/g,"\\'")}')">📋 Copiar login</button>
+            </td>
             <td>${s.plataforma||''}</td>
             <td>${s.cliente||'-'}${s.telefone?'<br><small>'+s.telefone+'</small>':''}</td>
             <td>${venc}</td>
@@ -1311,6 +1350,7 @@
       ev.preventDefault();
       const body = {
         email: document.getElementById('as-email').value,
+        senha: document.getElementById('as-senha').value,
         plataforma: document.getElementById('as-plat').value,
         cliente: document.getElementById('as-cliente').value,
         telefone: document.getElementById('as-tel').value,
@@ -1320,7 +1360,7 @@
       };
       const r = await fetch('/api/admin/assinaturas', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
-      if (j.success) { showToast('✓ Conta cadastrada'); document.getElementById('assin-form').reset(); document.getElementById('as-plat').value='Netflix'; document.getElementById('as-dias').value='30'; loadAssinaturas(); }
+      if (j.success) { showToast('✓ Conta cadastrada'); document.getElementById('assin-form').reset(); document.getElementById('as-plat').value='Netflix'; document.getElementById('as-dias').value='30'; loadAssinaturas(); loadComprasPorData(); }
       else showToast('✗ '+(j.message||'Erro'));
     }
 
