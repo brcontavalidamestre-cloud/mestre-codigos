@@ -259,6 +259,40 @@ STOCK_FILE          = os.environ.get("STOCK_FILE", os.path.join(_data_dir, "stoc
 ORDERS_FILE         = os.environ.get("ORDERS_FILE", os.path.join(_data_dir, "orders.json"))
 LICENSES_FILE       = os.environ.get("LICENSES_FILE", os.path.join(_data_dir, "licenses.json"))
 
+# ╔══ PAINEL DE COBRANÇA (assinaturas por conta de streaming) — só no MESTRE ══╗
+# Cada assinatura: { email, plataforma, cliente, telefone, valor, dur_days,
+#   start_at, expires_at, status (active/expired), created_at, renew_pix_txid }
+SUBSCRIPTIONS_FILE  = os.environ.get("SUBSCRIPTIONS_FILE", os.path.join(_data_dir, "subscriptions.json"))
+SUB_DEFAULT_DAYS    = int(os.environ.get("SUB_DEFAULT_DAYS", "30"))
+SUB_RENEW_VALUE     = float(os.environ.get("SUB_RENEW_VALUE", "35.00"))
+
+def load_subscriptions():
+    data = _read_json_file(SUBSCRIPTIONS_FILE, [])
+    if not isinstance(data, list):
+        data = []
+    return data
+
+def save_subscriptions(subs):
+    if not isinstance(subs, list):
+        subs = []
+    return _write_json_file(SUBSCRIPTIONS_FILE, subs)
+
+def _sub_is_active(sub):
+    """True se a assinatura está ativa (não vencida)."""
+    if not isinstance(sub, dict):
+        return False
+    exp = sub.get("expires_at") or 0
+    return int(time.time()) < exp
+
+def _find_subscription(email):
+    """Acha a assinatura de um email (case-insensitive). Retorna (sub, index) ou (None, -1)."""
+    el = (email or "").strip().lower()
+    subs = load_subscriptions()
+    for i, s in enumerate(subs):
+        if isinstance(s, dict) and (s.get("email", "") or "").lower() == el:
+            return s, i
+    return None, -1
+
 # ╔══ LOJA 2 (nova loja vitrine, dados SEPARADOS, gerenciada pelo admin do rios) ══╗
 PRODUCTS_FILE_2     = os.environ.get("PRODUCTS_FILE_2", os.path.join(_data_dir, "products_loja2.json"))
 STOCK_FILE_2        = os.environ.get("STOCK_FILE_2", os.path.join(_data_dir, "stock_loja2.json"))
@@ -2946,6 +2980,22 @@ def get_code():
     username = session.get("username")
     _clear_pending_reset_link(username)
 
+    # ╔══ MESTRE: bloqueio por assinatura vencida ══╗
+    # Se a conta (email) tem assinatura cadastrada e está VENCIDA, não entrega código.
+    if is_master_host():
+        sub, _idx = _find_subscription(user_email)
+        if sub is not None and not _sub_is_active(sub):
+            exp = sub.get("expires_at") or 0
+            exp_str = _dt.utcfromtimestamp(exp).strftime("%d/%m/%Y") if exp else ""
+            return jsonify({
+                "success": False,
+                "subscription_expired": True,
+                "email": user_email,
+                "expired_at": exp_str,
+                "renew_value": SUB_RENEW_VALUE,
+                "message": f"⚠️ Assinatura vencida em {exp_str}. Renove para liberar os códigos novamente."
+            }), 402
+
     # NOTA: o RIOS usa automaticamente a caixa ggtv.net.br via get_imap_accounts()
     # (detecção por host). A busca IMAP padrão abaixo já funciona normalmente.
 
@@ -3869,6 +3919,207 @@ def api_admin_loja2_list_orders():
         return jsonify({"success": True, "orders": clean_sorted[:200]})
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro: {e}", "orders": []})
+
+
+# ╔════════════════════════════════════════════════════════════════════════╗
+# ║  PAINEL DE COBRANÇA — Assinaturas por conta de streaming (só MESTRE)    ║
+# ╚════════════════════════════════════════════════════════════════════════╝
+@app.route("/api/admin/assinaturas", methods=["GET"])
+@admin_required
+def api_admin_list_subscriptions():
+    """Lista todas as assinaturas, com status ativo/vencido calculado."""
+    subs = load_subscriptions()
+    now = int(time.time())
+    out = []
+    for s in subs:
+        if not isinstance(s, dict):
+            continue
+        exp = s.get("expires_at") or 0
+        s2 = dict(s)
+        s2["active"] = now < exp
+        s2["days_left"] = max(0, int((exp - now) / 86400)) if exp else 0
+        out.append(s2)
+    # ordena: vencidos primeiro, depois por vencimento
+    out.sort(key=lambda x: (x.get("active", False), x.get("expires_at", 0)))
+    return jsonify({"success": True, "subscriptions": out, "default_days": SUB_DEFAULT_DAYS, "renew_value": SUB_RENEW_VALUE})
+
+
+@app.route("/api/admin/assinaturas", methods=["POST"])
+@admin_required
+def api_admin_add_subscription():
+    """Cadastra uma nova assinatura (conta de streaming com vencimento)."""
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    if not email or "@" not in email:
+        return jsonify({"success": False, "message": "Informe um email válido."}), 400
+    plataforma = str(data.get("plataforma", "Netflix")).strip()[:40]
+    cliente = str(data.get("cliente", "")).strip()[:80]
+    telefone = str(data.get("telefone", "")).strip()[:30]
+    try:
+        valor = float(str(data.get("valor", SUB_RENEW_VALUE)).replace(",", "."))
+    except Exception:
+        valor = SUB_RENEW_VALUE
+    try:
+        dur_days = int(data.get("dur_days", SUB_DEFAULT_DAYS))
+    except Exception:
+        dur_days = SUB_DEFAULT_DAYS
+    # data de inicio: agora (ou custom)
+    now = int(time.time())
+    start_at = now
+    # se enviou data de vencimento custom (YYYY-MM-DD), usa ela
+    exp_custom = str(data.get("expires_date", "")).strip()
+    if exp_custom:
+        try:
+            import datetime as _dtmod
+            dt = _dtmod.datetime.strptime(exp_custom, "%Y-%m-%d")
+            expires_at = int(dt.timestamp())
+        except Exception:
+            expires_at = now + dur_days * 86400
+    else:
+        expires_at = now + dur_days * 86400
+
+    subs = load_subscriptions()
+    # se ja existe, atualiza
+    existing, idx = _find_subscription(email)
+    sub = {
+        "email": email, "plataforma": plataforma, "cliente": cliente,
+        "telefone": telefone, "valor": valor, "dur_days": dur_days,
+        "start_at": start_at, "expires_at": expires_at,
+        "created_at": (existing.get("created_at") if existing else now),
+        "renew_pix_txid": None, "renew_count": (existing.get("renew_count", 0) if existing else 0),
+    }
+    if idx >= 0:
+        subs[idx] = sub
+    else:
+        subs.append(sub)
+    save_subscriptions(subs)
+    return jsonify({"success": True, "subscription": sub})
+
+
+@app.route("/api/admin/assinaturas/<path:email>/renovar", methods=["POST"])
+@admin_required
+def api_admin_renew_subscription(email):
+    """Renova manualmente (admin) uma assinatura por +dur_days."""
+    sub, idx = _find_subscription(email)
+    if idx < 0:
+        return jsonify({"success": False, "message": "Assinatura não encontrada."}), 404
+    now = int(time.time())
+    base = max(now, sub.get("expires_at") or now)  # estende a partir do maior entre agora e vencimento
+    dur = sub.get("dur_days", SUB_DEFAULT_DAYS)
+    sub["expires_at"] = base + dur * 86400
+    sub["renew_count"] = sub.get("renew_count", 0) + 1
+    subs = load_subscriptions()
+    subs[idx] = sub
+    save_subscriptions(subs)
+    return jsonify({"success": True, "subscription": sub})
+
+
+@app.route("/api/admin/assinaturas/<path:email>", methods=["DELETE"])
+@admin_required
+def api_admin_delete_subscription(email):
+    """Remove uma assinatura."""
+    subs = load_subscriptions()
+    el = (email or "").strip().lower()
+    new_subs = [s for s in subs if (s.get("email", "") or "").lower() != el]
+    if len(new_subs) == len(subs):
+        return jsonify({"success": False, "message": "Não encontrada."}), 404
+    save_subscriptions(new_subs)
+    return jsonify({"success": True})
+
+
+# ── RENOVAÇÃO VIA PIX (público — cliente paga e renova sozinho) ──
+@app.route("/api/renovar/pix", methods=["POST"])
+def api_renovar_pix():
+    """Cliente solicita renovação: gera cobrança Pix para a conta vencida."""
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    sub, idx = _find_subscription(email)
+    if idx < 0:
+        return jsonify({"success": False, "message": "Conta não encontrada no sistema."}), 404
+    valor = sub.get("valor", SUB_RENEW_VALUE)
+    fake_order = {
+        "id": f"RENOV-{int(time.time())}-{email[:8]}",
+        "price": valor,
+        "product_name": f"Renovacao {sub.get('plataforma','Netflix')} - {email}",
+    }
+    try:
+        pix = efi_create_pix_charge(fake_order)
+    except Exception as e:
+        pix = {"success": False, "message": f"Erro Efi: {e}"}
+    if not pix.get("success"):
+        return jsonify({"success": False, "message": pix.get("message", "Erro ao gerar Pix.")}), 502
+    # guarda o txid para conferir depois
+    sub["renew_pix_txid"] = pix.get("txid")
+    sub["renew_order_id"] = fake_order["id"]
+    subs = load_subscriptions()
+    subs[idx] = sub
+    save_subscriptions(subs)
+    return jsonify({
+        "success": True, "valor": valor,
+        "pix_qrcode": pix.get("qrcode_image"),
+        "pix_copia_cola": pix.get("copia_cola"),
+        "txid": pix.get("txid"),
+    })
+
+
+@app.route("/api/renovar/status", methods=["POST"])
+def api_renovar_status():
+    """Cliente confere se o Pix de renovação foi pago. Se pago, renova +dur_days."""
+    data = request.get_json(silent=True) or {}
+    email = str(data.get("email", "")).strip().lower()
+    sub, idx = _find_subscription(email)
+    if idx < 0:
+        return jsonify({"success": False, "message": "Conta não encontrada."}), 404
+    txid = sub.get("renew_pix_txid")
+    if not txid:
+        return jsonify({"success": False, "paid": False, "message": "Nenhuma renovação pendente."})
+    try:
+        check = efi_check_pix_status(txid)
+    except Exception as e:
+        return jsonify({"success": False, "paid": False, "message": f"Erro: {e}"})
+    if check.get("paid"):
+        now = int(time.time())
+        base = max(now, sub.get("expires_at") or now)
+        dur = sub.get("dur_days", SUB_DEFAULT_DAYS)
+        sub["expires_at"] = base + dur * 86400
+        sub["renew_count"] = sub.get("renew_count", 0) + 1
+        sub["renew_pix_txid"] = None
+        subs = load_subscriptions()
+        subs[idx] = sub
+        save_subscriptions(subs)
+        exp_str = _dt.utcfromtimestamp(sub["expires_at"]).strftime("%d/%m/%Y")
+        return jsonify({"success": True, "paid": True, "new_expires": exp_str,
+                        "message": f"✅ Renovado! Nova validade: {exp_str}"})
+    return jsonify({"success": True, "paid": False, "message": "Pagamento ainda não confirmado."})
+
+
+# ── COMPRAS AGRUPADAS POR DATA (admin) ──
+@app.route("/api/admin/compras-por-data", methods=["GET"])
+@admin_required
+def api_admin_compras_por_data():
+    """Agrupa todos os pedidos da loja por data (cada dia = um bloco)."""
+    try:
+        orders = load_orders()
+        clean = [o for o in orders if isinstance(o, dict) and o.get("id")]
+        import datetime as _dtmod
+        grupos = {}
+        for o in clean:
+            ts = o.get("created_at", 0) or 0
+            dia = _dtmod.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d") if ts else "sem-data"
+            grupos.setdefault(dia, {"data": dia, "pedidos": [], "total": 0.0, "qtd": 0, "pagos": 0})
+            grupos[dia]["pedidos"].append(o)
+            grupos[dia]["qtd"] += 1
+            if o.get("status") == "paid":
+                grupos[dia]["pagos"] += 1
+                grupos[dia]["total"] += float(o.get("price", 0) or 0)
+        # ordena dias do mais recente p/ o mais antigo
+        blocos = sorted(grupos.values(), key=lambda g: g["data"], reverse=True)
+        for b in blocos:
+            b["pedidos"].sort(key=lambda o: o.get("created_at", 0) or 0, reverse=True)
+        return jsonify({"success": True, "blocos": blocos})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro: {e}", "blocos": []})
+
 
 # ── Endpoints INTERNOS: rios serve dados da Loja 2 para a nova loja vitrine ──
 @app.route("/api/internal/loja2/produtos", methods=["GET"])
