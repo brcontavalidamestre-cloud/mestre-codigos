@@ -4112,12 +4112,45 @@ def api_admin_compras_por_data():
         orders = load_orders()
         clean = [o for o in orders if isinstance(o, dict) and o.get("id")]
         import datetime as _dtmod
+        now = int(time.time())
+        # indexa assinaturas por email para cruzar login/vencimento
+        subs = load_subscriptions()
+        subs_idx = {}
+        for s in subs:
+            if isinstance(s, dict) and s.get("email"):
+                subs_idx[s.get("email", "").lower()] = s
         grupos = {}
         for o in clean:
             ts = o.get("created_at", 0) or 0
             dia = _dtmod.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d") if ts else "sem-data"
             grupos.setdefault(dia, {"data": dia, "pedidos": [], "total": 0.0, "qtd": 0, "pagos": 0})
-            grupos[dia]["pedidos"].append(o)
+            # enriquece o pedido com o login entregue e a assinatura vinculada
+            o2 = dict(o)
+            # login entregue ao cliente neste pedido
+            login_email = o.get("delivered_email") or ""
+            login_senha = o.get("delivered_password") or ""
+            # tenta achar assinatura: pelo login entregue OU pelo email do cliente
+            sub = subs_idx.get((login_email or "").lower()) or subs_idx.get((o.get("customer_email", "") or "").lower())
+            if sub:
+                if not login_email:
+                    login_email = sub.get("email", "")
+                if not login_senha:
+                    login_senha = sub.get("senha", "")
+                exp = sub.get("expires_at") or 0
+                o2["sub_email"] = sub.get("email", "")
+                o2["sub_active"] = now < exp if exp else False
+                o2["sub_expires_at"] = exp
+                o2["sub_days_left"] = max(0, int((exp - now) / 86400)) if exp else 0
+                o2["sub_dur_days"] = sub.get("dur_days", 30)
+            else:
+                o2["sub_email"] = ""
+                o2["sub_active"] = None
+                o2["sub_expires_at"] = 0
+                o2["sub_days_left"] = 0
+                o2["sub_dur_days"] = 30
+            o2["login_email"] = login_email
+            o2["login_senha"] = login_senha
+            grupos[dia]["pedidos"].append(o2)
             grupos[dia]["qtd"] += 1
             if o.get("status") == "paid":
                 grupos[dia]["pagos"] += 1

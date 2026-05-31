@@ -1391,15 +1391,50 @@
           const dataFmt = b.data !== 'sem-data' ? new Date(b.data+'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'}) : 'Sem data';
           const linhas = b.pedidos.map(o => {
             const hora = o.created_at ? new Date(o.created_at*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '';
-            const st = o.status === 'paid' ? '<span style="color:#4caf50;">Pago</span>' : '<span style="color:#ff9800;">Pendente</span>';
-            return `<tr><td>${hora}</td><td>${o.product_name||''}</td><td>${o.customer_name||''}<br><small>${o.customer_email||''}</small></td><td>R$ ${(parseFloat(o.price)||0).toFixed(2)}</td><td>${st}</td></tr>`;
+            const stPag = o.status === 'paid' ? '<span style="color:#4caf50;">Pago</span>' : '<span style="color:#ff9800;">Pendente</span>';
+            // LOGIN (email + senha) entregue / vinculado
+            const lEmail = o.login_email || '';
+            const lSenha = o.login_senha || '';
+            let loginCell;
+            if (lEmail) {
+              const senhaTxt = lSenha ? lSenha : '<span style="color:#888;">—</span>';
+              const loginCopy = lEmail + (lSenha ? ' | '+lSenha : '');
+              loginCell = `<div style="font-weight:600;">${lEmail}</div>
+                <div style="font-size:.85rem;color:#fcd34d;">🔑 ${senhaTxt}</div>
+                <button class="btn-ref" style="margin-top:4px;font-size:.72rem;padding:2px 8px;" onclick="copiarLogin('${loginCopy.replace(/'/g,"\\'")}')">📋 Copiar login</button>`;
+            } else {
+              loginCell = '<span style="color:#888;">sem login vinculado</span>';
+            }
+            // VENCIMENTO + STATUS da assinatura
+            let vencCell = '<span style="color:#888;">—</span>';
+            let stAssin = '<span style="color:#888;">—</span>';
+            let acoesCell = '<span style="color:#888;">—</span>';
+            if (o.sub_email) {
+              const venc = o.sub_expires_at ? new Date(o.sub_expires_at*1000).toLocaleDateString('pt-BR') : '—';
+              vencCell = venc;
+              stAssin = o.sub_active
+                ? `<span style="color:#4caf50;">✓ Ativa (${o.sub_days_left}d)</span>`
+                : '<span style="color:#ff5252;font-weight:700;">✗ VENCIDA</span>';
+              acoesCell = `<button class="btn-ref" onclick="renovarAssinatura('${o.sub_email}')" title="Renovar +${o.sub_dur_days||30}d">♻️ Renovar</button>
+                <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="delAssinatura('${o.sub_email}')">🗑️</button>`;
+            }
+            return `<tr>
+              <td>${hora}</td>
+              <td>${o.product_name||''}</td>
+              <td>${o.customer_name||''}<br><small>${o.customer_email||''}</small></td>
+              <td>${loginCell}</td>
+              <td>${vencCell}</td>
+              <td>${stAssin}<br><small>${stPag}</small></td>
+              <td>R$ ${(parseFloat(o.price)||0).toFixed(2)}</td>
+              <td>${acoesCell}</td>
+            </tr>`;
           }).join('');
           return `<div style="background:rgba(252,211,77,0.05);border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:14px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
               <div style="font-weight:800;color:#fcd34d;text-transform:capitalize;">📅 ${dataFmt}</div>
               <div style="font-size:.9rem;">Pedidos: <b>${b.qtd}</b> | Pagos: <b style="color:#4caf50;">${b.pagos}</b> | Total: <b style="color:#fcd34d;">R$ ${b.total.toFixed(2)}</b></div>
             </div>
-            <div class="twrap"><table><thead><tr><th>Hora</th><th>Produto</th><th>Cliente</th><th>Valor</th><th>Status</th></tr></thead><tbody>${linhas}</tbody></table></div>
+            <div class="twrap"><table><thead><tr><th>Hora</th><th>Produto</th><th>Cliente</th><th>Login (Email + Senha)</th><th>Vencimento</th><th>Status</th><th>Valor</th><th>Ações</th></tr></thead><tbody>${linhas}</tbody></table></div>
           </div>`;
         }).join('');
       } catch(e) { console.log('compras-data err', e); }
