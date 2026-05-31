@@ -2445,6 +2445,9 @@
               } else {
                 showError(data.message || 'Código não encontrado.');
               }
+            } else if (data.subscription_expired) {
+              // ╔══ Assinatura vencida: oferece renovação via Pix ══╗
+              showRenovacao(emailVal, data.expired_at, data.renew_value);
             } else {
               const msg = data.message || 'Código não encontrado.';
               if (msg.toLowerCase().includes('não encontrado') || msg.toLowerCase().includes('nao encontrado') || msg.toLowerCase().includes('nenhum email')) {
@@ -2634,6 +2637,72 @@
       navigator.clipboard.writeText(code).then(() => {
         showToast('✓ Código copiado!');
       });
+    }
+
+    // ╔══ RENOVAÇÃO DE ASSINATURA VENCIDA (via Pix) ══╗
+    let _renovEmail = '';
+    let _renovInterval = null;
+    function showRenovacao(email, expiredAt, valor) {
+      _renovEmail = email;
+      const box = document.getElementById('result-box');
+      box.className = 'result-box error';
+      box.innerHTML = `
+        <span class="result-emoji">⏰</span>
+        <div class="error-title" style="color:#fcd34d;">Assinatura Vencida</div>
+        <div class="error-msg">
+          A conta <b>${email}</b> venceu em <b>${expiredAt||'-'}</b>.<br>
+          Os códigos estão <b>bloqueados</b> até a renovação.<br><br>
+          <b style="color:#fcd34d;font-size:1.2rem;">Renovar por R$ ${(parseFloat(valor)||35).toFixed(2)}</b><br>
+          <small>+30 dias de acesso</small>
+        </div>
+        <button class="btn-primary" style="margin-top:14px;background:linear-gradient(135deg,#dc2626,#b91c1c);" onclick="gerarPixRenovacao()" id="btn-renovar">
+          💳 Gerar Pix para Renovar
+        </button>
+        <div id="renov-pix-area" style="margin-top:16px;"></div>
+      `;
+      box.style.display = 'block';
+    }
+
+    async function gerarPixRenovacao() {
+      const btn = document.getElementById('btn-renovar');
+      const area = document.getElementById('renov-pix-area');
+      if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner"></span> Gerando Pix...'; }
+      try {
+        const r = await fetch('/api/renovar/pix', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:_renovEmail})});
+        const j = await r.json();
+        if (!j.success) { area.innerHTML = '<div style="color:#ff5252;">'+(j.message||'Erro ao gerar Pix')+'</div>'; if(btn){btn.disabled=false;btn.innerHTML='💳 Gerar Pix para Renovar';} return; }
+        let html = '<div style="background:rgba(255,255,255,0.05);padding:14px;border-radius:12px;">';
+        if (j.pix_qrcode) html += '<img src="'+j.pix_qrcode+'" alt="QR Pix" style="width:200px;max-width:90%;border-radius:10px;margin-bottom:10px;"/><br>';
+        if (j.pix_copia_cola) {
+          html += '<div style="font-size:.8rem;color:#aaa;margin-bottom:6px;">Pix Copia e Cola:</div>';
+          html += '<textarea readonly onclick="this.select()" style="width:100%;height:70px;font-size:.75rem;padding:8px;border-radius:8px;">'+j.pix_copia_cola+'</textarea>';
+          html += '<button class="btn-primary" style="margin-top:8px;" onclick="navigator.clipboard.writeText('+JSON.stringify(j.pix_copia_cola)+');showToast(\'✓ Pix copiado!\')">📋 Copiar Pix</button>';
+        }
+        html += '<div style="margin-top:12px;color:#fcd34d;" id="renov-status"><span class="spinner"></span> Aguardando pagamento...</div>';
+        html += '</div>';
+        area.innerHTML = html;
+        if (btn) btn.style.display = 'none';
+        // poll de status a cada 5s
+        if (_renovInterval) clearInterval(_renovInterval);
+        _renovInterval = setInterval(checarRenovacao, 5000);
+      } catch(e) {
+        area.innerHTML = '<div style="color:#ff5252;">Erro de conexão. Tente novamente.</div>';
+        if(btn){btn.disabled=false;btn.innerHTML='💳 Gerar Pix para Renovar';}
+      }
+    }
+
+    async function checarRenovacao() {
+      try {
+        const r = await fetch('/api/renovar/status', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:_renovEmail})});
+        const j = await r.json();
+        if (j.paid) {
+          if (_renovInterval) clearInterval(_renovInterval);
+          const st = document.getElementById('renov-status');
+          if (st) st.innerHTML = '<span style="color:#4caf50;font-weight:700;">✅ '+(j.message||'Renovado com sucesso!')+'</span>';
+          showToast('✅ Assinatura renovada! Já pode buscar códigos.');
+          setTimeout(() => { const b=document.getElementById('result-box'); if(b) b.style.display='none'; }, 4000);
+        }
+      } catch(e) {}
     }
 
     function showToast(msg) {

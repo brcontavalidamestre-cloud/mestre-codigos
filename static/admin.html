@@ -493,6 +493,44 @@
     </div>
 
 
+        <!-- ============ PAINEL DE COBRANÇA (assinaturas) — só no MESTRE ============ -->
+    <div class="panel" id="cobranca-panel" style="display:none;margin-top:30px;border:2px solid #fcd34d;">
+      <div class="phdr">
+        <div class="ptit">💳 Painel de Cobrança — Assinaturas</div>
+        <button class="btn-ref" onclick="loadAssinaturas()">🔄 Atualizar</button>
+      </div>
+      <div class="sinfo" style="margin-bottom:10px;">Cadastre as contas (logins) com vencimento. Conta vencida = códigos bloqueados até renovar.</div>
+      <form id="assin-form" onsubmit="addAssinatura(event)" style="margin-bottom:16px;background:rgba(252,211,77,0.06);padding:14px;border-radius:10px;">
+        <div class="fgrid">
+          <div class="fgrp"><label class="flbl">✉ Email da conta</label><input class="fi" id="as-email" placeholder="conta@cliente.com" required/></div>
+          <div class="fgrp"><label class="flbl">🎬 Plataforma</label><input class="fi" id="as-plat" placeholder="Netflix" value="Netflix"/></div>
+          <div class="fgrp"><label class="flbl">👤 Cliente (opcional)</label><input class="fi" id="as-cliente" placeholder="Nome do cliente"/></div>
+          <div class="fgrp"><label class="flbl">📱 Telefone (opcional)</label><input class="fi" id="as-tel" placeholder="WhatsApp"/></div>
+          <div class="fgrp"><label class="flbl">💰 Valor renovação (R$)</label><input class="fi" id="as-valor" placeholder="35.00"/></div>
+          <div class="fgrp"><label class="flbl">📅 Dias de validade</label><input class="fi" id="as-dias" placeholder="30" value="30"/></div>
+          <div class="fgrp"><label class="flbl">📆 OU vencimento exato (opcional)</label><input class="fi" id="as-vencdate" type="date"/></div>
+        </div>
+        <button type="submit" class="btn-p">➕ Cadastrar / Atualizar Conta</button>
+      </form>
+      <div class="twrap">
+        <table>
+          <thead><tr><th>Email</th><th>Plataforma</th><th>Cliente</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead>
+          <tbody id="assin-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- COMPRAS POR DATA -->
+    <div class="panel" id="compras-data-panel" style="display:none;margin-top:20px;border:1px solid #fcd34d;">
+      <div class="phdr">
+        <div class="ptit">📅 Compras por Data</div>
+        <button class="btn-ref" onclick="loadComprasPorData()">🔄 Atualizar</button>
+      </div>
+      <div class="sinfo" style="margin-bottom:10px;">Todas as compras agrupadas por dia. Cada bloco mostra o total do dia.</div>
+      <div id="compras-data-list" style="display:flex;flex-direction:column;gap:16px;"></div>
+    </div>
+
+
     <!-- ============ MESTRE: LICENÇAS DE SITES FILHOS ============ -->
     <!-- Visivel APENAS no domínio MESTRE -->
     <div class="panel" id="licencas-panel" style="display:none;margin-top:20px;">
@@ -839,6 +877,7 @@
       loadOrders();
       checkMasterAndShowLicencas();
       showLoja2IfRios();
+      showCobrancaIfMaster();
       loadBackupSummary();
     })();
 
@@ -1219,6 +1258,111 @@
           return `<tr><td>${o.id||''}</td><td>${o.product_name||''}</td><td>${o.customer_name||''}<br><small>${o.customer_email||''}</small></td><td>R$ ${(o.price||0).toFixed ? (o.price).toFixed(2) : o.price}</td><td>${st}</td><td><small>${d}</small></td></tr>`;
         }).join('');
       } catch(e) { console.log('loja2 ord err', e); }
+    }
+
+
+    
+    /* ============ PAINEL DE COBRANÇA (assinaturas) — só no MESTRE ============ */
+    async function showCobrancaIfMaster() {
+      try {
+        const r = await fetch('/api/site-mode');
+        const j = await r.json();
+        if (j && j.is_master) {
+          ['cobranca-panel','compras-data-panel'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) el.style.display = 'block';
+          });
+          loadAssinaturas();
+          loadComprasPorData();
+        }
+      } catch(e) {}
+    }
+
+    async function loadAssinaturas() {
+      try {
+        const r = await fetch('/api/admin/assinaturas');
+        const j = await r.json();
+        const tb = document.getElementById('assin-tbody');
+        if (!j.success || !j.subscriptions.length) {
+          tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">Nenhuma conta cadastrada</td></tr>';
+          return;
+        }
+        tb.innerHTML = j.subscriptions.map(s => {
+          const venc = s.expires_at ? new Date(s.expires_at*1000).toLocaleDateString('pt-BR') : '-';
+          const st = s.active
+            ? `<span style="color:#4caf50;">✓ Ativa (${s.days_left}d)</span>`
+            : '<span style="color:#ff5252;font-weight:700;">✗ VENCIDA</span>';
+          return `<tr>
+            <td>${s.email||''}</td>
+            <td>${s.plataforma||''}</td>
+            <td>${s.cliente||'-'}${s.telefone?'<br><small>'+s.telefone+'</small>':''}</td>
+            <td>${venc}</td>
+            <td>${st}</td>
+            <td>
+              <button class="btn-ref" onclick="renovarAssinatura('${s.email}')" title="Renovar +${s.dur_days||30}d">♻️ Renovar</button>
+              <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="delAssinatura('${s.email}')">🗑️</button>
+            </td>
+          </tr>`;
+        }).join('');
+      } catch(e) { console.log('assin err', e); }
+    }
+
+    async function addAssinatura(ev) {
+      ev.preventDefault();
+      const body = {
+        email: document.getElementById('as-email').value,
+        plataforma: document.getElementById('as-plat').value,
+        cliente: document.getElementById('as-cliente').value,
+        telefone: document.getElementById('as-tel').value,
+        valor: document.getElementById('as-valor').value,
+        dur_days: document.getElementById('as-dias').value,
+        expires_date: document.getElementById('as-vencdate').value,
+      };
+      const r = await fetch('/api/admin/assinaturas', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const j = await r.json();
+      if (j.success) { showToast('✓ Conta cadastrada'); document.getElementById('assin-form').reset(); document.getElementById('as-plat').value='Netflix'; document.getElementById('as-dias').value='30'; loadAssinaturas(); }
+      else showToast('✗ '+(j.message||'Erro'));
+    }
+
+    async function renovarAssinatura(email) {
+      if (!confirm('Renovar a conta '+email+'?')) return;
+      const r = await fetch('/api/admin/assinaturas/'+encodeURIComponent(email)+'/renovar', {method:'POST'});
+      const j = await r.json();
+      if (j.success) { showToast('✓ Renovada'); loadAssinaturas(); } else showToast('✗ '+(j.message||'Erro'));
+    }
+
+    async function delAssinatura(email) {
+      if (!confirm('Remover a conta '+email+'?')) return;
+      const r = await fetch('/api/admin/assinaturas/'+encodeURIComponent(email), {method:'DELETE'});
+      const j = await r.json();
+      if (j.success) { showToast('✓ Removida'); loadAssinaturas(); } else showToast('✗ '+(j.message||'Erro'));
+    }
+
+    async function loadComprasPorData() {
+      try {
+        const r = await fetch('/api/admin/compras-por-data');
+        const j = await r.json();
+        const list = document.getElementById('compras-data-list');
+        if (!j.success || !j.blocos.length) {
+          list.innerHTML = '<div style="color:#888;text-align:center;padding:14px;">Nenhuma compra ainda</div>';
+          return;
+        }
+        list.innerHTML = j.blocos.map(b => {
+          const dataFmt = b.data !== 'sem-data' ? new Date(b.data+'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'}) : 'Sem data';
+          const linhas = b.pedidos.map(o => {
+            const hora = o.created_at ? new Date(o.created_at*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '';
+            const st = o.status === 'paid' ? '<span style="color:#4caf50;">Pago</span>' : '<span style="color:#ff9800;">Pendente</span>';
+            return `<tr><td>${hora}</td><td>${o.product_name||''}</td><td>${o.customer_name||''}<br><small>${o.customer_email||''}</small></td><td>R$ ${(parseFloat(o.price)||0).toFixed(2)}</td><td>${st}</td></tr>`;
+          }).join('');
+          return `<div style="background:rgba(252,211,77,0.05);border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+              <div style="font-weight:800;color:#fcd34d;text-transform:capitalize;">📅 ${dataFmt}</div>
+              <div style="font-size:.9rem;">Pedidos: <b>${b.qtd}</b> | Pagos: <b style="color:#4caf50;">${b.pagos}</b> | Total: <b style="color:#fcd34d;">R$ ${b.total.toFixed(2)}</b></div>
+            </div>
+            <div class="twrap"><table><thead><tr><th>Hora</th><th>Produto</th><th>Cliente</th><th>Valor</th><th>Status</th></tr></thead><tbody>${linhas}</tbody></table></div>
+          </div>`;
+        }).join('');
+      } catch(e) { console.log('compras-data err', e); }
     }
 
 
