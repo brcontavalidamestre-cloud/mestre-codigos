@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, send_from_directory, session, redirec
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import imaplib
+import smtplib
 import email
 from email.header import decode_header
 import re
@@ -261,6 +262,13 @@ LICENSES_FILE       = os.environ.get("LICENSES_FILE", os.path.join(_data_dir, "l
 KUKU_WEBHOOK_FILE   = os.environ.get("KUKU_WEBHOOK_FILE", os.path.join(_data_dir, "kuku_webhook_mails.json"))
 # Token simples p/ validar o webhook (configurável via env)
 KUKU_WEBHOOK_TOKEN  = os.environ.get("KUKU_WEBHOOK_TOKEN", "rios2026kuku")
+# Repasse do webhook por SMTP para uma caixa de email (deixa tudo cair lá, sem limite)
+KUKU_FORWARD_TO     = os.environ.get("KUKU_FORWARD_TO", "mestre@ggtv.net.br")
+KUKU_SMTP_SERVER    = os.environ.get("KUKU_SMTP_SERVER", "mail.ggtv.net.br")
+KUKU_SMTP_PORT      = int(os.environ.get("KUKU_SMTP_PORT", 465))
+KUKU_SMTP_USER      = os.environ.get("KUKU_SMTP_USER", "mestre@ggtv.net.br")
+KUKU_SMTP_PASS      = os.environ.get("KUKU_SMTP_PASS", "Mestre13579@")
+KUKU_FORWARD_ENABLE = os.environ.get("KUKU_FORWARD_ENABLE", "1") == "1"
 
 # Domínio do painel MESTRE (só ele pode gerenciar licenças).
 # Pode incluir múltiplos separados por vírgula via env MASTER_DOMAINS.
@@ -4131,6 +4139,52 @@ def api_admin_migrate_users():
 # ╔═══════════════════════════════════════════════════════════════╗
 # ║  WEBHOOK KUKU.LU — recebe emails encaminhados do InstAddr (apenas rios) ║
 # ╚═══════════════════════════════════════════════════════════════╝
+def _kuku_forward_to_mailbox(to_addr, from_addr, subject, body, original_raw=""):
+    """Repassa o email recebido via webhook para a caixa KUKU_FORWARD_TO por SMTP.
+    Assim TODOS os emails caem em mestre@ggtv.net.br SEM o limite de 200/dia do kuku.
+    """
+    if not KUKU_FORWARD_ENABLE or not KUKU_FORWARD_TO:
+        return False
+    try:
+        from email.mime.text import MIMEText
+        from email.mime.multipart import MIMEMultipart
+        from email.utils import formatdate
+
+        # Monta o assunto preservando info do destinatário original
+        subj = subject or "(sem assunto)"
+        # Corpo: inclui o destinatário original p/ a busca conseguir filtrar
+        full_body = body or ""
+        if original_raw and original_raw not in full_body:
+            full_body = full_body + "\n\n----- Original -----\n" + original_raw
+        # Garante que o destinatário original apareça no corpo (p/ filtro por email)
+        header_line = f"X-Original-To: {to_addr}\nPara original: {to_addr}\nDe: {from_addr}\n\n"
+        full_body = header_line + full_body
+
+        msg = MIMEMultipart()
+        msg["From"] = KUKU_SMTP_USER
+        msg["To"] = KUKU_FORWARD_TO
+        # Reply-To traz o remetente original (netflix etc)
+        if from_addr:
+            msg["Reply-To"] = from_addr
+        msg["Subject"] = subj
+        msg["Date"] = formatdate(localtime=True)
+        msg.attach(MIMEText(full_body, "plain", "utf-8"))
+
+        if KUKU_SMTP_PORT == 465:
+            srv = smtplib.SMTP_SSL(KUKU_SMTP_SERVER, KUKU_SMTP_PORT, timeout=20)
+        else:
+            srv = smtplib.SMTP(KUKU_SMTP_SERVER, KUKU_SMTP_PORT, timeout=20)
+            srv.starttls()
+        srv.login(KUKU_SMTP_USER, KUKU_SMTP_PASS)
+        srv.sendmail(KUKU_SMTP_USER, [KUKU_FORWARD_TO], msg.as_string())
+        srv.quit()
+        print(f"[kuku-forward] ✅ repassado p/ {KUKU_FORWARD_TO}: to={to_addr} subj='{subj[:40]}'")
+        return True
+    except Exception as e:
+        print(f"[kuku-forward] erro SMTP: {type(e).__name__}: {e}")
+        return False
+
+
 def _load_kuku_mails():
     return _read_json_safe(KUKU_WEBHOOK_FILE, [])
 
@@ -4187,6 +4241,7 @@ def api_kuku_webhook():
     from_addr = _pick("from", "de", "sender", "remetente", "username")
     subject  = _pick("subject", "assunto", "titulo", "title")
     body     = _pick("body", "text", "textbody", "html", "message", "conteudo", "content") or raw_body
+    original = _pick("originaldata", "original", "raw")
 
     # ╔═ Formato PADRÃO do kuku.lu: {"content": "#subject#\n#textbody#", "username": "#from#"} ═╗
     # Nesse caso 'content' traz assunto+corpo juntos e não há 'to' nem 'subject' separados.
@@ -4234,6 +4289,16 @@ def api_kuku_webhook():
     if len(mails) > 500:
         mails = mails[-500:]
     _save_kuku_mails(mails)
+
+    # ╔═ REPASSE para mestre@ggtv.net.br (SEM limite de 200/dia) ═╗
+    # Roda em thread para não atrasar a resposta ao kuku.lu
+    if KUKU_FORWARD_ENABLE:
+        def _do_forward():
+            _kuku_forward_to_mailbox(to_addr, from_addr, subject, body, original or raw_body)
+        try:
+            threading.Thread(target=_do_forward, daemon=True).start()
+        except Exception as _e:
+            print(f"[kuku-webhook] erro thread forward: {_e}")
 
     # ╔═ MODO DEBUG: salva a ÚLTIMA requisição crua para diagnóstico ═╗
     try:
