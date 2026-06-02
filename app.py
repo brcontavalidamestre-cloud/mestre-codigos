@@ -4104,6 +4104,102 @@ def api_renovar_status():
 
 
 # ── COMPRAS AGRUPADAS POR DATA (admin) ──
+
+@app.route("/api/admin/backup-volume", methods=["GET"])
+@admin_required
+def api_admin_backup_volume():
+    """Baixa TODOS os arquivos JSON do volume /data em um unico ZIP.
+    Use para clonar a aplicacao em outro projeto Railway."""
+    import io as _io, zipfile as _zf, os as _os, datetime as _dt
+    try:
+        base = _data_dir
+        if not _os.path.isdir(base):
+            return jsonify({"success": False, "message": f"Diretorio {base} nao existe"}), 500
+        buf = _io.BytesIO()
+        nomes = []
+        with _zf.ZipFile(buf, "w", _zf.ZIP_DEFLATED) as zf:
+            for nome in _os.listdir(base):
+                caminho = _os.path.join(base, nome)
+                if _os.path.isfile(caminho):
+                    try:
+                        zf.write(caminho, arcname=nome)
+                        nomes.append(nome)
+                    except Exception:
+                        pass
+        buf.seek(0)
+        ts = _dt.datetime.utcnow().strftime("%Y%m%d-%H%M%S")
+        from flask import send_file
+        resp = send_file(
+            buf,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name=f"volume-backup-{ts}.zip",
+        )
+        # adiciona lista dos arquivos no header (debug)
+        resp.headers["X-Backup-Files"] = ",".join(nomes)[:500]
+        return resp
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
+
+
+@app.route("/api/admin/restore-volume", methods=["POST"])
+@admin_required
+def api_admin_restore_volume():
+    """Restaura o volume /data a partir de um ZIP enviado via upload (campo 'file').
+    SOBRESCREVE arquivos existentes - use com cuidado. Protegido por admin."""
+    import io as _io, zipfile as _zf, os as _os
+    try:
+        if "file" not in request.files:
+            return jsonify({"success": False, "message": "Envie o arquivo ZIP no campo 'file'."}), 400
+        upload = request.files["file"]
+        if not upload or not upload.filename:
+            return jsonify({"success": False, "message": "Arquivo invalido."}), 400
+        # le tudo em memoria
+        raw = upload.read()
+        if not raw:
+            return jsonify({"success": False, "message": "ZIP vazio."}), 400
+        # confirma com parametro ?confirm=SIM (evita restauracao acidental)
+        if request.args.get("confirm", "") != "SIM":
+            return jsonify({
+                "success": False,
+                "message": "Adicione ?confirm=SIM na URL para confirmar a restauracao (sobrescreve arquivos)."
+            }), 400
+        base = _data_dir
+        if not _os.path.isdir(base):
+            try:
+                _os.makedirs(base, exist_ok=True)
+            except Exception as e:
+                return jsonify({"success": False, "message": f"Nao foi possivel criar {base}: {e}"}), 500
+        restored = []
+        skipped = []
+        with _zf.ZipFile(_io.BytesIO(raw), "r") as zf:
+            for info in zf.infolist():
+                nome = _os.path.basename(info.filename)
+                if not nome or info.is_dir():
+                    skipped.append(info.filename)
+                    continue
+                # so aceita arquivos .json (seguranca)
+                if not nome.lower().endswith(".json"):
+                    skipped.append(nome + " (nao .json)")
+                    continue
+                destino = _os.path.join(base, nome)
+                try:
+                    with zf.open(info) as src, open(destino, "wb") as dst:
+                        dst.write(src.read())
+                    restored.append(nome)
+                except Exception as e:
+                    skipped.append(f"{nome} (erro: {e})")
+        return jsonify({
+            "success": True,
+            "restored": restored,
+            "skipped": skipped,
+            "data_dir": base,
+            "message": f"{len(restored)} arquivo(s) restaurado(s) em {base}. Reinicie o servico (ja recarrega na proxima leitura)."
+        })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
+
+
 @app.route("/api/admin/compras-por-data", methods=["GET"])
 @admin_required
 def api_admin_compras_por_data():
