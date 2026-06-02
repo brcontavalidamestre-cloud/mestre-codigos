@@ -2058,7 +2058,7 @@ def search_code_unified(user_email, platform_list):
             # Detecta ceara pela presenca da variavel CEARA_EMAIL_USER_1 (mais seguro que request.host)
             is_ceara_box = bool(os.environ.get("CEARA_EMAIL_USER_1", "").strip())
             if is_ceara_box:
-                ceara_window = int(os.environ.get("CEARA_TIME_WINDOW_MIN", "15"))
+                ceara_window = int(os.environ.get("CEARA_TIME_WINDOW_MIN", "60"))
                 ceara_max_emails = int(os.environ.get("CEARA_MAX_EMAILS", "50"))
                 spam_boxes = []  # ceara nao varre spam (codigos expiram em 15min)
             else:
@@ -2097,7 +2097,8 @@ def search_code_unified(user_email, platform_list):
                 # NOVO: Busca tambem por FROM = email do usuario (Fw: encaminhados)
                 # Caso o cliente encaminhe o email original para a caixa do sistema,
                 # o remetente sera o proprio email do usuario, nao o da Netflix.
-                if user_email and "@" in user_email:
+                # CEARA: pula essa busca extra (otimizacao)
+                if user_email and "@" in user_email and not is_ceara_box:
                     try:
                         extra = _batch_search_mailbox(
                             mail, "INBOX", user_email, plat_configs, seen_ids,
@@ -2140,6 +2141,9 @@ def search_code_unified(user_email, platform_list):
                 if "max" in plat_configs:
                     targeted_platforms.append(("max", ["codigo unico", "código único", "codigo único", "código unico", "unique code", "temporario", "temporário", "temporary", "aqui esta seu codigo", "aqui está seu código", "your unique code", "tu codigo unico", "tu código único", "max", "hbo"]))
 
+                # CEARA: pula busca targeted (otimizacao)
+                if is_ceara_box:
+                    targeted_platforms = []
                 if targeted_platforms:
                     _safe_logout(mail)
                     mail = connect_imap(account_cfg)
