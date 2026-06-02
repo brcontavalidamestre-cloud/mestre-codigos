@@ -187,6 +187,19 @@ RIOS_IMAP_PORT   = int(os.environ.get("RIOS_IMAP_PORT", 993))
 RIOS_EMAIL_USER  = os.environ.get("RIOS_EMAIL_USER", "mestre@ggtv.net.br")
 RIOS_EMAIL_PASS  = os.environ.get("RIOS_EMAIL_PASS", "Mestre13579@")
 
+# ─── Caixas IMAP EXCLUSIVAS do ceara.up.railway.app ────────────────────────────
+# Estas variaveis sao definidas APENAS no serviço 'ceara' no Railway.
+# Em qualquer outro link (rios, mestre, lojario, jmp...) elas ficam vazias e
+# sao IGNORADAS — ou seja, NADA muda nos outros sites.
+CEARA_IMAP_SERVER_1 = os.environ.get("CEARA_IMAP_SERVER_1", "")
+CEARA_IMAP_PORT_1   = int(os.environ.get("CEARA_IMAP_PORT_1", 993))
+CEARA_EMAIL_USER_1  = os.environ.get("CEARA_EMAIL_USER_1", "")
+CEARA_EMAIL_PASS_1  = os.environ.get("CEARA_EMAIL_PASS_1", "")
+CEARA_IMAP_SERVER_2 = os.environ.get("CEARA_IMAP_SERVER_2", "")
+CEARA_IMAP_PORT_2   = int(os.environ.get("CEARA_IMAP_PORT_2", 993))
+CEARA_EMAIL_USER_2  = os.environ.get("CEARA_EMAIL_USER_2", "")
+CEARA_EMAIL_PASS_2  = os.environ.get("CEARA_EMAIL_PASS_2", "")
+
 
 def _is_rios_request():
     """True se o request atual vem de rios.up.railway.app"""
@@ -196,7 +209,39 @@ def _is_rios_request():
         return False
 
 
+def _is_ceara_request():
+    """True se o request atual vem de ceara.up.railway.app"""
+    try:
+        return "ceara" in (request.host or "").lower()
+    except Exception:
+        return False
+
+
 def get_imap_accounts():
+    # ╔══ CEARA: usa SOMENTE as 2 caixas exclusivas (nao usa ggtv, nem principal) ══╗
+    if _is_ceara_request():
+        ceara_accs = []
+        if CEARA_EMAIL_USER_1 and CEARA_EMAIL_PASS_1 and CEARA_IMAP_SERVER_1:
+            ceara_accs.append({
+                "name": "caixa-ceara-1",
+                "server": CEARA_IMAP_SERVER_1,
+                "port": CEARA_IMAP_PORT_1,
+                "user": CEARA_EMAIL_USER_1,
+                "password": CEARA_EMAIL_PASS_1,
+            })
+        if CEARA_EMAIL_USER_2 and CEARA_EMAIL_PASS_2 and CEARA_IMAP_SERVER_2:
+            ceara_accs.append({
+                "name": "caixa-ceara-2",
+                "server": CEARA_IMAP_SERVER_2,
+                "port": CEARA_IMAP_PORT_2,
+                "user": CEARA_EMAIL_USER_2,
+                "password": CEARA_EMAIL_PASS_2,
+            })
+        if ceara_accs:
+            return ceara_accs
+        # se nao houver caixas configuradas para ceara, retorna vazio (nao usa as outras)
+        return []
+
     # ╔══ RIOS: usa SOMENTE a caixa ggtv.net.br ══╗
     if _is_rios_request() and RIOS_EMAIL_USER and RIOS_EMAIL_PASS:
         return [{
