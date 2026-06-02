@@ -4976,6 +4976,45 @@ def api_admin_backup_summary():
     except Exception as e:
         return jsonify({"success": False, "message": str(e)}), 500
 
+
+@app.route("/api/admin/wipe-users", methods=["POST"])
+@admin_required
+def api_admin_wipe_users():
+    """Remove TODOS os usuarios do users.json, exceto os listados em 'keep'.
+    Bypassa a regra de 'created_by' - so o admin do sistema deve usar.
+    Body JSON: {"keep": ["ceara","outro"], "confirm": "SIM"}
+    """
+    data = request.get_json(silent=True) or {}
+    if data.get("confirm") != "SIM":
+        return jsonify({"success": False, "message": "Adicione confirm=SIM no body para confirmar."}), 400
+    keep_raw = data.get("keep") or []
+    if not isinstance(keep_raw, list):
+        return jsonify({"success": False, "message": "Campo 'keep' deve ser uma lista de usernames."}), 400
+    keep = {str(u).strip().lower() for u in keep_raw if u}
+    # sempre preserva o admin logado para nao ficar trancado fora
+    current_admin = session.get("username")
+    if current_admin:
+        keep.add(str(current_admin).strip().lower())
+    users = load_users()
+    antes = len(users)
+    removidos = []
+    novos = {}
+    for uname, udata in users.items():
+        if str(uname).strip().lower() in keep:
+            novos[uname] = udata
+        else:
+            removidos.append(uname)
+    save_users(novos)
+    return jsonify({
+        "success": True,
+        "antes": antes,
+        "depois": len(novos),
+        "removidos_total": len(removidos),
+        "removidos_amostra": removidos[:10],
+        "mantidos": list(novos.keys()),
+    })
+
+
 @app.route("/api/admin/migrate-users", methods=["POST"])
 @admin_required
 def api_admin_migrate_users():
