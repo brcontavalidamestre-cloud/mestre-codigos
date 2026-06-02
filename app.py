@@ -1696,11 +1696,15 @@ def _get_spam_boxes(mail, account_cfg=None):
 FWD_PREFIXES_SEARCH = ["ENC:", "Enc:", "FW:", "Fw:", "Fwd:", "FWD:", "RE:", "Re:"]
 
 def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
-                           use_date_filter=True, since_date=None):
+                           use_date_filter=True, since_date=None,
+                           max_age_minutes=None, max_emails=100):
     """
     Busca emails de uma caixa usando BATCH FETCH de headers.
     Filtra por múltiplas plataformas de uma vez.
     Retorna lista de (mailbox, platform_key, email_id) do MAIS RECENTE para o mais antigo.
+
+    max_age_minutes: se definido, descarta emails cuja data > X minutos atras (otimizacao ceara)
+    max_emails: quantos emails fazer batch fetch (padrao 100)
     """
     matched = []
     try:
@@ -1717,12 +1721,18 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
         status, msgs = mail.search(None, *search_criteria)
         if status == "OK" and msgs[0]:
             all_ids = msgs[0].split()
-            # 100 mais recentes (equilíbrio entre cobertura e velocidade)
-            recent_ids = all_ids[-100:]
+            # max_emails mais recentes
+            recent_ids = all_ids[-max_emails:]
+            # cutoff para filtro fino por minutos
+            cutoff_ts = None
+            if max_age_minutes:
+                cutoff_ts = _dt.utcnow().timestamp() - (max_age_minutes * 60)
 
             # ── BATCH FETCH de todos os headers em um único round-trip ──────
             id_str = b",".join(recent_ids)
-            st_b, data_b = mail.fetch(id_str, "(BODY[HEADER.FIELDS (SUBJECT)])")
+            # se filtro de minutos, busca tambem Date para checar idade
+            fetch_fields = "(BODY[HEADER.FIELDS (SUBJECT DATE)])" if cutoff_ts else "(BODY[HEADER.FIELDS (SUBJECT)])"
+            st_b, data_b = mail.fetch(id_str, fetch_fields)
             if st_b == "OK":
                 id_idx = 0
                 for item in data_b:
@@ -1732,6 +1742,18 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                         eid = recent_ids[id_idx]
                         hdr  = email.message_from_bytes(item[1])
                         subj = decode_str(hdr.get("Subject", ""))
+                        # filtro fino por idade (minutos) usando o header Date
+                        if cutoff_ts:
+                            try:
+                                from email.utils import parsedate_to_datetime
+                                msg_dt = parsedate_to_datetime(hdr.get("Date", ""))
+                                if msg_dt:
+                                    msg_ts = msg_dt.timestamp()
+                                    if msg_ts < cutoff_ts:
+                                        id_idx += 1
+                                        continue
+                            except Exception:
+                                pass
                         key  = (mailbox, eid)
                         if key not in seen_ids:
                             for plat_key, plat_cfg in platform_configs.items():
@@ -2031,23 +2053,39 @@ def search_code_unified(user_email, platform_list):
             today     = _dt.utcnow().strftime("%d-%b-%Y")
             since_2d  = (_dt.utcnow() - _td(days=2)).strftime("%d-%b-%Y")
             since_7d  = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
-            spam_boxes = _get_spam_boxes(mail, account_cfg)
+
+            # ── OTIMIZACAO CEARA: janela de 15 minutos + sem busca em spam/7dias ──
+            is_ceara_box = _is_ceara_request()
+            if is_ceara_box:
+                ceara_window = int(os.environ.get("CEARA_TIME_WINDOW_MIN", "15"))
+                ceara_max_emails = int(os.environ.get("CEARA_MAX_EMAILS", "50"))
+                spam_boxes = []  # ceara nao varre spam (codigos expiram em 15min)
+            else:
+                ceara_window = None
+                ceara_max_emails = 100
+                spam_boxes = _get_spam_boxes(mail, account_cfg)
             seen_ids   = set()
 
             for sender, plat_configs in by_sender.items():
-                # 1ª passagem: Últimos 2 dias na INBOX (caixa principal)
-                matched = _batch_search_mailbox(
-                    mail, "INBOX", sender, plat_configs, seen_ids,
-                    use_date_filter=True, since_date=since_2d)
+                # 1ª passagem: caixa principal. Ceara: janela 15min na INBOX, hoje
+                if is_ceara_box:
+                    matched = _batch_search_mailbox(
+                        mail, "INBOX", sender, plat_configs, seen_ids,
+                        use_date_filter=True, since_date=today,
+                        max_age_minutes=ceara_window, max_emails=ceara_max_emails)
+                else:
+                    matched = _batch_search_mailbox(
+                        mail, "INBOX", sender, plat_configs, seen_ids,
+                        use_date_filter=True, since_date=since_2d)
 
-                # 2ª passagem: Últimos 7 dias se não achou
-                if not matched:
+                # 2ª passagem: Últimos 7 dias se não achou (PULA no ceara)
+                if not matched and not is_ceara_box:
                     matched = _batch_search_mailbox(
                         mail, "INBOX", sender, plat_configs, seen_ids,
                         use_date_filter=True, since_date=since_7d)
 
-                # 3ª passagem: PASTAS DE SPAM (últimos 7 dias)
-                if not matched:
+                # 3ª passagem: PASTAS DE SPAM (últimos 7 dias) - PULA no ceara
+                if not matched and not is_ceara_box:
                     for mb in spam_boxes:
                         matched.extend(_batch_search_mailbox(
                             mail, mb, sender, plat_configs, seen_ids,
