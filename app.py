@@ -5015,6 +5015,45 @@ def api_admin_wipe_users():
     })
 
 
+
+@app.route("/api/admin/debug-ceara-pass", methods=["GET"])
+@admin_required
+def api_admin_debug_ceara_pass():
+    """Mostra o valor exato (em hex) das senhas Ceara para diagnostico.
+    NAO retorna a senha em texto claro - apenas hex e tamanho."""
+    p1 = os.environ.get("CEARA_EMAIL_PASS_1", "")
+    p2 = os.environ.get("CEARA_EMAIL_PASS_2", "")
+    u1 = os.environ.get("CEARA_EMAIL_USER_1", "")
+    u2 = os.environ.get("CEARA_EMAIL_USER_2", "")
+    s1 = os.environ.get("CEARA_IMAP_SERVER_1", "")
+    s2 = os.environ.get("CEARA_IMAP_SERVER_2", "")
+    return jsonify({
+        "caixa1": {
+            "server": s1,
+            "user": u1,
+            "pass_len": len(p1),
+            "pass_hex": p1.encode("utf-8").hex(),
+            "pass_first_char_code": ord(p1[0]) if p1 else None,
+            "pass_last_char_code": ord(p1[-1]) if p1 else None,
+        },
+        "caixa2": {
+            "server": s2,
+            "user": u2,
+            "pass_len": len(p2),
+            "pass_hex": p2.encode("utf-8").hex(),
+            "pass_first_char_code": ord(p2[0]) if p2 else None,
+            "pass_last_char_code": ord(p2[-1]) if p2 else None,
+        },
+        "esperado_caixa2": {
+            "pass_esperado": "@Ceara2024#",
+            "pass_len_esperado": 11,
+            "pass_hex_esperado": "@Ceara2024#".encode("utf-8").hex(),
+            "first_char_esperado": ord("@"),
+            "last_char_esperado": ord("#"),
+        }
+    })
+
+
 @app.route("/api/admin/migrate-users", methods=["POST"])
 @admin_required
 def api_admin_migrate_users():
