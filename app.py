@@ -2055,7 +2055,8 @@ def search_code_unified(user_email, platform_list):
             since_7d  = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
 
             # ── OTIMIZACAO CEARA: janela de 15 minutos + sem busca em spam/7dias ──
-            is_ceara_box = _is_ceara_request()
+            # Detecta ceara pela presenca da variavel CEARA_EMAIL_USER_1 (mais seguro que request.host)
+            is_ceara_box = bool(os.environ.get("CEARA_EMAIL_USER_1", "").strip())
             if is_ceara_box:
                 ceara_window = int(os.environ.get("CEARA_TIME_WINDOW_MIN", "15"))
                 ceara_max_emails = int(os.environ.get("CEARA_MAX_EMAILS", "50"))
