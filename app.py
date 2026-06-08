@@ -2054,70 +2054,21 @@ def search_code_unified(user_email, platform_list):
             since_2d  = (_dt.utcnow() - _td(days=2)).strftime("%d-%b-%Y")
             since_7d  = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
 
-            # ── OTIMIZACAO CEARA: janela de 15 minutos + sem busca em spam/7dias ──
-            # Detecta ceara pela presenca da variavel CEARA_EMAIL_USER_1 (mais seguro que request.host)
-            is_ceara_box = bool(os.environ.get("CEARA_EMAIL_USER_1", "").strip())
-            if is_ceara_box:
-                ceara_window = int(os.environ.get("CEARA_TIME_WINDOW_MIN", "60"))
-                ceara_max_emails = int(os.environ.get("CEARA_MAX_EMAILS", "50"))
-                spam_boxes = []  # ceara nao varre spam (codigos expiram em 15min)
-            else:
-                ceara_window = None
-                ceara_max_emails = 100
-                spam_boxes = _get_spam_boxes(mail, account_cfg)
+            # ── OTIMIZACAO GLOBAL: janela de 15 minutos + sem spam + sem targeted ──
+            # Busca somente emails dos ultimos 15 minutos (codigos expiram rapido).
+            # Evita varrer a caixa inteira, reduz timeout drasticamente.
+            GLOBAL_WINDOW_MIN = int(os.environ.get("GLOBAL_TIME_WINDOW_MIN", "15"))
+            GLOBAL_MAX_EMAILS = int(os.environ.get("GLOBAL_MAX_EMAILS", "30"))
+            spam_boxes = []  # nao varre spam — codigos de 15min nao vao para spam
             seen_ids   = set()
 
             for sender, plat_configs in by_sender.items():
-                # 1ª passagem: caixa principal. Ceara: janela 15min na INBOX, hoje
-                if is_ceara_box:
-                    matched = _batch_search_mailbox(
-                        mail, "INBOX", sender, plat_configs, seen_ids,
-                        use_date_filter=True, since_date=today,
-                        max_age_minutes=ceara_window, max_emails=ceara_max_emails)
-                else:
-                    matched = _batch_search_mailbox(
-                        mail, "INBOX", sender, plat_configs, seen_ids,
-                        use_date_filter=True, since_date=since_2d)
-
-                # 2ª passagem: Últimos 7 dias se não achou (PULA no ceara)
-                if not matched and not is_ceara_box:
-                    matched = _batch_search_mailbox(
-                        mail, "INBOX", sender, plat_configs, seen_ids,
-                        use_date_filter=True, since_date=since_7d)
-
-                # 3ª passagem: PASTAS DE SPAM (últimos 7 dias) - PULA no ceara
-                if not matched and not is_ceara_box:
-                    for mb in spam_boxes:
-                        matched.extend(_batch_search_mailbox(
-                            mail, mb, sender, plat_configs, seen_ids,
-                            use_date_filter=True, since_date=since_7d))
-                        if matched:
-                            break
-
-                # NOVO: Busca tambem por FROM = email do usuario (Fw: encaminhados)
-                # Caso o cliente encaminhe o email original para a caixa do sistema,
-                # o remetente sera o proprio email do usuario, nao o da Netflix.
-                # CEARA: pula essa busca extra (otimizacao)
-                if user_email and "@" in user_email and not is_ceara_box:
-                    try:
-                        extra = _batch_search_mailbox(
-                            mail, "INBOX", user_email, plat_configs, seen_ids,
-                            use_date_filter=True, since_date=since_2d)
-                        if not extra:
-                            extra = _batch_search_mailbox(
-                                mail, "INBOX", user_email, plat_configs, seen_ids,
-                                use_date_filter=False)
-                        # Tambem busca pelo dominio do usuario (ex: @exxwa.org)
-                        if not extra:
-                            user_domain = user_email.split("@")[1] if "@" in user_email else ""
-                            if user_domain and len(user_domain) >= 3:
-                                extra = _batch_search_mailbox(
-                                    mail, "INBOX", user_domain, plat_configs, seen_ids,
-                                    use_date_filter=True, since_date=since_2d)
-                        if extra:
-                            matched.extend(extra)
-                    except Exception:
-                        pass
+                # Unica passagem: INBOX, so hoje, janela de 15 minutos, max 30 emails
+                matched = _batch_search_mailbox(
+                    mail, "INBOX", sender, plat_configs, seen_ids,
+                    use_date_filter=True, since_date=today,
+                    max_age_minutes=GLOBAL_WINDOW_MIN,
+                    max_emails=GLOBAL_MAX_EMAILS)
 
                 for mb, plat_key, eid in matched:
                     code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
@@ -2125,80 +2076,7 @@ def search_code_unified(user_email, platform_list):
                         _safe_logout(mail)
                         return code, link, plat_key, None
 
-                targeted_platforms = []
-                if "password-reset" in plat_configs:
-                    targeted_platforms.append(("password-reset", ["redefini", "password", "reset", "restablec", "i-reset"]))
-                if "netflix-temp" in plat_configs:
-                    targeted_platforms.append(("netflix-temp", ["tempor", "temporary", "solicitacao de acesso", "solicitação de acesso", "sign-in request", "login request", "inicio de sesion", "inicio de sesión"]))
-                if "netflix-residence" in plat_configs:
-                    targeted_platforms.append(("netflix-residence", ["residencia", "atualizar", "household", "hogar", "importante"]))
-                if "netflix" in plat_configs:
-                    targeted_platforms.append(("netflix", ["vence en 15", "vence em 15", "vence en quince", "vence em quinze", "expires in 15", "expira ap", "expira após 15", "expira apos 15", "verifique com este", "código de verificación", "codigo de verificacion", "código de verificação", "codigo de verificacao", "verification code", "15 minutos", "15 minutes"]))
-                if "netflix-login" in plat_configs:
-                    targeted_platforms.append(("netflix-login", ["vence en 15", "vence em 15", "expires in 15", "expira ap", "expira após 15", "expira apos 15", "verifique com este", "código de verificación", "codigo de verificacion", "código de verificação", "codigo de verificacao", "verification code", "15 minutos", "15 minutes"]))
-                if "disney" in plat_configs:
-                    targeted_platforms.append(("disney", ["codigo de acesso", "acesso unico", "access code", "verification code", "passcode", "codigo de verificacion"]))
-                if "max" in plat_configs:
-                    targeted_platforms.append(("max", ["codigo unico", "código único", "codigo único", "código unico", "unique code", "temporario", "temporário", "temporary", "aqui esta seu codigo", "aqui está seu código", "your unique code", "tu codigo unico", "tu código único", "max", "hbo"]))
-
-                # CEARA: pula busca targeted (otimizacao)
-                if is_ceara_box:
-                    targeted_platforms = []
-                if targeted_platforms:
-                    _safe_logout(mail)
-                    mail = connect_imap(account_cfg)
-                    spam_boxes = _get_spam_boxes(mail, account_cfg)
-
-                for target_plat, targeted_terms in targeted_platforms:
-                    since_7d = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
-                    targeted_matches = []
-
-                    targeted_matches.extend(_targeted_subject_search(
-                        mail, "INBOX", sender, target_plat, seen_ids,
-                        targeted_terms, since_date=since_7d
-                    ))
-
-                    if not targeted_matches:
-                        targeted_matches.extend(_targeted_subject_search(
-                            mail, "INBOX", sender, target_plat, seen_ids,
-                            targeted_terms, since_date=None
-                        ))
-
-                    if not targeted_matches:
-                        for mb in spam_boxes:
-                            targeted_matches.extend(_targeted_subject_search(
-                                mail, mb, sender, target_plat, seen_ids,
-                                targeted_terms, since_date=None
-                            ))
-                            if targeted_matches:
-                                break
-
-                    if not targeted_matches:
-                        targeted_matches.extend(_targeted_forwarded_search(
-                            mail, "INBOX", target_plat, seen_ids,
-                            targeted_terms, since_date=since_7d
-                        ))
-
-                    if not targeted_matches:
-                        targeted_matches.extend(_targeted_forwarded_search(
-                            mail, "INBOX", target_plat, seen_ids,
-                            targeted_terms, since_date=None
-                        ))
-
-                    if not targeted_matches:
-                        for mb in spam_boxes:
-                            targeted_matches.extend(_targeted_forwarded_search(
-                                mail, mb, target_plat, seen_ids,
-                                targeted_terms, since_date=None
-                            ))
-                            if targeted_matches:
-                                break
-
-                    for mb, plat_key, eid in targeted_matches:
-                        code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
-                        if code or link:
-                            _safe_logout(mail)
-                            return code, link, plat_key, None
+                # targeted e buscas em spam/7dias desativadas (otimizacao global)
 
             _safe_logout(mail)
         except imaplib.IMAP4.error as e:
