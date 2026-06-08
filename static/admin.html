@@ -539,14 +539,32 @@
           </div>
         </div>
 
-        <!-- COMPRAS POR DATA -->
+        <!-- COMPRAS POR DATA / PESQUISA DE EMAILS VENDIDOS -->
         <div class="panel" id="compras-data-panel" style="border:1px solid #fcd34d;">
           <div class="phdr">
-            <div class="ptit">📅 Compras por Data</div>
+            <div class="ptit">📅 Compras / 🔎 Pesquisa de Emails Vendidos</div>
             <button class="btn-ref" onclick="loadComprasPorData()">🔄 Atualizar</button>
           </div>
-          <div class="sinfo" style="margin-bottom:10px;">Todas as compras agrupadas por dia. Cada bloco mostra o total do dia.</div>
-          <div id="compras-data-list" style="display:flex;flex-direction:column;gap:16px;"></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <button id="compras-tab-data" class="btn-ref" style="background:rgba(124,58,237,.22);border-color:#a78bfa;color:#fff;" onclick="showComprasTab('data')">📅 Compras por Data</button>
+            <button id="compras-tab-search" class="btn-ref" onclick="showComprasTab('search')">🔎 Pesquisar Emails Vendidos</button>
+          </div>
+
+          <div id="compras-data-view">
+            <div class="sinfo" style="margin-bottom:10px;">Todas as compras agrupadas por dia. Cada bloco mostra o total do dia.</div>
+            <div id="compras-data-list" style="display:flex;flex-direction:column;gap:16px;"></div>
+          </div>
+
+          <div id="compras-search-view" style="display:none;">
+            <div class="sinfo" style="margin-bottom:10px;">Pesquise pelo email vendido, email do cliente, nome do cliente ou produto. Ex.: login entregue, Gmail do cliente ou nome do comprador.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+              <input class="fi" id="compras-search-input" placeholder="Ex: mestrenay2+ddf@gmail.com ou cliente@gmail.com" style="flex:1;min-width:280px;" onkeydown="if(event.key==='Enter'){event.preventDefault();searchComprasVendidas();}"/>
+              <button class="btn-ref" onclick="searchComprasVendidas()">🔎 Pesquisar</button>
+              <button class="btn-ref" onclick="clearComprasSearch()">🧹 Limpar</button>
+            </div>
+            <div id="compras-search-summary" class="sinfo" style="margin-bottom:10px;"></div>
+            <div id="compras-search-results"></div>
+          </div>
         </div>
       </div>
     </div>
@@ -1378,65 +1396,179 @@
       if (j.success) { showToast('✓ Removida'); loadAssinaturas(); } else showToast('✗ '+(j.message||'Erro'));
     }
 
+    let comprasDataCache = [];
+    let comprasTabAtual = 'data';
+
+    function escapeHtml(v) {
+      return String(v || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+    }
+    function normBusca(v) {
+      return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+    }
+    function getStatusCompra(o) {
+      return o.status === 'paid' ? '<span style="color:#4caf50;">Pago</span>' : '<span style="color:#ff9800;">Pendente</span>';
+    }
+    function getLoginCell(o) {
+      const lEmail = o.login_email || '';
+      const lSenha = o.login_senha || '';
+      if (!lEmail) return '<span style="color:#888;">sem login vinculado</span>';
+      const senhaTxt = lSenha ? escapeHtml(lSenha) : '<span style="color:#888;">—</span>';
+      const loginCopy = lEmail + (lSenha ? ' | ' + lSenha : '');
+      return `<div style="font-weight:600;">${escapeHtml(lEmail)}</div>
+        <div style="font-size:.85rem;color:#fcd34d;">🔑 ${senhaTxt}</div>
+        <button class="btn-ref" style="margin-top:4px;font-size:.72rem;padding:2px 8px;" onclick="copiarLogin('${loginCopy.replace(/'/g,"\\'")}')">📋 Copiar login</button>`;
+    }
+    function getAssinMeta(o) {
+      let vencCell = '<span style="color:#888;">—</span>';
+      let stAssin = '<span style="color:#888;">—</span>';
+      let acoesCell = '<span style="color:#888;">—</span>';
+      if (o.sub_email) {
+        const venc = o.sub_expires_at ? new Date(o.sub_expires_at*1000).toLocaleDateString('pt-BR') : '—';
+        vencCell = venc;
+        stAssin = o.sub_active
+          ? `<span style="color:#4caf50;">✓ Ativa (${o.sub_days_left}d)</span>`
+          : '<span style="color:#ff5252;font-weight:700;">✗ VENCIDA</span>';
+        acoesCell = `<button class="btn-ref" onclick="renovarAssinatura('${o.sub_email}')" title="Renovar +${o.sub_dur_days||30}d">♻️ Renovar</button>
+          <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="delAssinatura('${o.sub_email}')">🗑️</button>`;
+      }
+      return { vencCell, stAssin, acoesCell };
+    }
+    function showComprasTab(tab) {
+      comprasTabAtual = tab;
+      const isData = tab === 'data';
+      const dataView = document.getElementById('compras-data-view');
+      const searchView = document.getElementById('compras-search-view');
+      const btnData = document.getElementById('compras-tab-data');
+      const btnSearch = document.getElementById('compras-tab-search');
+      if (dataView) dataView.style.display = isData ? 'block' : 'none';
+      if (searchView) searchView.style.display = isData ? 'none' : 'block';
+      if (btnData) {
+        btnData.style.background = isData ? 'rgba(124,58,237,.22)' : 'transparent';
+        btnData.style.borderColor = isData ? '#a78bfa' : '';
+        btnData.style.color = '#fff';
+      }
+      if (btnSearch) {
+        btnSearch.style.background = !isData ? 'rgba(124,58,237,.22)' : 'transparent';
+        btnSearch.style.borderColor = !isData ? '#a78bfa' : '';
+        btnSearch.style.color = '#fff';
+      }
+      if (!isData) {
+        const input = document.getElementById('compras-search-input');
+        if (input && input.value.trim()) searchComprasVendidas();
+      }
+    }
+    function renderComprasPorData(blocos) {
+      const list = document.getElementById('compras-data-list');
+      if (!list) return;
+      if (!blocos.length) {
+        list.innerHTML = '<div style="color:#888;text-align:center;padding:14px;">Nenhuma compra ainda</div>';
+        return;
+      }
+      list.innerHTML = blocos.map(b => {
+        const dataFmt = b.data !== 'sem-data' ? new Date(b.data+'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'}) : 'Sem data';
+        const linhas = (b.pedidos || []).map(o => {
+          const hora = o.created_at ? new Date(o.created_at*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '';
+          const stPag = getStatusCompra(o);
+          const loginCell = getLoginCell(o);
+          const { vencCell, stAssin, acoesCell } = getAssinMeta(o);
+          return `<tr>
+            <td>${hora}</td>
+            <td>${escapeHtml(o.product_name||'')}</td>
+            <td>${escapeHtml(o.customer_name||'')}<br><small>${escapeHtml(o.customer_email||'')}</small></td>
+            <td>${loginCell}</td>
+            <td>${vencCell}</td>
+            <td>${stAssin}<br><small>${stPag}</small></td>
+            <td>R$ ${(parseFloat(o.price)||0).toFixed(2)}</td>
+            <td>${acoesCell}</td>
+          </tr>`;
+        }).join('');
+        return `<div style="background:rgba(252,211,77,0.05);border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:14px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+            <div style="font-weight:800;color:#fcd34d;text-transform:capitalize;">📅 ${dataFmt}</div>
+            <div style="font-size:.9rem;">Pedidos: <b>${b.qtd}</b> | Pagos: <b style="color:#4caf50;">${b.pagos}</b> | Total: <b style="color:#fcd34d;">R$ ${b.total.toFixed(2)}</b></div>
+          </div>
+          <div class="twrap"><table><thead><tr><th>Hora</th><th>Produto</th><th>Cliente</th><th>Login (Email + Senha)</th><th>Vencimento</th><th>Status</th><th>Valor</th><th>Ações</th></tr></thead><tbody>${linhas}</tbody></table></div>
+        </div>`;
+      }).join('');
+    }
+    function clearComprasSearch() {
+      const input = document.getElementById('compras-search-input');
+      const summary = document.getElementById('compras-search-summary');
+      const results = document.getElementById('compras-search-results');
+      if (input) input.value = '';
+      if (summary) summary.innerHTML = 'Digite um email vendido, email do cliente, nome do cliente ou produto para pesquisar.';
+      if (results) results.innerHTML = '';
+    }
+    function searchComprasVendidas() {
+      const input = document.getElementById('compras-search-input');
+      const summary = document.getElementById('compras-search-summary');
+      const results = document.getElementById('compras-search-results');
+      const termo = normBusca(input ? input.value : '');
+      if (!termo) {
+        clearComprasSearch();
+        return;
+      }
+      const rows = [];
+      (comprasDataCache || []).forEach(b => {
+        (b.pedidos || []).forEach(o => {
+          const vendaEmail = o.login_email || o.sub_email || '';
+          const haystack = [
+            vendaEmail,
+            o.customer_email || '',
+            o.customer_name || '',
+            o.product_name || '',
+            o.login_senha || '',
+            b.data || ''
+          ].map(normBusca).join(' | ');
+          if (haystack.includes(termo)) rows.push({ bloco: b, pedido: o, vendaEmail });
+        });
+      });
+      if (summary) {
+        summary.innerHTML = rows.length
+          ? `Encontrado(s) <b>${rows.length}</b> resultado(s) para <b>${escapeHtml(input.value)}</b>.`
+          : `Nenhum resultado para <b>${escapeHtml(input.value)}</b>.`;
+      }
+      if (!results) return;
+      if (!rows.length) {
+        results.innerHTML = '<div style="color:#888;text-align:center;padding:14px;">Nenhuma venda encontrada para esse termo.</div>';
+        return;
+      }
+      results.innerHTML = `<div class="twrap"><table><thead><tr><th>Data</th><th>Hora</th><th>Produto</th><th>Cliente</th><th>Email vendido</th><th>Senha</th><th>Status</th><th>Valor</th><th>Ações</th></tr></thead><tbody>${rows.map(({bloco, pedido, vendaEmail}) => {
+        const dataFmt = bloco.data !== 'sem-data' ? new Date(bloco.data+'T12:00:00').toLocaleDateString('pt-BR') : 'Sem data';
+        const hora = pedido.created_at ? new Date(pedido.created_at*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '';
+        const senha = pedido.login_senha || '';
+        const status = getStatusCompra(pedido);
+        const { acoesCell } = getAssinMeta(pedido);
+        const copyTxt = vendaEmail ? vendaEmail + (senha ? ' | ' + senha : '') : '';
+        const vendaHtml = vendaEmail
+          ? `<div style="font-weight:700;">${escapeHtml(vendaEmail)}</div><button class="btn-ref" style="margin-top:4px;font-size:.72rem;padding:2px 8px;" onclick="copiarLogin('${copyTxt.replace(/'/g,"\\'")}')">📋 Copiar</button>`
+          : '<span style="color:#888;">sem login vinculado</span>';
+        return `<tr>
+          <td>${dataFmt}</td>
+          <td>${hora}</td>
+          <td>${escapeHtml(pedido.product_name || '')}</td>
+          <td>${escapeHtml(pedido.customer_name || '')}<br><small>${escapeHtml(pedido.customer_email || '')}</small></td>
+          <td>${vendaHtml}</td>
+          <td>${senha ? '🔑 ' + escapeHtml(senha) : '<span style="color:#888;">—</span>'}</td>
+          <td>${status}</td>
+          <td>R$ ${(parseFloat(pedido.price)||0).toFixed(2)}</td>
+          <td>${acoesCell}</td>
+        </tr>`;
+      }).join('')}</tbody></table></div>`;
+    }
     async function loadComprasPorData() {
       try {
         const r = await fetch('/api/admin/compras-por-data');
         const j = await r.json();
-        const list = document.getElementById('compras-data-list');
-        if (!j.success || !j.blocos.length) {
-          list.innerHTML = '<div style="color:#888;text-align:center;padding:14px;">Nenhuma compra ainda</div>';
-          return;
+        comprasDataCache = (j && j.success && Array.isArray(j.blocos)) ? j.blocos : [];
+        renderComprasPorData(comprasDataCache);
+        if (!comprasDataCache.length) clearComprasSearch();
+        else {
+          const input = document.getElementById('compras-search-input');
+          if (input && input.value.trim()) searchComprasVendidas();
+          else clearComprasSearch();
         }
-        list.innerHTML = j.blocos.map(b => {
-          const dataFmt = b.data !== 'sem-data' ? new Date(b.data+'T12:00:00').toLocaleDateString('pt-BR', {weekday:'long', day:'2-digit', month:'2-digit', year:'numeric'}) : 'Sem data';
-          const linhas = b.pedidos.map(o => {
-            const hora = o.created_at ? new Date(o.created_at*1000).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}) : '';
-            const stPag = o.status === 'paid' ? '<span style="color:#4caf50;">Pago</span>' : '<span style="color:#ff9800;">Pendente</span>';
-            // LOGIN (email + senha) entregue / vinculado
-            const lEmail = o.login_email || '';
-            const lSenha = o.login_senha || '';
-            let loginCell;
-            if (lEmail) {
-              const senhaTxt = lSenha ? lSenha : '<span style="color:#888;">—</span>';
-              const loginCopy = lEmail + (lSenha ? ' | '+lSenha : '');
-              loginCell = `<div style="font-weight:600;">${lEmail}</div>
-                <div style="font-size:.85rem;color:#fcd34d;">🔑 ${senhaTxt}</div>
-                <button class="btn-ref" style="margin-top:4px;font-size:.72rem;padding:2px 8px;" onclick="copiarLogin('${loginCopy.replace(/'/g,"\\'")}')">📋 Copiar login</button>`;
-            } else {
-              loginCell = '<span style="color:#888;">sem login vinculado</span>';
-            }
-            // VENCIMENTO + STATUS da assinatura
-            let vencCell = '<span style="color:#888;">—</span>';
-            let stAssin = '<span style="color:#888;">—</span>';
-            let acoesCell = '<span style="color:#888;">—</span>';
-            if (o.sub_email) {
-              const venc = o.sub_expires_at ? new Date(o.sub_expires_at*1000).toLocaleDateString('pt-BR') : '—';
-              vencCell = venc;
-              stAssin = o.sub_active
-                ? `<span style="color:#4caf50;">✓ Ativa (${o.sub_days_left}d)</span>`
-                : '<span style="color:#ff5252;font-weight:700;">✗ VENCIDA</span>';
-              acoesCell = `<button class="btn-ref" onclick="renovarAssinatura('${o.sub_email}')" title="Renovar +${o.sub_dur_days||30}d">♻️ Renovar</button>
-                <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="delAssinatura('${o.sub_email}')">🗑️</button>`;
-            }
-            return `<tr>
-              <td>${hora}</td>
-              <td>${o.product_name||''}</td>
-              <td>${o.customer_name||''}<br><small>${o.customer_email||''}</small></td>
-              <td>${loginCell}</td>
-              <td>${vencCell}</td>
-              <td>${stAssin}<br><small>${stPag}</small></td>
-              <td>R$ ${(parseFloat(o.price)||0).toFixed(2)}</td>
-              <td>${acoesCell}</td>
-            </tr>`;
-          }).join('');
-          return `<div style="background:rgba(252,211,77,0.05);border:1px solid rgba(252,211,77,0.3);border-radius:12px;padding:14px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
-              <div style="font-weight:800;color:#fcd34d;text-transform:capitalize;">📅 ${dataFmt}</div>
-              <div style="font-size:.9rem;">Pedidos: <b>${b.qtd}</b> | Pagos: <b style="color:#4caf50;">${b.pagos}</b> | Total: <b style="color:#fcd34d;">R$ ${b.total.toFixed(2)}</b></div>
-            </div>
-            <div class="twrap"><table><thead><tr><th>Hora</th><th>Produto</th><th>Cliente</th><th>Login (Email + Senha)</th><th>Vencimento</th><th>Status</th><th>Valor</th><th>Ações</th></tr></thead><tbody>${linhas}</tbody></table></div>
-          </div>`;
-        }).join('');
+        showComprasTab(comprasTabAtual || 'data');
       } catch(e) { console.log('compras-data err', e); }
     }
 
