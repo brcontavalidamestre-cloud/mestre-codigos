@@ -1583,8 +1583,13 @@
     async function addAssinatura(ev) {
       ev.preventDefault();
       const email = (document.getElementById('as-email').value || '').trim().toLowerCase();
+      const bulkTxt = (document.getElementById('as-bulk-list').value || '').trim();
       if (!email) {
-        showToast('✗ Preencha o email da conta para cadastro individual');
+        if (bulkTxt) {
+          await importAssinaturasEmMassa();
+          return;
+        }
+        showToast('✗ Preencha o email da conta ou use a lista em massa');
         return;
       }
       const body = {
