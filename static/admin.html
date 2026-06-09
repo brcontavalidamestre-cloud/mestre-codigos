@@ -2083,6 +2083,7 @@
             <div class="abts">
               <button class="bsm bpw" onclick="openPw('${x(u.username)}')">🔑 Alterar Senha</button>
               <button class="bsm bpin locked" onclick="openPin('${x(u.username)}', ${u.reset_pin_custom})">${u.reset_pin_custom ? '🔒 PIN Personalizado' : '🔒 PIN Padrão 1995'}</button>
+              <button class="bsm" onclick="openDirectLogin('${x(u.username)}')">🚀 Entrar Direto</button>
               <button class="bsm bdel" onclick="openDel('${x(u.username)}')">🗑️ Remover</button>
             </div>
           </td>
@@ -2105,6 +2106,26 @@
     }
 
     /* load */
+    async function openDirectLogin(username) {
+      try {
+        const r = await fetch('/api/admin/users/' + encodeURIComponent(username) + '/direct-link', { method:'POST' });
+        const j = await r.json();
+        if (j.success && j.url) {
+          const win = window.open(j.url, '_blank', 'noopener');
+          if (!win) {
+            try { await navigator.clipboard.writeText(j.url); showToast('📋 Link direto copiado'); }
+            catch(e) { showToast('✗ Libere pop-up para abrir o acesso direto'); }
+            return;
+          }
+          showToast('🚀 Acesso direto aberto');
+        } else {
+          showToast('✗ ' + (j.message || 'Erro ao gerar link direto'));
+        }
+      } catch(e) {
+        showToast('Erro de conexão');
+      }
+    }
+
     async function loadUsers() {
       document.getElementById('tbody').innerHTML =
         `<tr><td colspan="4"><div class="empty"><span class="sp"></span> Carregando...</div></td></tr>`;

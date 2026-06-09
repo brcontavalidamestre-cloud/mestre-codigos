@@ -11,6 +11,8 @@ import json
 import unicodedata
 import time
 import threading
+import hmac
+import hashlib
 from datetime import timedelta
 
 app = Flask(__name__, static_folder='static')
@@ -33,6 +35,7 @@ USERS_FILE = os.environ.get("USERS_FILE", os.path.join(_data_dir, "users.json"))
 _pending_reset_links = {}
 _PENDING_RESET_TTL = 300  # 5 minutos
 DEFAULT_RESET_PIN = os.environ.get("DEFAULT_RESET_PIN", "1995")
+AUTO_LOGIN_TTL = int(os.environ.get("AUTO_LOGIN_TTL", "600"))  # segundos
 
 def _set_pending_reset_link(username, link):
     _pending_reset_links[username] = {
@@ -76,6 +79,15 @@ def _verify_reset_pin_value(user, pin):
     if custom_pin:
         return check_password_hash(custom_pin, pin)
     return pin == DEFAULT_RESET_PIN
+
+
+def _make_auto_login_sig(username, ts):
+    payload = f"{str(username or '').strip().lower()}|{int(ts or 0)}"
+    return hmac.new(app.secret_key.encode('utf-8'), payload.encode('utf-8'), hashlib.sha256).hexdigest()
+
+
+def _set_session_for_user(username, user):
+    _set_session_for_user(username, user)
 
 
 def load_users():
@@ -2755,6 +2767,50 @@ def api_login():
     session["name"]      = user.get("name", username)
     redirect_to = "/admin" if user.get("role") == "admin" else "/"
     return jsonify({"success": True, "role": user.get("role", "client"), "redirect": redirect_to})
+
+@app.route("/auto-login/<username>")
+def auto_login_user(username):
+    username = str(username or '').strip().lower()
+    ts_raw = str(request.args.get('ts', '')).strip()
+    sig = str(request.args.get('sig', '')).strip().lower()
+    try:
+        ts = int(ts_raw or '0')
+    except Exception:
+        ts = 0
+    if not username or not ts or not sig:
+        return redirect('/login')
+    if abs(int(time.time()) - ts) > AUTO_LOGIN_TTL:
+        return redirect('/login')
+    expected = _make_auto_login_sig(username, ts)
+    if not hmac.compare_digest(expected, sig):
+        return redirect('/login')
+    users = load_users()
+    user = users.get(username)
+    if not user:
+        return redirect('/login')
+    _set_session_for_user(username, user)
+    return redirect('/')
+
+
+@app.route("/api/admin/users/<username>/direct-link", methods=["POST"])
+@admin_required
+def api_admin_user_direct_link(username):
+    username = str(username or '').strip().lower()
+    users = load_users()
+    user = users.get(username)
+    if not user:
+        return jsonify({"success": False, "message": "Usuário não encontrado."}), 404
+    ts = int(time.time())
+    sig = _make_auto_login_sig(username, ts)
+    base = request.host_url.rstrip('/')
+    url = f"{base}/auto-login/{username}?ts={ts}&sig={sig}"
+    return jsonify({
+        "success": True,
+        "username": username,
+        "url": url,
+        "expires_in": AUTO_LOGIN_TTL
+    })
+
 
 @app.route("/api/auth/logout", methods=["POST"])
 def api_logout():
