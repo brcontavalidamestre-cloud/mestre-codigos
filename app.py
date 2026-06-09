@@ -3162,6 +3162,8 @@ def _do_checkout():
     product  = next((p for p in products if p["id"] == product_id), None)
     if not product:
         return jsonify({"success": False, "message": "Produto não encontrado."}), 404
+    product_assigned_user = str(product.get("assigned_user", "")).strip().lower()
+    product_assigned_user_name = str(product.get("assigned_user_name", "")).strip()
 
     # Verifica estoque
     stock = load_stock()
@@ -3183,6 +3185,8 @@ def _do_checkout():
         "customer_name": customer_name,
         "customer_email": customer_email,
         "customer_phone": customer_phone,
+        "assigned_user": product_assigned_user,
+        "assigned_user_name": product_assigned_user_name,
         "status": "pending",
         "created_at": int(time.time()),
         "paid_at": None,
@@ -3513,6 +3517,9 @@ def mark_order_paid_and_deliver(order_id):
         order["delivered_email"]    = stock_item.get("email")
         order["delivered_password"] = stock_item.get("password")
         order["delivered_note"]     = stock_item.get("note")
+        if stock_item.get("assigned_user"):
+            order["assigned_user"] = str(stock_item.get("assigned_user", "")).strip().lower()
+            order["assigned_user_name"] = stock_item.get("assigned_user_name") or order.get("assigned_user")
         # marca o item como entregue ao cliente
         st = load_stock()
         for it in st.get(order.get("product_id"), []):
@@ -3648,6 +3655,13 @@ def api_admin_update_product(product_id):
         product["emoji"] = str(data["emoji"]).strip()[:4]
     if "color" in data:
         product["color"] = str(data["color"]).strip()[:20]
+    if "assigned_user" in data:
+        assigned_user = str(data.get("assigned_user", "")).strip().lower()
+        users = load_users()
+        if assigned_user and assigned_user not in users:
+            return jsonify({"success": False, "message": "Usuário vinculado não encontrado."}), 400
+        product["assigned_user"] = assigned_user
+        product["assigned_user_name"] = users.get(assigned_user, {}).get("name", assigned_user) if assigned_user else ""
     save_products(products)
     return jsonify({"success": True, "product": product})
 
@@ -3665,6 +3679,11 @@ def api_admin_add_stock(product_id):
     email_acc = str(data.get("email", "")).strip()
     password  = str(data.get("password", "")).strip()
     note      = str(data.get("note", "")).strip()
+    assigned_user = str(data.get("assigned_user", "")).strip().lower()
+    users = load_users()
+    if assigned_user and assigned_user not in users:
+        return jsonify({"success": False, "message": "Usuário vinculado não encontrado."}), 400
+    assigned_user_name = users.get(assigned_user, {}).get("name", assigned_user) if assigned_user else ""
     if not email_acc or not password:
         return jsonify({"success": False, "message": "Informe email e senha do acesso."}), 400
     products = load_products()
@@ -3677,6 +3696,8 @@ def api_admin_add_stock(product_id):
         "email":    email_acc,
         "password": password,
         "note":     note,
+        "assigned_user": assigned_user,
+        "assigned_user_name": assigned_user_name,
         "used":     False,
         "used_at":  None,
         "delivered_to": None,
@@ -4536,6 +4557,11 @@ def api_admin_create_license():
     pay_method  = str(data.get("payment_method", "")).strip()
     pay_status  = str(data.get("payment_status", "pendente")).strip()
     notes       = str(data.get("notes", "")).strip()
+    assigned_user = str(data.get("assigned_user", "")).strip().lower()
+    users = load_users()
+    if assigned_user and assigned_user not in users:
+        return jsonify({"success": False, "message": "Usuário vinculado não encontrado."}), 400
+    assigned_user_name = users.get(assigned_user, {}).get("name", assigned_user) if assigned_user else ""
     start_at    = int(data.get("start_at") or time.time())
 
     if not domain:
@@ -4568,6 +4594,8 @@ def api_admin_create_license():
         "payment_method":  pay_method,
         "payment_status":  pay_status,
         "notes":           notes,
+        "assigned_user":   assigned_user,
+        "assigned_user_name": assigned_user_name,
         "active":          True,
         "created_at":      int(time.time()),
         "created_by":      session.get("username")
@@ -4632,6 +4660,13 @@ def api_admin_update_license(license_id):
         lic["payment_status"] = str(data["payment_status"]).strip()
     if "notes" in data:
         lic["notes"] = str(data["notes"]).strip()
+    if "assigned_user" in data:
+        assigned_user = str(data.get("assigned_user", "")).strip().lower()
+        users = load_users()
+        if assigned_user and assigned_user not in users:
+            return jsonify({"success": False, "message": "Usuário vinculado não encontrado."}), 400
+        lic["assigned_user"] = assigned_user
+        lic["assigned_user_name"] = users.get(assigned_user, {}).get("name", assigned_user) if assigned_user else ""
     if "active" in data:
         lic["active"] = bool(data["active"])
     if "start_at" in data:

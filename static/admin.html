@@ -391,6 +391,10 @@
             <label class="flbl">🔑 Senha</label>
             <input class="fi" id="stk-pass" placeholder="senha de acesso" required/>
           </div>
+          <div class="fgrp">
+            <label class="flbl">🧑 Usuário vinculado</label>
+            <select class="fi" id="stk-user"><option value="">Sem vínculo específico</option></select>
+          </div>
           <div class="fgrp" style="grid-column:1/-1;">
             <label class="flbl">📝 Observação (opcional)</label>
             <input class="fi" id="stk-note" placeholder="perfil 1 / pin 0000 / etc."/>
@@ -405,6 +409,7 @@
               <th>Email</th>
               <th>Senha</th>
               <th>Observação</th>
+              <th>Usuário</th>
               <th>Status</th>
               <th>Ações</th>
             </tr>
@@ -427,6 +432,7 @@
               <th>Pedido</th>
               <th>Produto</th>
               <th>Cliente</th>
+              <th>Usuário</th>
               <th>Valor</th>
               <th>Status</th>
               <th>Data</th>
@@ -643,6 +649,10 @@
               <option value="pendente">⏳ Pendente</option>
               <option value="atrasado">⚠️ Atrasado</option>
             </select>
+          </div>
+          <div class="fgrp">
+            <label class="flbl">🧑 Usuário vinculado</label>
+            <select class="fi" id="lic-assigned-user"><option value="">Sem vínculo específico</option></select>
           </div>
           <div class="fgrp" style="grid-column:1/-1;">
             <label class="flbl">📝 Observações</label>
@@ -1029,7 +1039,7 @@
         _produtos = j.products;
         const list = document.getElementById('loja-prod-list');
         list.innerHTML = j.products.map(p => `
-          <div style="background:rgba(15,5,32,0.6);border:1px solid var(--bd);border-radius:10px;padding:14px;display:grid;grid-template-columns:60px 1fr 130px 130px;gap:10px;align-items:end;">
+          <div style="background:rgba(15,5,32,0.6);border:1px solid var(--bd);border-radius:10px;padding:14px;display:grid;grid-template-columns:60px 1fr 220px 130px;gap:10px;align-items:end;">
             <div style="font-size:2.2rem;text-align:center">${p.emoji||'🛍️'}</div>
             <div>
               <label class="flbl">Nome</label>
@@ -1040,6 +1050,8 @@
             <div>
               <label class="flbl">Preço R$</label>
               <input class="fi" type="number" step="0.01" value="${Number(p.price).toFixed(2)}" id="pp-${p.id}"/>
+              <label class="flbl" style="margin-top:6px">🧑 Usuário vinculado</label>
+              <select class="fi" id="pu-${p.id}">${getUsersSelectOptions(p.assigned_user || '', 'Sem vínculo específico')}</select>
               <div style="margin-top:8px;font-size:0.75rem;color:var(--tm)">
                 Estoque: <b style="color:${p.available>0?'#4ade80':'#f87171'}">${p.available||0}</b> / ${p.total||0}
               </div>
@@ -1060,11 +1072,12 @@
       const name  = document.getElementById('pn-'+pid).value.trim();
       const desc  = document.getElementById('pd-'+pid).value.trim();
       const price = document.getElementById('pp-'+pid).value;
+      const assigned_user = document.getElementById('pu-'+pid)?.value || '';
       try {
         const r = await fetch('/api/admin/loja/produtos/'+pid, {
           method:'PUT',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ name, description:desc, price })
+          body: JSON.stringify({ name, description:desc, price, assigned_user })
         });
         const j = await r.json();
         if (j.success) showToast('✓ Produto atualizado'); else showToast(j.message||'Erro');
@@ -1080,16 +1093,20 @@
         const j = await r.json();
         const tb = document.getElementById('stk-tbody');
         if (!j.success || !j.items.length) {
-          tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:var(--tm);padding:14px">Sem acessos cadastrados.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--tm);padding:14px">Sem acessos cadastrados.</td></tr>';
           return;
         }
         tb.innerHTML = j.items.map(it => {
           const status = it.used ? '<span style="color:#f87171">✗ Usado</span>' : '<span style="color:#4ade80">✓ Disponível</span>';
-          const delTo = it.delivered_to ? `<br><span style="font-size:0.7rem;color:var(--tm)">→ ${it.delivered_to}</span>` : '';
+          const delTo = it.delivered_to ? `<br><span style="font-size:0.7rem;color:var(--tm)">→ ${escapeHtml(it.delivered_to)}</span>` : '';
+          const vinc = it.assigned_user
+            ? `<span style="color:#fcd34d">🧑 ${escapeHtml(it.assigned_user_name || it.assigned_user)}</span>`
+            : '<span style="color:#888;">—</span>';
           return `<tr>
-            <td>${it.email}</td>
-            <td><code style="color:var(--gold-light)">${it.password}</code></td>
-            <td>${it.note||'—'}</td>
+            <td>${escapeHtml(it.email || '')}</td>
+            <td><code style="color:var(--gold-light)">${escapeHtml(it.password || '')}</code></td>
+            <td>${escapeHtml(it.note || '—')}</td>
+            <td>${vinc}</td>
             <td>${status}${delTo}</td>
             <td>
               ${it.used ? `<button class="bsm" onclick="resetStock('${pid}','${it.id}')" style="background:#0f766e;color:#fff;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem">♻️ Reset</button>` : ''}
@@ -1106,11 +1123,12 @@
       const email = document.getElementById('stk-email').value.trim();
       const password = document.getElementById('stk-pass').value.trim();
       const note = document.getElementById('stk-note').value.trim();
+      const assigned_user = document.getElementById('stk-user').value;
       try {
         const r = await fetch('/api/admin/loja/estoque/'+pid, {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email, password, note })
+          body: JSON.stringify({ email, password, note, assigned_user })
         });
         const j = await r.json();
         if (j.success) {
@@ -1149,17 +1167,21 @@
         const j = await r.json();
         const tb = document.getElementById('ord-tbody');
         if (!j.success || !j.orders.length) {
-          tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--tm);padding:14px">Nenhum pedido ainda.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Nenhum pedido ainda.</td></tr>';
           return;
         }
         tb.innerHTML = j.orders.map(o => {
           const dt = o.created_at ? new Date(o.created_at*1000).toLocaleString('pt-BR') : '—';
           const stColor = o.status==='paid'?'#4ade80':(o.status==='pending'?'#fbbf24':'#f87171');
           const stLabel = o.status==='paid'?'✓ Pago':(o.status==='pending'?'⏳ Pendente':o.status);
+          const vinc = o.assigned_user
+            ? `🧑 ${escapeHtml(o.assigned_user_name || o.assigned_user)}`
+            : '<span style="color:#888;">—</span>';
           return `<tr>
-            <td style="font-family:monospace;font-size:0.78rem">${o.id}</td>
-            <td>${o.product_name}</td>
-            <td>${o.customer_name}<br><span style="font-size:0.72rem;color:var(--tm)">${o.customer_email}</span></td>
+            <td style="font-family:monospace;font-size:0.78rem">${escapeHtml(o.id || '')}</td>
+            <td>${escapeHtml(o.product_name || '')}</td>
+            <td>${escapeHtml(o.customer_name || '')}<br><span style="font-size:0.72rem;color:var(--tm)">${escapeHtml(o.customer_email || '')}</span></td>
+            <td>${vinc}</td>
             <td>R$ ${Number(o.price).toFixed(2).replace('.', ',')}</td>
             <td style="color:${stColor}">${stLabel}</td>
             <td style="font-size:0.78rem">${dt}</td>
@@ -1340,18 +1362,31 @@
       navigator.clipboard.writeText(txt).then(()=>showToast('📋 Login copiado')).catch(()=>showToast('✗ Falha ao copiar'));
     }
 
-    function renderAssinUsuarios() {
-      const sel = document.getElementById('as-user');
+    function getUsersSelectOptions(selectedValue='', blankLabel='Sem vínculo específico') {
+      const atual = String(selectedValue || '');
+      const lista = Array.isArray(_users) ? [..._users].sort((a,b) => String(a.username||'').localeCompare(String(b.username||''), 'pt-BR')) : [];
+      return `<option value="">${escapeHtml(blankLabel)}</option>` + lista.map(u => {
+        const username = String(u.username || '');
+        const nome = u.name && u.name !== u.username ? ' — ' + escapeHtml(u.name) : '';
+        const perfil = u.role === 'admin' ? ' [admin]' : ' [cliente]';
+        const sel = username === atual ? ' selected' : '';
+        return `<option value="${escapeHtml(username)}"${sel}>${escapeHtml(username)}${nome}${perfil}</option>`;
+      }).join('');
+    }
+
+    function renderUserSelect(selectId, blankLabel='Sem vínculo específico') {
+      const sel = document.getElementById(selectId);
       if (!sel) return;
       const atual = sel.value || '';
-      const lista = Array.isArray(_users) ? [..._users].sort((a,b) => String(a.username||'').localeCompare(String(b.username||''), 'pt-BR')) : [];
-      sel.innerHTML = '<option value="">Sem vínculo específico</option>' + lista.map(u => {
-        const nome = u.name && u.name !== u.username ? ' — ' + x(u.name) : '';
-        const perfil = u.role === 'admin' ? ' [admin]' : ' [cliente]';
-        return `<option value="${x(u.username)}">${x(u.username)}${nome}${perfil}</option>`;
-      }).join('');
+      sel.innerHTML = getUsersSelectOptions(atual, blankLabel);
       if ([...sel.options].some(o => o.value === atual)) sel.value = atual;
       else sel.value = '';
+    }
+
+    function renderAssinUsuarios() {
+      renderUserSelect('as-user');
+      renderUserSelect('stk-user');
+      renderUserSelect('lic-assigned-user');
     }
 
     async function loadAssinaturas() {
@@ -1714,7 +1749,7 @@
           const payColor = payStat==='pago'?'#4ade80':(payStat==='atrasado'?'#f87171':'#fbbf24');
           return `<tr>
             <td style="font-family:monospace;font-size:0.78rem"><a href="https://${l.domain}" target="_blank" style="color:#a78bfa;text-decoration:none">${l.domain}</a></td>
-            <td>${l.customer_name || '—'}</td>
+            <td>${escapeHtml(l.customer_name || '—')}${l.assigned_user ? `<br><small style="color:#fcd34d;">🧑 ${escapeHtml(l.assigned_user_name || l.assigned_user)}</small>` : ''}</td>
             <td style="font-size:0.78rem">
               <div>👤 <code style="color:var(--gold-light)">${l.admin_user}</code></div>
               <div>🔑 <code style="color:var(--gold-light)">${(l.admin_pass||'').replace(/./g,'•').slice(0,8)} <button onclick="showLicPass('${l.id}','${(l.admin_pass||'').replace(/'/g,"\\'")}')" style="background:transparent;border:none;color:#a78bfa;cursor:pointer">👁️</button></code></div>
@@ -1751,6 +1786,7 @@
       const payload = {
         domain:         document.getElementById('lic-domain').value.trim(),
         customer_name:  document.getElementById('lic-customer').value.trim(),
+        assigned_user:  document.getElementById('lic-assigned-user').value.trim(),
         admin_user:     document.getElementById('lic-user').value.trim(),
         admin_pass:     document.getElementById('lic-pass').value.trim(),
         duration_days:  parseInt(document.getElementById('lic-days').value, 10),
