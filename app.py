@@ -2040,8 +2040,18 @@ def search_code_unified(user_email, platform_list):
             by_sender[fk] = {}
         by_sender[fk][p] = cfg
 
+    user_email = str(user_email or "").strip().lower()
+    email_domain = user_email.split("@", 1)[1] if "@" in user_email else ""
+    hotmail_domains = {
+        "hotmail.com", "hotmail.com.br", "outlook.com", "outlook.com.br",
+        "live.com", "live.com.br", "msn.com"
+    }
+    is_hotmail_family = email_domain in hotmail_domains
+
     accounts = get_imap_accounts()
     if not accounts:
+        if _is_ceara_request():
+            return None, None, None, "Nenhuma caixa IMAP configurada no Ceará. Configure CEARA_IMAP_SERVER_1/2, CEARA_EMAIL_USER_1/2 e CEARA_EMAIL_PASS_1/2 no Railway."
         return None, None, None, "Nenhuma caixa de email configurada."
 
     last_error = None
@@ -2054,29 +2064,57 @@ def search_code_unified(user_email, platform_list):
             since_2d  = (_dt.utcnow() - _td(days=2)).strftime("%d-%b-%Y")
             since_7d  = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
 
-            # ── OTIMIZACAO GLOBAL: janela de 15 minutos + sem spam + sem targeted ──
-            # Busca somente emails dos ultimos 15 minutos (codigos expiram rapido).
-            # Evita varrer a caixa inteira, reduz timeout drasticamente.
-            GLOBAL_WINDOW_MIN = int(os.environ.get("GLOBAL_TIME_WINDOW_MIN", "15"))
-            GLOBAL_MAX_EMAILS = int(os.environ.get("GLOBAL_MAX_EMAILS", "30"))
-            spam_boxes = []  # nao varre spam — codigos de 15min nao vao para spam
-            seen_ids   = set()
+            # Hotmail/Outlook costuma atrasar ou cair no lixo eletrônico.
+            # No Ceará, ampliamos a busca para reduzir falhas de consulta.
+            if _is_ceara_request() or is_hotmail_family:
+                global_window_min = int(os.environ.get("HOTMAIL_TIME_WINDOW_MIN", "180"))
+                global_max_emails = int(os.environ.get("HOTMAIL_MAX_EMAILS", "120"))
+                primary_since = since_2d
+                secondary_since = since_7d
+                spam_boxes = _get_spam_boxes(mail, account_cfg)
+            else:
+                global_window_min = int(os.environ.get("GLOBAL_TIME_WINDOW_MIN", "15"))
+                global_max_emails = int(os.environ.get("GLOBAL_MAX_EMAILS", "30"))
+                primary_since = today
+                secondary_since = since_2d
+                spam_boxes = []
+
+            seen_ids = set()
+            mailboxes_primary = ["INBOX"] + [b for b in spam_boxes if b and b.upper() != "INBOX"]
 
             for sender, plat_configs in by_sender.items():
-                # Unica passagem: INBOX, so hoje, janela de 15 minutos, max 30 emails
-                matched = _batch_search_mailbox(
-                    mail, "INBOX", sender, plat_configs, seen_ids,
-                    use_date_filter=True, since_date=today,
-                    max_age_minutes=GLOBAL_WINDOW_MIN,
-                    max_emails=GLOBAL_MAX_EMAILS)
+                found = False
 
-                for mb, plat_key, eid in matched:
-                    code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
-                    if code or link:
-                        _safe_logout(mail)
-                        return code, link, plat_key, None
+                # Passagem principal: INBOX + Junk/Spam quando aplicável
+                for mailbox in mailboxes_primary:
+                    matched = _batch_search_mailbox(
+                        mail, mailbox, sender, plat_configs, seen_ids,
+                        use_date_filter=True, since_date=primary_since,
+                        max_age_minutes=global_window_min,
+                        max_emails=global_max_emails)
 
-                # targeted e buscas em spam/7dias desativadas (otimizacao global)
+                    for mb, plat_key, eid in matched:
+                        code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
+                        if code or link:
+                            _safe_logout(mail)
+                            return code, link, plat_key, None
+                        found = found or bool(matched)
+
+                # Fallback extra para Ceará/Hotmail: busca maior e sem filtro de minutos
+                if (_is_ceara_request() or is_hotmail_family) and not found:
+                    fallback_boxes = mailboxes_primary if mailboxes_primary else ["INBOX"]
+                    for mailbox in fallback_boxes:
+                        matched = _batch_search_mailbox(
+                            mail, mailbox, sender, plat_configs, seen_ids,
+                            use_date_filter=True, since_date=secondary_since,
+                            max_age_minutes=None,
+                            max_emails=max(global_max_emails, 180))
+
+                        for mb, plat_key, eid in matched:
+                            code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
+                            if code or link:
+                                _safe_logout(mail)
+                                return code, link, plat_key, None
 
             _safe_logout(mail)
         except imaplib.IMAP4.error as e:
