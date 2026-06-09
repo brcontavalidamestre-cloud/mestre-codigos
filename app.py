@@ -4339,30 +4339,37 @@ def api_admin_restore_volume():
 @app.route("/api/admin/compras-por-data", methods=["GET"])
 @admin_required
 def api_admin_compras_por_data():
-    """Agrupa todos os pedidos da loja por data (cada dia = um bloco)."""
+    """Agrupa pedidos online + contas pagas cadastradas manualmente por data."""
     try:
         orders = load_orders()
         clean = [o for o in orders if isinstance(o, dict) and o.get("id")]
         import datetime as _dtmod
         now = int(time.time())
-        # indexa assinaturas por email para cruzar login/vencimento
         subs = load_subscriptions()
         subs_idx = {}
         for s in subs:
             if isinstance(s, dict) and s.get("email"):
                 subs_idx[s.get("email", "").lower()] = s
+
         grupos = {}
-        for o in clean:
-            ts = o.get("created_at", 0) or 0
+        linked_emails = set()
+
+        def _add_compra_row(o2, paid_total=0.0):
+            ts = o2.get("created_at", 0) or 0
             dia = _dtmod.datetime.utcfromtimestamp(ts).strftime("%Y-%m-%d") if ts else "sem-data"
             grupos.setdefault(dia, {"data": dia, "pedidos": [], "total": 0.0, "qtd": 0, "pagos": 0})
-            # enriquece o pedido com o login entregue e a assinatura vinculada
+            grupos[dia]["pedidos"].append(o2)
+            grupos[dia]["qtd"] += 1
+            if o2.get("status") == "paid":
+                grupos[dia]["pagos"] += 1
+                grupos[dia]["total"] += float(paid_total or 0)
+
+        for o in clean:
             o2 = dict(o)
-            # login entregue ao cliente neste pedido
             login_email = o.get("delivered_email") or ""
             login_senha = o.get("delivered_password") or ""
-            # tenta achar assinatura: pelo login entregue OU pelo email do cliente
-            sub = subs_idx.get((login_email or "").lower()) or subs_idx.get((o.get("customer_email", "") or "").lower())
+            customer_email = (o.get("customer_email", "") or "").lower()
+            sub = subs_idx.get((login_email or "").lower()) or subs_idx.get(customer_email)
             if sub:
                 if not login_email:
                     login_email = sub.get("email", "")
@@ -4382,12 +4389,38 @@ def api_admin_compras_por_data():
                 o2["sub_dur_days"] = 30
             o2["login_email"] = login_email
             o2["login_senha"] = login_senha
-            grupos[dia]["pedidos"].append(o2)
-            grupos[dia]["qtd"] += 1
-            if o.get("status") == "paid":
-                grupos[dia]["pagos"] += 1
-                grupos[dia]["total"] += float(o.get("price", 0) or 0)
-        # ordena dias do mais recente p/ o mais antigo
+            o2["manual_entry"] = False
+            if login_email:
+                linked_emails.add(str(login_email).strip().lower())
+            if customer_email:
+                linked_emails.add(customer_email)
+            _add_compra_row(o2, float(o.get("price", 0) or 0))
+
+        for sub in subs:
+            if not isinstance(sub, dict):
+                continue
+            email_sub = str(sub.get("email", "")).strip().lower()
+            if not email_sub or email_sub in linked_emails:
+                continue
+            exp = sub.get("expires_at") or 0
+            manual_row = {
+                "product_name": f"{sub.get('plataforma', 'Conta Paga')} (Manual)",
+                "customer_name": sub.get("cliente") or sub.get("assigned_user_name") or "Cadastro manual",
+                "customer_email": "",
+                "created_at": sub.get("created_at") or sub.get("start_at") or 0,
+                "status": "paid",
+                "price": float(sub.get("valor", 0) or 0),
+                "login_email": sub.get("email", ""),
+                "login_senha": sub.get("senha", ""),
+                "sub_email": sub.get("email", ""),
+                "sub_active": now < exp if exp else False,
+                "sub_expires_at": exp,
+                "sub_days_left": max(0, int((exp - now) / 86400)) if exp else 0,
+                "sub_dur_days": sub.get("dur_days", 30),
+                "manual_entry": True,
+            }
+            _add_compra_row(manual_row, manual_row["price"])
+
         blocos = sorted(grupos.values(), key=lambda g: g["data"], reverse=True)
         for b in blocos:
             b["pedidos"].sort(key=lambda o: o.get("created_at", 0) or 0, reverse=True)
