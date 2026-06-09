@@ -3952,22 +3952,19 @@ def api_admin_add_subscription():
         expires_at = now + dur_days * 86400
 
     subs = load_subscriptions()
-    # se ja existe, atualiza
+    # não permite cadastrar email repetido
     existing, idx = _find_subscription(email)
+    if idx >= 0:
+        return jsonify({"success": False, "message": "Este email já está cadastrado."}), 409
+
     sub = {
         "email": email, "senha": senha, "plataforma": plataforma, "cliente": cliente,
         "telefone": telefone, "valor": valor, "dur_days": dur_days,
         "start_at": start_at, "expires_at": expires_at,
-        "created_at": (existing.get("created_at") if existing else now),
-        "renew_pix_txid": None, "renew_count": (existing.get("renew_count", 0) if existing else 0),
+        "created_at": now,
+        "renew_pix_txid": None, "renew_count": 0,
     }
-    # mantém senha antiga se não enviou nova
-    if not senha and existing and existing.get("senha"):
-        sub["senha"] = existing.get("senha")
-    if idx >= 0:
-        subs[idx] = sub
-    else:
-        subs.append(sub)
+    subs.append(sub)
     save_subscriptions(subs)
     return jsonify({"success": True, "subscription": sub})
 
