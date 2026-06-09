@@ -1547,7 +1547,7 @@
         const { j } = await fetchJsonNoCache('/api/admin/assinaturas?all=1');
         const tb = document.getElementById('assin-tbody');
         if (!j.success || !j.subscriptions.length) {
-          tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">Nenhuma conta cadastrada</td></tr>';
+          tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">Contas manuais aparecem apenas em Compras por Data.</td></tr>';
           return;
         }
         tb.innerHTML = j.subscriptions.map(s => {

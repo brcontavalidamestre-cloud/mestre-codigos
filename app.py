@@ -4071,6 +4071,10 @@ def api_admin_list_subscriptions():
     for s in subs:
         if not isinstance(s, dict):
             continue
+        # Contas cadastradas manualmente devem aparecer apenas em Compras.
+        # Só renderiza no quadro superior quando houver flag explícita show_in_panel=True.
+        if s.get("show_in_panel") is not True:
+            continue
         exp = s.get("expires_at") or 0
         active = now < exp
         # Por padrão, só mostra as ATIVAS (pagas)
@@ -4139,6 +4143,7 @@ def api_admin_add_subscription():
         "assigned_user_name": assigned_user_name,
         "start_at": start_at, "expires_at": expires_at,
         "created_at": now,
+        "show_in_panel": False,
         "renew_pix_txid": None, "renew_count": 0,
     }
     subs.append(sub)
