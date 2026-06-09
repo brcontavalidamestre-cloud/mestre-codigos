@@ -1008,6 +1008,23 @@
 
     let _users = [], _pwUser = null, _delUser = null, _meUser = null;
 
+    function withNoCache(url) {
+      const sep = url.includes('?') ? '&' : '?';
+      return `${url}${sep}_ts=${Date.now()}`;
+    }
+
+    async function fetchJsonNoCache(url, options = {}) {
+      const opts = { ...options };
+      const method = String(opts.method || 'GET').toUpperCase();
+      if (method === 'GET') {
+        opts.cache = 'no-store';
+        url = withNoCache(url);
+      }
+      const r = await fetch(url, opts);
+      const j = await r.json();
+      return { r, j };
+    }
+
     /* init */
     (async function init() {
       try {
@@ -1120,8 +1137,7 @@
     let _produtos = [];
     async function loadLojaProdutos() {
       try {
-        const r = await fetch('/api/admin/loja/produtos');
-        const j = await r.json();
+        const { j } = await fetchJsonNoCache('/api/admin/loja/produtos');
         if (!j.success) return;
         _produtos = j.products;
         const list = document.getElementById('loja-prod-list');
@@ -1176,8 +1192,7 @@
       const pid = document.getElementById('stk-prod-sel').value;
       if (!pid) return;
       try {
-        const r = await fetch('/api/admin/loja/estoque/'+pid);
-        const j = await r.json();
+        const { j } = await fetchJsonNoCache('/api/admin/loja/estoque/'+pid);
         const tb = document.getElementById('stk-tbody');
         if (!j.success || !j.items.length) {
           tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--tm);padding:14px">Sem acessos cadastrados.</td></tr>';
@@ -1223,7 +1238,8 @@
           document.getElementById('stk-pass').value = '';
           document.getElementById('stk-note').value = '';
           showToast('✓ Acesso adicionado');
-          loadStock(); loadLojaProdutos();
+          await loadLojaProdutos();
+          await loadStock();
         } else { showToast(j.message||'Erro'); }
       } catch(e){ showToast('Erro de conexão'); }
     }
@@ -1233,7 +1249,7 @@
       try {
         const r = await fetch(`/api/admin/loja/estoque/${pid}/${iid}`, { method:'DELETE' });
         const j = await r.json();
-        if (j.success) { showToast('✓ Removido'); loadStock(); loadLojaProdutos(); }
+        if (j.success) { showToast('✓ Removido'); await loadLojaProdutos(); await loadStock(); }
         else showToast(j.message||'Erro');
       } catch(e){}
     }
@@ -1243,15 +1259,14 @@
       try {
         const r = await fetch(`/api/admin/loja/estoque/${pid}/${iid}/reset`, { method:'POST' });
         const j = await r.json();
-        if (j.success) { showToast('✓ Reativado'); loadStock(); loadLojaProdutos(); }
+        if (j.success) { showToast('✓ Reativado'); await loadLojaProdutos(); await loadStock(); }
       } catch(e){}
     }
 
     /* ============ LOJA: PEDIDOS ============ */
     async function loadOrders() {
       try {
-        const r = await fetch('/api/admin/loja/pedidos');
-        const j = await r.json();
+        const { j } = await fetchJsonNoCache('/api/admin/loja/pedidos');
         const tb = document.getElementById('ord-tbody');
         if (!j.success || !j.orders.length) {
           tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--tm);padding:14px">Nenhum pedido ainda.</td></tr>';
@@ -1295,8 +1310,7 @@
 
     async function loadLoja2Produtos() {
       try {
-        const r = await fetch('/api/admin/loja2/produtos');
-        const j = await r.json();
+        const { j } = await fetchJsonNoCache('/api/admin/loja2/produtos');
         if (!j.success) return;
         const list = document.getElementById('loja2-prod-list');
         const sel = document.getElementById('l2-stk-prod-sel');
@@ -1338,7 +1352,7 @@
       };
       const r = await fetch('/api/admin/loja2/produtos', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
-      if (j.success) { showToast('✓ Produto criado'); document.getElementById('l2-prod-form').reset(); loadLoja2Produtos(); }
+      if (j.success) { showToast('✓ Produto criado'); document.getElementById('l2-prod-form').reset(); await loadLoja2Produtos(); }
       else showToast('✗ ' + (j.message||'Erro'));
     }
 
@@ -1350,21 +1364,20 @@
       };
       const r = await fetch('/api/admin/loja2/produtos/'+id, {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
-      if (j.success) { showToast('✓ Salvo'); loadLoja2Produtos(); } else showToast('✗ '+(j.message||'Erro'));
+      if (j.success) { showToast('✓ Salvo'); await loadLoja2Produtos(); } else showToast('✗ '+(j.message||'Erro'));
     }
 
     async function deleteLoja2Product(id, name) {
       if (!confirm('Excluir o produto "'+name+'" e todo o seu estoque?')) return;
       const r = await fetch('/api/admin/loja2/produtos/'+id, {method:'DELETE'});
       const j = await r.json();
-      if (j.success) { showToast('✓ Excluído'); loadLoja2Produtos(); } else showToast('✗ '+(j.message||'Erro'));
+      if (j.success) { showToast('✓ Excluído'); await loadLoja2Produtos(); } else showToast('✗ '+(j.message||'Erro'));
     }
 
     async function loadLoja2Stock() {
       const sel = document.getElementById('l2-stk-prod-sel');
       if (!sel || !sel.value) return;
-      const r = await fetch('/api/admin/loja2/estoque/'+sel.value);
-      const j = await r.json();
+      const { j } = await fetchJsonNoCache('/api/admin/loja2/estoque/'+sel.value);
       const tb = document.getElementById('l2-stk-tbody');
       if (!j.success || !j.items.length) { tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Sem acessos cadastrados</td></tr>'; return; }
       tb.innerHTML = j.items.map(it => `
@@ -1389,7 +1402,7 @@
       };
       const r = await fetch('/api/admin/loja2/estoque/'+sel.value, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
-      if (j.success) { showToast('✓ Acesso adicionado'); document.getElementById('l2-stk-form').reset(); loadLoja2Stock(); loadLoja2Produtos(); }
+      if (j.success) { showToast('✓ Acesso adicionado'); document.getElementById('l2-stk-form').reset(); await loadLoja2Produtos(); await loadLoja2Stock(); }
       else showToast('✗ '+(j.message||'Erro'));
     }
 
@@ -1397,19 +1410,18 @@
       if (!confirm('Remover este acesso?')) return;
       const r = await fetch('/api/admin/loja2/estoque/'+pid+'/'+iid, {method:'DELETE'});
       const j = await r.json();
-      if (j.success) { showToast('✓ Removido'); loadLoja2Stock(); loadLoja2Produtos(); }
+      if (j.success) { showToast('✓ Removido'); await loadLoja2Produtos(); await loadLoja2Stock(); }
     }
 
     async function resetLoja2Stock(pid, iid) {
       const r = await fetch('/api/admin/loja2/estoque/'+pid+'/'+iid+'/reset', {method:'POST'});
       const j = await r.json();
-      if (j.success) { showToast('✓ Reativado'); loadLoja2Stock(); loadLoja2Produtos(); }
+      if (j.success) { showToast('✓ Reativado'); await loadLoja2Produtos(); await loadLoja2Stock(); }
     }
 
     async function loadLoja2Orders() {
       try {
-        const r = await fetch('/api/admin/loja2/pedidos');
-        const j = await r.json();
+        const { j } = await fetchJsonNoCache('/api/admin/loja2/pedidos');
         const tb = document.getElementById('l2-ord-tbody');
         if (!j.success || !j.orders.length) { tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;">Nenhum pedido ainda</td></tr>'; return; }
         tb.innerHTML = j.orders.map(o => {
@@ -1426,7 +1438,7 @@
       try {
         const r = await fetch('/api/admin/loja2/pedidos/' + encodeURIComponent(orderId), {method:'DELETE'});
         const j = await r.json();
-        if (j.success) { showToast('✓ Cobrança da Loja 2 excluída'); loadLoja2Orders(); }
+        if (j.success) { showToast('✓ Cobrança da Loja 2 excluída'); await loadLoja2Orders(); }
         else showToast('✗ ' + (j.message||'Erro'));
       } catch(e) { showToast('Erro de conexão'); }
     }
@@ -1488,11 +1500,12 @@
     }
 
     // Abre o modal de cobrança em tela cheia e carrega os dados
-    function abrirCobranca() {
+    async function abrirCobranca() {
       const m = document.getElementById('cobranca-modal');
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
-      loadAssinaturas();
-      loadComprasPorData();
+      await loadAssinaturas();
+      await loadComprasPorData();
+     
     }
     function fecharCobranca() {
       const m = document.getElementById('cobranca-modal');
@@ -1531,8 +1544,7 @@
 
     async function loadAssinaturas() {
       try {
-        const r = await fetch('/api/admin/assinaturas?all=1');
-        const j = await r.json();
+        const { j } = await fetchJsonNoCache('/api/admin/assinaturas?all=1');
         const tb = document.getElementById('assin-tbody');
         if (!j.success || !j.subscriptions.length) {
           tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">Nenhuma conta cadastrada</td></tr>';
@@ -1588,7 +1600,7 @@
       };
       const r = await fetch('/api/admin/assinaturas', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
-      if (j.success) { showToast('✓ Conta cadastrada'); document.getElementById('assin-form').reset(); document.getElementById('as-plat').value='Netflix'; document.getElementById('as-dias').value='30'; loadAssinaturas(); loadComprasPorData(); }
+      if (j.success) { showToast('✓ Conta cadastrada'); document.getElementById('assin-form').reset(); document.getElementById('as-plat').value='Netflix'; document.getElementById('as-dias').value='30'; await loadAssinaturas(); await loadComprasPorData(); }
       else showToast('✗ '+(j.message||'Erro'));
     }
 
@@ -1652,22 +1664,23 @@
       }
       showToast('✓ Importação concluída: ' + ok + ' ok / ' + repetido + ' repetido(s) / ' + erro + ' erro(s)');
       document.getElementById('as-bulk-list').value = '';
-      loadAssinaturas();
-      loadComprasPorData();
+      await loadAssinaturas();
+      await loadComprasPorData();
+     
     }
 
     async function renovarAssinatura(email) {
       if (!confirm('Renovar a conta '+email+'?')) return;
       const r = await fetch('/api/admin/assinaturas/'+encodeURIComponent(email)+'/renovar', {method:'POST'});
       const j = await r.json();
-      if (j.success) { showToast('✓ Renovada'); loadAssinaturas(); loadComprasPorData(); } else showToast('✗ '+(j.message||'Erro'));
+      if (j.success) { showToast('✓ Renovada'); await loadAssinaturas(); await loadComprasPorData(); } else showToast('✗ '+(j.message||'Erro'));
     }
 
     async function delAssinatura(email) {
       if (!confirm('Remover a conta '+email+'?')) return;
       const r = await fetch('/api/admin/assinaturas/'+encodeURIComponent(email), {method:'DELETE'});
       const j = await r.json();
-      if (j.success) { showToast('✓ Removida'); loadAssinaturas(); loadComprasPorData(); } else showToast('✗ '+(j.message||'Erro'));
+      if (j.success) { showToast('✓ Removida'); await loadAssinaturas(); await loadComprasPorData(); } else showToast('✗ '+(j.message||'Erro'));
     }
 
     async function deleteOrder(orderId) {
@@ -1676,7 +1689,7 @@
       try {
         const r = await fetch('/api/admin/loja/pedidos/' + encodeURIComponent(orderId), {method:'DELETE'});
         const j = await r.json();
-        if (j.success) { showToast('✓ Cobrança excluída'); loadOrders(); loadComprasPorData(); }
+        if (j.success) { showToast('✓ Cobrança excluída'); await loadOrders(); await loadComprasPorData(); }
         else showToast('✗ ' + (j.message||'Erro'));
       } catch(e) { showToast('Erro de conexão'); }
     }
@@ -1847,8 +1860,7 @@
     }
     async function loadComprasPorData() {
       try {
-        const r = await fetch('/api/admin/compras-por-data');
-        const j = await r.json();
+        const { j } = await fetchJsonNoCache('/api/admin/compras-por-data');
         comprasDataCache = (j && j.success && Array.isArray(j.blocos)) ? j.blocos : [];
         renderComprasPorData(comprasDataCache);
         if (!comprasDataCache.length) clearComprasSearch();
@@ -1890,8 +1902,7 @@
       const tb = document.getElementById('lic-tbody');
       tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Carregando...</td></tr>';
       try {
-        const r = await fetch('/api/admin/licencas');
-        const j = await r.json();
+        const { j } = await fetchJsonNoCache('/api/admin/licencas');
         if (!j.success) {
           tb.innerHTML = `<tr><td colspan="7" style="text-align:center;color:#f87171;padding:14px">${j.message || 'Erro'}</td></tr>`;
           return;
@@ -1973,8 +1984,8 @@
           showToast('✓ Licença cadastrada');
           document.getElementById('lic-form').reset();
           document.getElementById('lic-days').value = '30';
-          loadLicencas();
-          loadUsers(); // novo admin foi criado
+          await loadLicencas();
+          await loadUsers(); // novo admin foi criado
         } else {
           showToast(j.message || 'Erro');
         }
@@ -1989,7 +2000,7 @@
           body: JSON.stringify({ days })
         });
         const j = await r.json();
-        if (j.success) { showToast(`✓ Renovada +${days} dias`); loadLicencas(); }
+        if (j.success) { showToast(`✓ Renovada +${days} dias`); await loadLicencas(); }
         else showToast(j.message || 'Erro');
       } catch(e){ showToast('Erro de conexão'); }
     }
@@ -1998,7 +2009,7 @@
       try {
         const r = await fetch(`/api/admin/licencas/${id}/toggle`, { method:'POST' });
         const j = await r.json();
-        if (j.success) { showToast(j.active ? '✓ Ativada' : '⏸️ Desativada'); loadLicencas(); }
+        if (j.success) { showToast(j.active ? '✓ Ativada' : '⏸️ Desativada'); await loadLicencas(); }
       } catch(e){ showToast('Erro'); }
     }
 
@@ -2007,13 +2018,12 @@
       try {
         const r = await fetch(`/api/admin/licencas/${id}`, { method:'DELETE' });
         const j = await r.json();
-        if (j.success) { showToast('✓ Excluída'); loadLicencas(); }
+        if (j.success) { showToast('✓ Excluída'); await loadLicencas(); }
       } catch(e){ showToast('Erro'); }
     }
 
     async function editLicenca(id) {
-      const r = await fetch('/api/admin/licencas');
-      const j = await r.json();
+      const { j } = await fetchJsonNoCache('/api/admin/licencas');
       const lic = (j.licenses || []).find(l => l.id === id);
       if (!lic) return;
       const newName  = prompt('Nome do cliente:', lic.customer_name || '');
@@ -2036,7 +2046,7 @@
           body: JSON.stringify(payload)
         });
         const jj = await rr.json();
-        if (jj.success) { showToast('✓ Atualizada'); loadLicencas(); loadUsers(); }
+        if (jj.success) { showToast('✓ Atualizada'); await loadLicencas(); await loadUsers(); }
         else showToast(jj.message || 'Erro');
       } catch(e){ showToast('Erro'); }
     }
@@ -2097,8 +2107,7 @@
       if (si) si.value = '';
       document.getElementById('s-info').textContent = '';
       try {
-        const r = await fetch('/api/admin/users');
-        const d = await r.json();
+        const { j: d } = await fetchJsonNoCache('/api/admin/users');
         if (!d.success) { showTblErr('Erro ao carregar usuários.'); return; }
         _users = Array.isArray(d.users) ? d.users.slice() : [];
         if (_meUser && _meUser.username) {
@@ -2135,7 +2144,7 @@
         if (d.success) {
           showOk(d.message || 'Usuário criado!');
           document.getElementById('cform').reset();
-          loadUsers();
+          await loadUsers();
         } else {
           showErrA(d.message || 'Erro ao criar.');
         }
@@ -2188,7 +2197,7 @@
         const r = await fetch(`/api/admin/users/${encodeURIComponent(_delUser)}`, { method: 'DELETE' });
         const d = await r.json();
         closeOv('ov-del');
-        if (d.success) { toast('🗑️ Usuário removido!', '#10b981'); loadUsers(); }
+        if (d.success) { toast('🗑️ Usuário removido!', '#10b981'); await loadUsers(); }
         else toast('❌ ' + (d.message || 'Erro.'), '#ef4444');
       } catch { closeOv('ov-del'); toast('❌ Erro de conexão.', '#ef4444'); }
       finally { btn.disabled = false; btn.innerHTML = 'Sim, Remover'; }
