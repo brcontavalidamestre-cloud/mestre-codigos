@@ -523,24 +523,23 @@
               <div class="fgrp"><label class="flbl">✉ Email da conta (login)</label><input class="fi" id="as-email" placeholder="conta@cliente.com" required/></div>
               <div class="fgrp"><label class="flbl">🔒 Senha do login</label><input class="fi" id="as-senha" placeholder="senha da conta"/></div>
               <div class="fgrp"><label class="flbl">🎬 Plataforma</label><input class="fi" id="as-plat" placeholder="Netflix" value="Netflix"/></div>
-              <div class="fgrp"><label class="flbl">👤 Cliente (opcional)</label><input class="fi" id="as-cliente" placeholder="Nome do cliente"/></div>
+              <div class="fgrp"><label class="flbl">👤 Cliente</label><input class="fi" id="as-cliente" placeholder="Nome do cliente"/></div>
               <div class="fgrp"><label class="flbl">📱 Telefone (opcional)</label><input class="fi" id="as-tel" placeholder="WhatsApp"/></div>
               <div class="fgrp"><label class="flbl">💰 Valor renovação (R$)</label><input class="fi" id="as-valor" placeholder="35.00"/></div>
               <div class="fgrp"><label class="flbl">📅 Dias de validade</label><input class="fi" id="as-dias" placeholder="30" value="30"/></div>
-              <div class="fgrp"><label class="flbl">📆 OU vencimento exato (opcional)</label><input class="fi" id="as-vencdate" type="date"/></div>
+              <div class="fgrp"><label class="flbl">📆 Vencimento exato</label><input class="fi" id="as-vencdate" type="date"/></div>
+              <div class="fgrp" style="grid-column:1/-1;">
+                <label class="flbl">📥 Lista de emails em massa</label>
+                <div class="sinfo" style="margin:6px 0 10px 0;">Cole somente os emails, um por linha. O cliente e o vencimento preenchidos acima serão aplicados aos emails importados em massa.</div>
+                <textarea class="fi" id="as-bulk-list" rows="6" placeholder="conta1@gmail.com&#10;conta2@gmail.com&#10;conta3@gmail.com" style="width:100%;resize:vertical;"></textarea>
+              </div>
             </div>
-            <button type="submit" class="btn-p">➕ Cadastrar / Atualizar Conta Paga</button>
-          </form>
-
-          <div style="margin-bottom:16px;background:rgba(124,58,237,0.10);padding:14px;border-radius:10px;border:1px dashed rgba(167,139,250,.45);">
-            <div style="font-weight:800;color:#fcd34d;margin-bottom:8px;">📥 Adicionar lista de emails em massa</div>
-            <div class="sinfo" style="margin-bottom:10px;">Cole uma conta por linha. Formatos aceitos: <b>email</b>, <b>email;senha</b>, <b>email;senha;cliente</b> ou <b>email;senha;cliente;vencimento</b>. O vencimento deve estar em <b>YYYY-MM-DD</b>. Se cliente ou vencimento não vierem na linha, o sistema usa os campos do formulário acima.</div>
-            <textarea class="fi" id="as-bulk-list" rows="7" placeholder="conta1@gmail.com;senha1;João Silva;2026-06-30&#10;conta2@gmail.com;senha2;Maria Souza;2026-07-05&#10;conta3@gmail.com" style="width:100%;resize:vertical;margin-bottom:10px;"></textarea>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <button type="button" class="btn-p" onclick="importAssinaturasEmMassa()">📥 Importar lista em massa</button>
+              <button type="submit" class="btn-p">➕ Cadastrar / Atualizar Conta Paga</button>
+              <button type="button" class="btn-p" onclick="importAssinaturasEmMassa()">📥 Importar emails em massa</button>
               <button type="button" class="btn-ref" onclick="document.getElementById('as-bulk-list').value=''">🧹 Limpar lista</button>
             </div>
-          </div>
+          </form>
           <div class="twrap">
             <table>
               <thead><tr><th>Login (Email + Senha)</th><th>Plataforma</th><th>Cliente</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead>
@@ -1405,21 +1404,16 @@
       const dur_days = document.getElementById('as-dias').value;
       const expiresPadrao = document.getElementById('as-vencdate').value;
 
-      const linhas = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const linhas = txt.split(/\r?\n/).map(s => s.trim().toLowerCase()).filter(Boolean);
       if (!linhas.length) {
         showToast('✗ Nenhuma linha válida na lista');
         return;
       }
-      if (!confirm('Importar ' + linhas.length + ' conta(s) em massa?')) return;
+      if (!confirm('Importar ' + linhas.length + ' email(s) em massa?')) return;
 
       const seen = new Set();
       let ok = 0, erro = 0, repetido = 0;
-      for (const linha of linhas) {
-        const partes = linha.split(/[;,|]/).map(s => s.trim());
-        const email = (partes[0] || '').toLowerCase();
-        const senha = partes[1] || '';
-        const clienteLinha = partes[2] || clientePadrao;
-        const expiresLinha = partes[3] || expiresPadrao;
+      for (const email of linhas) {
         if (!email || !email.includes('@')) {
           erro++;
           continue;
@@ -1432,13 +1426,13 @@
         try {
           const body = {
             email,
-            senha,
+            senha: '',
             plataforma,
-            cliente: clienteLinha,
+            cliente: clientePadrao,
             telefone,
             valor,
             dur_days,
-            expires_date: expiresLinha
+            expires_date: expiresPadrao
           };
           const r = await fetch('/api/admin/assinaturas', {
             method:'POST',
