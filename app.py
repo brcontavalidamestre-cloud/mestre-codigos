@@ -3752,6 +3752,21 @@ def api_admin_list_orders():
         return jsonify({"success": False, "message": f"Erro: {e}", "orders": []})
 
 
+@app.route("/api/admin/loja/pedidos/<order_id>", methods=["DELETE"])
+@admin_required
+def api_admin_delete_order(order_id):
+    """Exclui uma cobrança/pedido da Loja 1 do painel admin."""
+    try:
+        orders = load_orders()
+        new_orders = [o for o in orders if not (isinstance(o, dict) and o.get("id") == order_id)]
+        if len(new_orders) == len(orders):
+            return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
+        save_orders(new_orders)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
+
+
 # ╔══════════════════════════════════════════════════════════════╗
 # ║  ADMIN LOJA 2 — gerenciar produtos/estoque/pedidos da NOVA loja (só no rios) ║
 # ║  Dados SEPARADOS (products_loja2.json, stock_loja2.json, orders_loja2.json)  ║
@@ -3915,6 +3930,21 @@ def api_admin_loja2_list_orders():
         return jsonify({"success": False, "message": f"Erro: {e}", "orders": []})
 
 
+@app.route("/api/admin/loja2/pedidos/<order_id>", methods=["DELETE"])
+@admin_required
+def api_admin_loja2_delete_order(order_id):
+    """Exclui uma cobrança/pedido da Loja 2 do painel admin."""
+    try:
+        orders = load_orders2()
+        new_orders = [o for o in orders if not (isinstance(o, dict) and o.get("id") == order_id)]
+        if len(new_orders) == len(orders):
+            return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
+        save_orders2(new_orders)
+        return jsonify({"success": True})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
+
+
 # ╔════════════════════════════════════════════════════════════════════════╗
 # ║  PAINEL DE COBRANÇA — Assinaturas por conta de streaming (só MESTRE)    ║
 # ╚════════════════════════════════════════════════════════════════════════╝
@@ -3972,12 +4002,13 @@ def api_admin_add_subscription():
     # data de inicio: agora (ou custom)
     now = int(time.time())
     start_at = now
-    # se enviou data de vencimento custom (YYYY-MM-DD), usa ela
+    # se enviou data de vencimento custom (YYYY-MM-DD), usa o fim do dia
     exp_custom = str(data.get("expires_date", "")).strip()
     if exp_custom:
         try:
             import datetime as _dtmod
             dt = _dtmod.datetime.strptime(exp_custom, "%Y-%m-%d")
+            dt = dt.replace(hour=23, minute=59, second=59)
             expires_at = int(dt.timestamp())
         except Exception:
             expires_at = now + dur_days * 86400

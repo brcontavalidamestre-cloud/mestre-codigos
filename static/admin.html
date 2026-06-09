@@ -500,6 +500,7 @@
                   <th>Valor</th>
                   <th>Status</th>
                   <th>Data</th>
+                  <th>Ações</th>
                 </tr>
               </thead>
               <tbody id="ord-tbody"></tbody>
@@ -560,7 +561,7 @@
         <div class="ptit">💳 Loja 2 — Pedidos</div>
         <button class="btn-ref" onclick="loadLoja2Orders()">🔄 Atualizar</button>
       </div>
-      <div class="twrap"><table><thead><tr><th>Pedido</th><th>Produto</th><th>Cliente</th><th>Valor</th><th>Status</th><th>Data</th></tr></thead>
+      <div class="twrap"><table><thead><tr><th>Pedido</th><th>Produto</th><th>Cliente</th><th>Valor</th><th>Status</th><th>Data</th><th>Ações</th></tr></thead>
       <tbody id="l2-ord-tbody"></tbody></table></div>
     </div>
 
@@ -586,10 +587,10 @@
         <!-- Assinaturas (somente PAGAS/ATIVAS) -->
         <div class="panel" id="cobranca-panel" style="margin-bottom:24px;border:2px solid #fcd34d;">
           <div class="phdr">
-            <div class="ptit">📋 Contas Pagas — Logins Ativos</div>
+            <div class="ptit">📋 Contas Pagas / Vencidas</div>
             <button class="btn-ref" onclick="loadAssinaturas()">🔄 Atualizar</button>
           </div>
-          <div class="sinfo" style="margin-bottom:10px;">Apenas contas pagas (ativas) aparecem aqui. Conta vencida = códigos bloqueados até renovar.</div>
+          <div class="sinfo" style="margin-bottom:10px;">Todas as contas aparecem aqui. Quando vencer, ela continua visível em <b style="color:#ff5252;">vermelho como VENCIDA</b> até renovar ou excluir.</div>
           <form id="assin-form" onsubmit="addAssinatura(event)" style="margin-bottom:16px;background:rgba(252,211,77,0.06);padding:14px;border-radius:10px;">
             <div class="fgrid">
               <div class="fgrp"><label class="flbl">✉ Email da conta (login) — opcional no modo massa</label><input class="fi" id="as-email" placeholder="conta@cliente.com"/></div>
@@ -1253,7 +1254,7 @@
         const j = await r.json();
         const tb = document.getElementById('ord-tbody');
         if (!j.success || !j.orders.length) {
-          tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Nenhum pedido ainda.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--tm);padding:14px">Nenhum pedido ainda.</td></tr>';
           return;
         }
         tb.innerHTML = j.orders.map(o => {
@@ -1271,6 +1272,7 @@
             <td>R$ ${Number(o.price).toFixed(2).replace('.', ',')}</td>
             <td style="color:${stColor}">${stLabel}</td>
             <td style="font-size:0.78rem">${dt}</td>
+            <td><button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="deleteOrder('${String(o.id || '').replace(/'/g,"\\'")}')">🗑️</button></td>
           </tr>`;
         }).join('');
       } catch(e){}
@@ -1409,13 +1411,24 @@
         const r = await fetch('/api/admin/loja2/pedidos');
         const j = await r.json();
         const tb = document.getElementById('l2-ord-tbody');
-        if (!j.success || !j.orders.length) { tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">Nenhum pedido ainda</td></tr>'; return; }
+        if (!j.success || !j.orders.length) { tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#888;">Nenhum pedido ainda</td></tr>'; return; }
         tb.innerHTML = j.orders.map(o => {
           const d = o.created_at ? new Date(o.created_at*1000).toLocaleString('pt-BR') : '';
           const st = o.status === 'paid' ? '<span style="color:#4caf50;">Pago</span>' : '<span style="color:#ff9800;">Pendente</span>';
-          return `<tr><td>${o.id||''}</td><td>${o.product_name||''}</td><td>${o.customer_name||''}<br><small>${o.customer_email||''}</small></td><td>R$ ${(o.price||0).toFixed ? (o.price).toFixed(2) : o.price}</td><td>${st}</td><td><small>${d}</small></td></tr>`;
+          return `<tr><td>${o.id||''}</td><td>${o.product_name||''}</td><td>${o.customer_name||''}<br><small>${o.customer_email||''}</small></td><td>R$ ${(o.price||0).toFixed ? (o.price).toFixed(2) : o.price}</td><td>${st}</td><td><small>${d}</small></td><td><button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="deleteLoja2Order('${String(o.id || '').replace(/'/g,"\\'")}')">🗑️</button></td></tr>`;
         }).join('');
       } catch(e) { console.log('loja2 ord err', e); }
+    }
+
+    async function deleteLoja2Order(orderId) {
+      if (!orderId) return;
+      if (!confirm('Excluir a cobrança/pedido ' + orderId + '?')) return;
+      try {
+        const r = await fetch('/api/admin/loja2/pedidos/' + encodeURIComponent(orderId), {method:'DELETE'});
+        const j = await r.json();
+        if (j.success) { showToast('✓ Cobrança da Loja 2 excluída'); loadLoja2Orders(); }
+        else showToast('✗ ' + (j.message||'Erro'));
+      } catch(e) { showToast('Erro de conexão'); }
     }
 
 
@@ -1518,7 +1531,7 @@
 
     async function loadAssinaturas() {
       try {
-        const r = await fetch('/api/admin/assinaturas');
+        const r = await fetch('/api/admin/assinaturas?all=1');
         const j = await r.json();
         const tb = document.getElementById('assin-tbody');
         if (!j.success || !j.subscriptions.length) {
@@ -1647,14 +1660,25 @@
       if (!confirm('Renovar a conta '+email+'?')) return;
       const r = await fetch('/api/admin/assinaturas/'+encodeURIComponent(email)+'/renovar', {method:'POST'});
       const j = await r.json();
-      if (j.success) { showToast('✓ Renovada'); loadAssinaturas(); } else showToast('✗ '+(j.message||'Erro'));
+      if (j.success) { showToast('✓ Renovada'); loadAssinaturas(); loadComprasPorData(); } else showToast('✗ '+(j.message||'Erro'));
     }
 
     async function delAssinatura(email) {
       if (!confirm('Remover a conta '+email+'?')) return;
       const r = await fetch('/api/admin/assinaturas/'+encodeURIComponent(email), {method:'DELETE'});
       const j = await r.json();
-      if (j.success) { showToast('✓ Removida'); loadAssinaturas(); } else showToast('✗ '+(j.message||'Erro'));
+      if (j.success) { showToast('✓ Removida'); loadAssinaturas(); loadComprasPorData(); } else showToast('✗ '+(j.message||'Erro'));
+    }
+
+    async function deleteOrder(orderId) {
+      if (!orderId) return;
+      if (!confirm('Excluir a cobrança/pedido ' + orderId + '?')) return;
+      try {
+        const r = await fetch('/api/admin/loja/pedidos/' + encodeURIComponent(orderId), {method:'DELETE'});
+        const j = await r.json();
+        if (j.success) { showToast('✓ Cobrança excluída'); loadOrders(); loadComprasPorData(); }
+        else showToast('✗ ' + (j.message||'Erro'));
+      } catch(e) { showToast('Erro de conexão'); }
     }
 
     let comprasDataCache = [];
@@ -1682,16 +1706,20 @@
     function getAssinMeta(o) {
       let vencCell = '<span style="color:#888;">—</span>';
       let stAssin = '<span style="color:#888;">—</span>';
-      let acoesCell = '<span style="color:#888;">—</span>';
+      let acoes = [];
       if (o.sub_email) {
         const venc = o.sub_expires_at ? new Date(o.sub_expires_at*1000).toLocaleDateString('pt-BR') : '—';
         vencCell = venc;
         stAssin = o.sub_active
           ? `<span style="color:#4caf50;">✓ Ativa (${o.sub_days_left}d)</span>`
           : '<span style="color:#ff5252;font-weight:700;">✗ VENCIDA</span>';
-        acoesCell = `<button class="btn-ref" onclick="renovarAssinatura('${o.sub_email}')" title="Renovar +${o.sub_dur_days||30}d">♻️ Renovar</button>
-          <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="delAssinatura('${o.sub_email}')">🗑️</button>`;
+        acoes.push(`<button class="btn-ref" onclick="renovarAssinatura('${o.sub_email}')" title="Renovar +${o.sub_dur_days||30}d">♻️ Renovar</button>`);
+        acoes.push(`<button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="delAssinatura('${o.sub_email}')">🗑️ Excluir conta</button>`);
       }
+      if (o.id) {
+        acoes.push(`<button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="deleteOrder('${String(o.id || '').replace(/'/g,"\\'")}')">🗑️ Excluir cobrança</button>`);
+      }
+      const acoesCell = acoes.length ? acoes.join(' ') : '<span style="color:#888;">—</span>';
       return { vencCell, stAssin, acoesCell };
     }
     function showComprasTab(tab) {
