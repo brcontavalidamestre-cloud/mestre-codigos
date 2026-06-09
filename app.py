@@ -2984,18 +2984,31 @@ def get_code():
     username = session.get("username")
     _clear_pending_reset_link(username)
 
-    # ╔══ MESTRE: bloqueio por assinatura vencida ══╗
-    # Se a conta (email) tem assinatura cadastrada e está VENCIDA, não entrega código.
+    # ╔══ MESTRE: consulta liberada SOMENTE para login vinculado ══╗
+    # No mestre, a busca de códigos só é permitida quando o email consultado
+    # estiver cadastrado em assinaturas e vinculado ao usuário logado.
     if is_master_host():
         sub, _idx = _find_subscription(user_email)
-        if sub is not None:
-            assigned_user = str(sub.get("assigned_user", "")).strip().lower()
-            if assigned_user and assigned_user != username:
-                return jsonify({
-                    "success": False,
-                    "message": f"Este login está vinculado ao usuário {assigned_user}. Faça login com o usuário correto para consultar o código."
-                }), 403
-        if sub is not None and not _sub_is_active(sub):
+        if sub is None:
+            return jsonify({
+                "success": False,
+                "message": "Este email não está liberado para consulta. Vincule a conta em 🧑 Usuário vinculado no Painel de Cobrança."
+            }), 403
+
+        assigned_user = str(sub.get("assigned_user", "")).strip().lower()
+        if not assigned_user:
+            return jsonify({
+                "success": False,
+                "message": "Esta conta ainda não está vinculada a nenhum usuário. Defina 🧑 Usuário vinculado no Painel de Cobrança para liberar a consulta."
+            }), 403
+
+        if assigned_user != username:
+            return jsonify({
+                "success": False,
+                "message": f"Este login está vinculado ao usuário {assigned_user}. Faça login com o usuário correto para consultar o código."
+            }), 403
+
+        if not _sub_is_active(sub):
             exp = sub.get("expires_at") or 0
             exp_str = _dt.utcfromtimestamp(exp).strftime("%d/%m/%Y") if exp else ""
             return jsonify({
