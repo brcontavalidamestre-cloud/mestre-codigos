@@ -920,7 +920,7 @@
       }
     })();
 
-    let _users = [], _pwUser = null, _delUser = null;
+    let _users = [], _pwUser = null, _delUser = null, _meUser = null;
 
     /* init */
     (async function init() {
@@ -929,6 +929,7 @@
         const d = await r.json();
         if (!d.logged_in) { location.href = '/login'; return; }
         if (d.role !== 'admin') { location.href = '/'; return; }
+        _meUser = { username: d.username || '', name: d.name || d.username || '', role: d.role || 'admin' };
         document.getElementById('topbar-name').textContent = d.name || d.username;
       } catch { location.href = '/login'; return; }
       loadUsers();
@@ -1933,7 +1934,12 @@
         const r = await fetch('/api/admin/users');
         const d = await r.json();
         if (!d.success) { showTblErr('Erro ao carregar usuários.'); return; }
-        _users = d.users;
+        _users = Array.isArray(d.users) ? d.users.slice() : [];
+        if (_meUser && _meUser.username) {
+          const hasMe = _users.some(u => String(u.username || '').toLowerCase() === String(_meUser.username || '').toLowerCase());
+          if (!hasMe) _users.unshift(_meUser);
+        }
+        _users.sort((a,b) => String(a.username||'').localeCompare(String(b.username||''), 'pt-BR'));
         renderAssinUsuarios();
         document.getElementById('st-total').textContent = _users.length;
         document.getElementById('st-cli').textContent   = _users.filter(u => u.role === 'client').length;
