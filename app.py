@@ -87,7 +87,11 @@ def _make_auto_login_sig(username, ts):
 
 
 def _set_session_for_user(username, user):
-    _set_session_for_user(username, user)
+    session.permanent = True
+    session["logged_in"] = True
+    session["username"]  = username
+    session["role"]      = user.get("role", "client")
+    session["name"]      = user.get("name", username)
 
 
 def load_users():
