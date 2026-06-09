@@ -524,6 +524,7 @@
               <div class="fgrp"><label class="flbl">🔒 Senha do login (opcional)</label><input class="fi" id="as-senha" placeholder="senha da conta"/></div>
               <div class="fgrp"><label class="flbl">🎬 Plataforma</label><input class="fi" id="as-plat" placeholder="Netflix" value="Netflix"/></div>
               <div class="fgrp"><label class="flbl">👤 Cliente</label><input class="fi" id="as-cliente" placeholder="Nome do cliente"/></div>
+              <div class="fgrp"><label class="flbl">🧑 Usuário vinculado</label><select class="fi" id="as-user"><option value="">Sem vínculo específico</option></select></div>
               <div class="fgrp"><label class="flbl">📱 Telefone (opcional)</label><input class="fi" id="as-tel" placeholder="WhatsApp"/></div>
               <div class="fgrp"><label class="flbl">💰 Valor renovação (R$) — opcional</label><input class="fi" id="as-valor" placeholder="35.00"/></div>
               <div class="fgrp"><label class="flbl">📅 Dias de validade</label><input class="fi" id="as-dias" placeholder="30" value="30"/></div>
@@ -542,7 +543,7 @@
           </form>
           <div class="twrap">
             <table>
-              <thead><tr><th>Login (Email + Senha)</th><th>Plataforma</th><th>Cliente</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead>
+              <thead><tr><th>Login (Email + Senha)</th><th>Plataforma</th><th>Cliente / Usuário</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead>
               <tbody id="assin-tbody"></tbody>
             </table>
           </div>
@@ -921,6 +922,7 @@
         document.getElementById('topbar-name').textContent = d.name || d.username;
       } catch { location.href = '/login'; return; }
       loadUsers();
+      renderAssinUsuarios();
       loadLojaProdutos();
       loadOrders();
       checkMasterAndShowLicencas();
@@ -1338,6 +1340,20 @@
       navigator.clipboard.writeText(txt).then(()=>showToast('📋 Login copiado')).catch(()=>showToast('✗ Falha ao copiar'));
     }
 
+    function renderAssinUsuarios() {
+      const sel = document.getElementById('as-user');
+      if (!sel) return;
+      const atual = sel.value || '';
+      const lista = Array.isArray(_users) ? [..._users].sort((a,b) => String(a.username||'').localeCompare(String(b.username||''), 'pt-BR')) : [];
+      sel.innerHTML = '<option value="">Sem vínculo específico</option>' + lista.map(u => {
+        const nome = u.name && u.name !== u.username ? ' — ' + x(u.name) : '';
+        const perfil = u.role === 'admin' ? ' [admin]' : ' [cliente]';
+        return `<option value="${x(u.username)}">${x(u.username)}${nome}${perfil}</option>`;
+      }).join('');
+      if ([...sel.options].some(o => o.value === atual)) sel.value = atual;
+      else sel.value = '';
+    }
+
     async function loadAssinaturas() {
       try {
         const r = await fetch('/api/admin/assinaturas');
@@ -1352,16 +1368,20 @@
           const st = s.active
             ? `<span style="color:#4caf50;">✓ Ativa (${s.days_left}d)</span>`
             : '<span style="color:#ff5252;font-weight:700;">✗ VENCIDA</span>';
-          const senhaTxt = s.senha ? s.senha : '<span style="color:#888;">—</span>';
+          const senhaTxt = s.senha ? x(s.senha) : '<span style="color:#888;">—</span>';
           const loginCopy = (s.email||'') + (s.senha ? ' | '+s.senha : '');
+          const vinculo = s.assigned_user
+            ? `<br><small style="color:#fcd34d;">🧑 Usuário: ${x(s.assigned_user_name || s.assigned_user)}</small>`
+            : '<br><small style="color:#888;">🧑 Sem vínculo específico</small>';
+          const telefone = s.telefone ? '<br><small>'+x(s.telefone)+'</small>' : '';
           return `<tr>
             <td>
-              <div style="font-weight:600;">${s.email||''}</div>
+              <div style="font-weight:600;">${x(s.email||'')}</div>
               <div style="font-size:.85rem;color:#fcd34d;">🔑 ${senhaTxt}</div>
               <button class="btn-ref" style="margin-top:4px;font-size:.72rem;padding:2px 8px;" onclick="copiarLogin('${loginCopy.replace(/'/g,"\\'")}')">📋 Copiar login</button>
             </td>
-            <td>${s.plataforma||''}</td>
-            <td>${s.cliente||'-'}${s.telefone?'<br><small>'+s.telefone+'</small>':''}</td>
+            <td>${x(s.plataforma||'')}</td>
+            <td>${x(s.cliente||'-')}${vinculo}${telefone}</td>
             <td>${venc}</td>
             <td>${st}</td>
             <td>
@@ -1385,6 +1405,7 @@
         senha: document.getElementById('as-senha').value,
         plataforma: document.getElementById('as-plat').value,
         cliente: document.getElementById('as-cliente').value,
+        assigned_user: document.getElementById('as-user').value,
         telefone: document.getElementById('as-tel').value,
         valor: document.getElementById('as-valor').value,
         dur_days: document.getElementById('as-dias').value,
@@ -1404,6 +1425,7 @@
       }
       const plataforma = document.getElementById('as-plat').value;
       const clientePadrao = document.getElementById('as-cliente').value;
+      const assignedUser = document.getElementById('as-user').value;
       const telefone = document.getElementById('as-tel').value;
       const valor = document.getElementById('as-valor').value;
       const dur_days = document.getElementById('as-dias').value;
@@ -1434,6 +1456,7 @@
             senha: '',
             plataforma,
             cliente: clientePadrao,
+            assigned_user: assignedUser,
             telefone,
             valor,
             dur_days,
@@ -1875,6 +1898,7 @@
         const d = await r.json();
         if (!d.success) { showTblErr('Erro ao carregar usuários.'); return; }
         _users = d.users;
+        renderAssinUsuarios();
         document.getElementById('st-total').textContent = _users.length;
         document.getElementById('st-cli').textContent   = _users.filter(u => u.role === 'client').length;
         document.getElementById('st-adm').textContent   = _users.filter(u => u.role === 'admin').length;

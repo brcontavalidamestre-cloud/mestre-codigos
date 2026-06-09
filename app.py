@@ -2950,6 +2950,13 @@ def get_code():
     # Se a conta (email) tem assinatura cadastrada e está VENCIDA, não entrega código.
     if is_master_host():
         sub, _idx = _find_subscription(user_email)
+        if sub is not None:
+            assigned_user = str(sub.get("assigned_user", "")).strip().lower()
+            if assigned_user and assigned_user != username:
+                return jsonify({
+                    "success": False,
+                    "message": f"Este login está vinculado ao usuário {assigned_user}. Faça login com o usuário correto para consultar o código."
+                }), 403
         if sub is not None and not _sub_is_active(sub):
             exp = sub.get("expires_at") or 0
             exp_str = _dt.utcfromtimestamp(exp).strftime("%d/%m/%Y") if exp else ""
@@ -3928,6 +3935,11 @@ def api_admin_add_subscription():
     cliente = str(data.get("cliente", "")).strip()[:80]
     telefone = str(data.get("telefone", "")).strip()[:30]
     senha = str(data.get("senha", "")).strip()[:80]  # senha do login da conta
+    assigned_user = str(data.get("assigned_user", "")).strip().lower()
+    users = load_users()
+    if assigned_user and assigned_user not in users:
+        return jsonify({"success": False, "message": "Usuário vinculado não encontrado."}), 400
+    assigned_user_name = users.get(assigned_user, {}).get("name", assigned_user) if assigned_user else ""
     try:
         valor = float(str(data.get("valor", SUB_RENEW_VALUE)).replace(",", "."))
     except Exception:
@@ -3960,6 +3972,8 @@ def api_admin_add_subscription():
     sub = {
         "email": email, "senha": senha, "plataforma": plataforma, "cliente": cliente,
         "telefone": telefone, "valor": valor, "dur_days": dur_days,
+        "assigned_user": assigned_user,
+        "assigned_user_name": assigned_user_name,
         "start_at": start_at, "expires_at": expires_at,
         "created_at": now,
         "renew_pix_txid": None, "renew_count": 0,
