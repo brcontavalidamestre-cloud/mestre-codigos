@@ -520,12 +520,12 @@
           <div class="sinfo" style="margin-bottom:10px;">Apenas contas pagas (ativas) aparecem aqui. Conta vencida = códigos bloqueados até renovar.</div>
           <form id="assin-form" onsubmit="addAssinatura(event)" style="margin-bottom:16px;background:rgba(252,211,77,0.06);padding:14px;border-radius:10px;">
             <div class="fgrid">
-              <div class="fgrp"><label class="flbl">✉ Email da conta (login)</label><input class="fi" id="as-email" placeholder="conta@cliente.com" required/></div>
-              <div class="fgrp"><label class="flbl">🔒 Senha do login</label><input class="fi" id="as-senha" placeholder="senha da conta"/></div>
+              <div class="fgrp"><label class="flbl">✉ Email da conta (login) — opcional no modo massa</label><input class="fi" id="as-email" placeholder="conta@cliente.com"/></div>
+              <div class="fgrp"><label class="flbl">🔒 Senha do login (opcional)</label><input class="fi" id="as-senha" placeholder="senha da conta"/></div>
               <div class="fgrp"><label class="flbl">🎬 Plataforma</label><input class="fi" id="as-plat" placeholder="Netflix" value="Netflix"/></div>
               <div class="fgrp"><label class="flbl">👤 Cliente</label><input class="fi" id="as-cliente" placeholder="Nome do cliente"/></div>
               <div class="fgrp"><label class="flbl">📱 Telefone (opcional)</label><input class="fi" id="as-tel" placeholder="WhatsApp"/></div>
-              <div class="fgrp"><label class="flbl">💰 Valor renovação (R$)</label><input class="fi" id="as-valor" placeholder="35.00"/></div>
+              <div class="fgrp"><label class="flbl">💰 Valor renovação (R$) — opcional</label><input class="fi" id="as-valor" placeholder="35.00"/></div>
               <div class="fgrp"><label class="flbl">📅 Dias de validade</label><input class="fi" id="as-dias" placeholder="30" value="30"/></div>
               <div class="fgrp"><label class="flbl">📆 Vencimento exato</label><input class="fi" id="as-vencdate" type="date"/></div>
               <div class="fgrp" style="grid-column:1/-1;">
@@ -1375,8 +1375,13 @@
 
     async function addAssinatura(ev) {
       ev.preventDefault();
+      const email = (document.getElementById('as-email').value || '').trim().toLowerCase();
+      if (!email) {
+        showToast('✗ Preencha o email da conta para cadastro individual');
+        return;
+      }
       const body = {
-        email: document.getElementById('as-email').value,
+        email,
         senha: document.getElementById('as-senha').value,
         plataforma: document.getElementById('as-plat').value,
         cliente: document.getElementById('as-cliente').value,
