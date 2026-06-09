@@ -531,6 +531,16 @@
             </div>
             <button type="submit" class="btn-p">➕ Cadastrar / Atualizar Conta Paga</button>
           </form>
+
+          <div style="margin-bottom:16px;background:rgba(124,58,237,0.10);padding:14px;border-radius:10px;border:1px dashed rgba(167,139,250,.45);">
+            <div style="font-weight:800;color:#fcd34d;margin-bottom:8px;">📥 Adicionar lista de emails em massa</div>
+            <div class="sinfo" style="margin-bottom:10px;">Cole uma conta por linha. Formatos aceitos: <b>email</b> ou <b>email;senha</b> ou <b>email,senha</b>. Os campos abaixo serão aplicados a todas as linhas.</div>
+            <textarea class="fi" id="as-bulk-list" rows="7" placeholder="conta1@gmail.com;senha1&#10;conta2@gmail.com;senha2&#10;conta3@gmail.com" style="width:100%;resize:vertical;margin-bottom:10px;"></textarea>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <button type="button" class="btn-p" onclick="importAssinaturasEmMassa()">📥 Importar lista em massa</button>
+              <button type="button" class="btn-ref" onclick="document.getElementById('as-bulk-list').value=''">🧹 Limpar lista</button>
+            </div>
+          </div>
           <div class="twrap">
             <table>
               <thead><tr><th>Login (Email + Senha)</th><th>Plataforma</th><th>Cliente</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead>
@@ -1380,6 +1390,54 @@
       const j = await r.json();
       if (j.success) { showToast('✓ Conta cadastrada'); document.getElementById('assin-form').reset(); document.getElementById('as-plat').value='Netflix'; document.getElementById('as-dias').value='30'; loadAssinaturas(); loadComprasPorData(); }
       else showToast('✗ '+(j.message||'Erro'));
+    }
+
+    async function importAssinaturasEmMassa() {
+      const txt = (document.getElementById('as-bulk-list').value || '').trim();
+      if (!txt) {
+        showToast('✗ Cole a lista de emails primeiro');
+        return;
+      }
+      const plataforma = document.getElementById('as-plat').value;
+      const cliente = document.getElementById('as-cliente').value;
+      const telefone = document.getElementById('as-tel').value;
+      const valor = document.getElementById('as-valor').value;
+      const dur_days = document.getElementById('as-dias').value;
+      const expires_date = document.getElementById('as-vencdate').value;
+
+      const linhas = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (!linhas.length) {
+        showToast('✗ Nenhuma linha válida na lista');
+        return;
+      }
+      if (!confirm('Importar ' + linhas.length + ' conta(s) em massa?')) return;
+
+      let ok = 0, erro = 0;
+      for (const linha of linhas) {
+        const partes = linha.split(/[;,|]/).map(s => s.trim());
+        const email = (partes[0] || '').toLowerCase();
+        const senha = partes.slice(1).join(';');
+        if (!email || !email.includes('@')) {
+          erro++;
+          continue;
+        }
+        try {
+          const body = { email, senha, plataforma, cliente, telefone, valor, dur_days, expires_date };
+          const r = await fetch('/api/admin/assinaturas', {
+            method:'POST',
+            headers:{'Content-Type':'application/json'},
+            body:JSON.stringify(body)
+          });
+          const j = await r.json();
+          if (j && j.success) ok++; else erro++;
+        } catch(e) {
+          erro++;
+        }
+      }
+      showToast('✓ Importação concluída: ' + ok + ' ok / ' + erro + ' erro(s)');
+      document.getElementById('as-bulk-list').value = '';
+      loadAssinaturas();
+      loadComprasPorData();
     }
 
     async function renovarAssinatura(email) {
