@@ -346,6 +346,32 @@
           <div class="alert aerr" id="a-err"><span>❌</span><span id="a-err-m"></span></div>
         </div>
 
+        <div class="panel" style="margin-top:0;margin-bottom:20px;border:2px solid #38bdf8;">
+          <div class="phdr">
+            <div class="ptit">📩 Emails liberados para administradores</div>
+            <button class="btn-ref" type="button" onclick="loadAdminOnlyVinculos()">🔄 Atualizar</button>
+          </div>
+          <div class="sinfo" style="margin-bottom:10px;">Somente emails vinculados aqui poderão ser usados na <b>Consulta Livre de Códigos</b>. Esta área aceita apenas usuários com perfil <b>Administrador</b>.</div>
+          <form id="ua-vinculos-form" onsubmit="importAdminOnlyVinculos(event)" style="margin-bottom:16px;background:rgba(56,189,248,0.08);padding:14px;border-radius:10px;">
+            <div class="fgrid">
+              <div class="fgrp">
+                <label class="flbl">⭐ Administrador</label>
+                <select class="fi" id="ua-admin-user" onchange="loadAdminOnlyVinculos()"><option value="">Todos os administradores</option></select>
+              </div>
+              <div class="fgrp" style="grid-column:1/-1;">
+                <label class="flbl">📥 Emails liberados</label>
+                <div class="sinfo" style="margin:6px 0 10px 0;">Cole um email por linha. Esses emails ficarão autorizados para consulta livre somente no admin correspondente.</div>
+                <textarea class="fi" id="ua-admin-bulk-list" rows="7" placeholder="email1@gmail.com&#10;email2@hotmail.com&#10;email3@outlook.com" style="width:100%;resize:vertical;"></textarea>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <button type="submit" class="btn-p">✅ Vincular emails ao admin</button>
+              <button type="button" class="btn-ref" onclick="document.getElementById('ua-admin-bulk-list').value=''">🧹 Limpar lista</button>
+            </div>
+          </form>
+          <div id="ua-vinculos-list" style="display:grid;gap:12px;"></div>
+        </div>
+
         <div class="panel" style="margin-top:0;border:2px solid #f59e0b;">
           <div class="phdr">
             <div class="ptit">👥 Usuários Cadastrados</div>
@@ -682,7 +708,7 @@
           <div class="phdr">
             <div class="ptit">📬 Consultar qualquer email</div>
           </div>
-          <div class="sinfo" style="margin-bottom:10px;">Esta área existe somente no painel admin. Aqui o administrador pode consultar códigos de qualquer email. A consulta normal dos clientes continua exigindo vínculo.</div>
+          <div class="sinfo" style="margin-bottom:10px;">Esta área existe somente no painel admin. Aqui o administrador só pode consultar códigos dos emails que estiverem vinculados a um administrador na Central de Usuários. A consulta normal dos clientes continua exigindo vínculo.</div>
           <form id="admin-code-form" onsubmit="buscarCodigoAdminLivre(event)" style="margin-bottom:16px;background:rgba(244,114,182,0.08);padding:14px;border-radius:10px;">
             <div class="fgrid">
               <div class="fgrp">
@@ -1570,10 +1596,11 @@
 
 
     
-    function abrirCentralUsuarios() {
+    async function abrirCentralUsuarios() {
       const m = document.getElementById('users-modal');
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
-      loadUsers();
+      await loadUsers();
+      await loadAdminOnlyVinculos();
     }
     function fecharCentralUsuarios() {
       const m = document.getElementById('users-modal');
@@ -1689,6 +1716,116 @@
       } catch(e) {
         if (st) st.textContent = 'Erro de conexão.';
         showToast('Erro de conexão');
+      }
+    }
+
+    async function importAdminOnlyVinculos(ev) {
+      if (ev) ev.preventDefault();
+      const assignedUser = String(document.getElementById('ua-admin-user')?.value || '').trim().toLowerCase();
+      const txt = String(document.getElementById('ua-admin-bulk-list')?.value || '').trim();
+      if (!assignedUser) {
+        showToast('✗ Selecione um administrador');
+        return;
+      }
+      if (!txt) {
+        showToast('✗ Cole os emails primeiro');
+        return;
+      }
+      const linhas = txt.split(/?
+/).map(s => s.trim()).filter(Boolean);
+      if (!linhas.length) {
+        showToast('✗ Nenhum email válido na lista');
+        return;
+      }
+      try {
+        const r = await fetch('/api/admin/vinculos-emails/import', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas, admin_only: true })
+        });
+        const j = await r.json();
+        if (!j.success) {
+          showToast('✗ ' + (j.message || 'Erro ao vincular emails'));
+          return;
+        }
+        showToast('✓ ' + (j.message || 'Emails vinculados'));
+        const ta = document.getElementById('ua-admin-bulk-list');
+        if (ta) ta.value = '';
+        await loadAdminOnlyVinculos();
+        if (document.getElementById('ve-tbody')) await loadVinculosEmails();
+      } catch(e) {
+        showToast('Erro de conexão');
+      }
+    }
+
+    async function deleteAdminOnlyVinculo(email) {
+      email = String(email || '').trim().toLowerCase();
+      if (!email) return;
+      if (!confirm('Remover o email ' + email + ' da consulta livre do admin?')) return;
+      try {
+        const r = await fetch('/api/admin/vinculos-emails/' + encodeURIComponent(email), { method:'DELETE' });
+        const j = await r.json();
+        if (!j.success) {
+          showToast('✗ ' + (j.message || 'Erro ao remover email'));
+          return;
+        }
+        showToast('✓ Email removido');
+        await loadAdminOnlyVinculos();
+        if (document.getElementById('ve-tbody')) await loadVinculosEmails();
+      } catch(e) {
+        showToast('Erro de conexão');
+      }
+    }
+
+    async function loadAdminOnlyVinculos() {
+      const box = document.getElementById('ua-vinculos-list');
+      if (!box) return;
+      const assignedUser = String(document.getElementById('ua-admin-user')?.value || '').trim().toLowerCase();
+      box.innerHTML = '<div class="sinfo">Carregando emails liberados...</div>';
+      try {
+        const url = assignedUser
+          ? '/api/admin/vinculos-emails?assigned_user=' + encodeURIComponent(assignedUser)
+          : '/api/admin/vinculos-emails';
+        const { j } = await fetchJsonNoCache(url);
+        const adminMap = new Map((_users || [])
+          .filter(u => String(u.role || '').toLowerCase() === 'admin')
+          .map(u => [String(u.username || '').toLowerCase(), u]));
+        const items = (Array.isArray(j.items) ? j.items : []).filter(it => adminMap.has(String(it.assigned_user || '').toLowerCase()));
+        if (!items.length) {
+          box.innerHTML = '<div class="sinfo">Nenhum email liberado para administradores.</div>';
+          return;
+        }
+        const groups = {};
+        items.forEach(it => {
+          const key = String(it.assigned_user || '').trim().toLowerCase();
+          if (!key) return;
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(it);
+        });
+        const keys = Object.keys(groups).sort((a,b) => a.localeCompare(b, 'pt-BR'));
+        box.innerHTML = keys.map(key => {
+          const user = adminMap.get(key) || {};
+          const nome = user.name && user.name !== key ? user.name : (groups[key][0]?.assigned_user_name || key);
+          const emailsHtml = groups[key]
+            .sort((a,b) => String(a.email||'').localeCompare(String(b.email||''), 'pt-BR'))
+            .map(it => `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 10px;border:1px solid rgba(125,211,252,.12);border-radius:10px;background:rgba(15,23,42,.28);">
+                <div style="min-width:0;">
+                  <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(it.email || '')}</div>
+                </div>
+                <button class="btn-ref" type="button" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteAdminOnlyVinculo('${String(it.email || '').replace(/'/g, "\'")}')">🗑️ Remover</button>
+              </div>`).join('');
+          return `<div style="border:1px solid rgba(56,189,248,.22);border-radius:14px;padding:14px;background:rgba(8,15,30,.45);">
+            <div style="display:flex;justify-content:space-between;gap:10px;align-items:center;margin-bottom:10px;flex-wrap:wrap;">
+              <div>
+                <div style="font-weight:800;color:#fff;">${x(nome || key)}</div>
+                <div style="font-size:.82rem;color:#93c5fd;">@${x(key)} • ${groups[key].length} email(s) liberado(s)</div>
+              </div>
+            </div>
+            <div style="display:grid;gap:8px;">${emailsHtml}</div>
+          </div>`;
+        }).join('');
+      } catch(e) {
+        box.innerHTML = '<div class="sinfo">Erro ao carregar emails liberados dos administradores.</div>';
       }
     }
 
@@ -2022,11 +2159,35 @@
       else sel.value = '';
     }
 
+    function getAdminUsersSelectOptions(selectedValue='', blankLabel='Todos os administradores') {
+      const atual = String(selectedValue || '');
+      const lista = Array.isArray(_users)
+        ? _users.filter(u => String(u.role || '').toLowerCase() === 'admin')
+            .sort((a,b) => String(a.username||'').localeCompare(String(b.username||''), 'pt-BR'))
+        : [];
+      return `<option value="">${escapeHtml(blankLabel)}</option>` + lista.map(u => {
+        const username = String(u.username || '');
+        const nome = u.name && u.name !== u.username ? ' — ' + escapeHtml(u.name) : '';
+        const sel = username === atual ? ' selected' : '';
+        return `<option value="${escapeHtml(username)}"${sel}>${escapeHtml(username)}${nome}</option>`;
+      }).join('');
+    }
+
+    function renderAdminUserSelect(selectId, blankLabel='Todos os administradores') {
+      const sel = document.getElementById(selectId);
+      if (!sel) return;
+      const atual = sel.value || '';
+      sel.innerHTML = getAdminUsersSelectOptions(atual, blankLabel);
+      if ([...sel.options].some(o => o.value === atual)) sel.value = atual;
+      else sel.value = '';
+    }
+
     function renderAssinUsuarios() {
       renderUserSelect('as-user');
       renderUserSelect('stk-user');
       renderUserSelect('lic-assigned-user');
       renderUserSelect('ve-user', 'Todos os usuários');
+      renderAdminUserSelect('ua-admin-user', 'Todos os administradores');
     }
 
     async function loadAssinaturas() {
