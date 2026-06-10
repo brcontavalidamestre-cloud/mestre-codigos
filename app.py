@@ -2232,6 +2232,36 @@ def _admin_can_see_assignment(assigned_user):
         return True
     return assigned_user == current_admin
 
+
+def _get_user_compras_reset_at(username):
+    username = str(username or "").strip().lower()
+    if not username:
+        return 0
+    try:
+        users = load_users()
+        u = users.get(username) or {}
+        return int(u.get("compras_reset_at") or 0)
+    except Exception:
+        return 0
+
+
+def _ensure_carlosadm_compras_reset_once():
+    try:
+        users = load_users()
+        u = users.get("carlosadm")
+        if not isinstance(u, dict):
+            return
+        if u.get("compras_reset_applied"):
+            return
+        now = int(time.time())
+        u["compras_reset_at"] = now
+        u["compras_reset_applied"] = True
+        users["carlosadm"] = u
+        save_users(users)
+        print(f"[cleanup] compras do usuario carlosadm resetadas em {now}")
+    except Exception as e:
+        print(f"[cleanup] erro ao resetar compras de carlosadm: {e}")
+
 # ─── ROTAS DE PAGINAS ──────────────────────────────────────────────────────────
 
 # ─── MIDDLEWARE DE LICENÇA ──────────────────────────────────────────────────────
@@ -4113,6 +4143,175 @@ def api_admin_loja2_delete_order(order_id):
 # ╔════════════════════════════════════════════════════════════════════════╗
 # ║  PAINEL DE COBRANÇA — Assinaturas por conta de streaming (só MESTRE)    ║
 # ╚════════════════════════════════════════════════════════════════════════╝
+@app.route("/api/admin/vinculos-emails", methods=["GET"])
+@admin_required
+def api_admin_list_vinculos_emails():
+    """Lista emails vinculados a usuários para liberação de consulta de códigos."""
+    assigned_user = str(request.args.get("assigned_user", "")).strip().lower()
+    if assigned_user and not _admin_can_see_assignment(assigned_user):
+        return jsonify({"success": False, "message": "Sem permissão para ver este usuário."}), 403
+
+    subs = load_subscriptions()
+    now = int(time.time())
+    items = []
+    for s in subs:
+        if not isinstance(s, dict):
+            continue
+        au = str(s.get("assigned_user", "")).strip().lower()
+        if not au:
+            continue
+        if assigned_user and au != assigned_user:
+            continue
+        if not _admin_can_see_assignment(au):
+            continue
+        exp = int(s.get("expires_at") or 0)
+        items.append({
+            "email": str(s.get("email", "")).strip().lower(),
+            "assigned_user": au,
+            "assigned_user_name": s.get("assigned_user_name") or au,
+            "plataforma": s.get("plataforma") or "Conta vinculada",
+            "cliente": s.get("cliente") or "",
+            "created_at": int(s.get("created_at") or 0),
+            "expires_at": exp,
+            "active": (now < exp) if exp else False,
+        })
+    items.sort(key=lambda x: (x.get("assigned_user") or "", x.get("email") or ""))
+    return jsonify({"success": True, "items": items})
+
+
+@app.route("/api/admin/vinculos-emails/import", methods=["POST"])
+@admin_required
+def api_admin_import_vinculos_emails():
+    """Vincula emails a um usuário para liberar o recebimento/consulta de códigos."""
+    data = request.get_json(silent=True) or {}
+    assigned_user = str(data.get("assigned_user", "")).strip().lower()
+    raw_emails = data.get("emails", [])
+    if not assigned_user:
+        return jsonify({"success": False, "message": "Selecione um usuário para vincular."}), 400
+
+    users = load_users()
+    user_target = users.get(assigned_user)
+    if not user_target:
+        return jsonify({"success": False, "message": "Usuário vinculado não encontrado."}), 400
+
+    current_admin = str(session.get("username") or "").strip().lower()
+    if current_admin != "admin":
+        created_by = str((user_target or {}).get("created_by") or "").strip().lower()
+        if assigned_user != current_admin and created_by != current_admin:
+            return jsonify({"success": False, "message": "Sem permissão para vincular emails a este usuário."}), 403
+
+    if isinstance(raw_emails, str):
+        raw_list = raw_emails.splitlines()
+    elif isinstance(raw_emails, list):
+        raw_list = raw_emails
+    else:
+        raw_list = []
+
+    seen = set()
+    emails = []
+    invalid = 0
+    duplicates = 0
+    for raw in raw_list:
+        email = str(raw or "").strip().lower()
+        if not email:
+            continue
+        if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+            invalid += 1
+            continue
+        if email in seen:
+            duplicates += 1
+            continue
+        seen.add(email)
+        emails.append(email)
+
+    if not emails:
+        return jsonify({"success": False, "message": "Nenhum email válido encontrado para importar."}), 400
+
+    assigned_user_name = user_target.get("name", assigned_user)
+    subs = load_subscriptions()
+    now = int(time.time())
+    long_days = 3650
+    long_exp = now + long_days * 86400
+    created = 0
+    updated = 0
+    skipped = 0
+
+    for email in emails:
+        existing, idx = _find_subscription(email)
+        if idx >= 0:
+            sub = existing or {}
+            old_assigned = str(sub.get("assigned_user", "")).strip().lower()
+            if old_assigned and not _admin_can_see_assignment(old_assigned):
+                skipped += 1
+                continue
+            sub["assigned_user"] = assigned_user
+            sub["assigned_user_name"] = assigned_user_name
+            sub["show_in_panel"] = False
+            sub["plataforma"] = sub.get("plataforma") or "Conta vinculada"
+            sub["cliente"] = sub.get("cliente") or ""
+            sub["telefone"] = sub.get("telefone") or ""
+            sub["senha"] = sub.get("senha") or ""
+            sub["valor"] = float(sub.get("valor") or 0)
+            sub["dur_days"] = int(sub.get("dur_days") or long_days)
+            if not sub.get("expires_at") or not _sub_is_active(sub):
+                sub["start_at"] = now
+                sub["expires_at"] = long_exp
+                sub["dur_days"] = long_days
+            if not sub.get("created_at"):
+                sub["created_at"] = now
+            subs[idx] = sub
+            updated += 1
+        else:
+            subs.append({
+                "email": email,
+                "senha": "",
+                "plataforma": "Conta vinculada",
+                "cliente": "",
+                "telefone": "",
+                "valor": 0.0,
+                "dur_days": long_days,
+                "assigned_user": assigned_user,
+                "assigned_user_name": assigned_user_name,
+                "start_at": now,
+                "expires_at": long_exp,
+                "created_at": now,
+                "show_in_panel": False,
+                "renew_pix_txid": None,
+                "renew_count": 0,
+            })
+            created += 1
+
+    save_subscriptions(subs)
+    return jsonify({
+        "success": True,
+        "message": f"Emails vinculados com sucesso ao usuário {assigned_user_name}.",
+        "assigned_user": assigned_user,
+        "assigned_user_name": assigned_user_name,
+        "created": created,
+        "updated": updated,
+        "invalid": invalid,
+        "duplicates": duplicates,
+        "skipped": skipped,
+        "total": len(emails)
+    })
+
+
+@app.route("/api/admin/vinculos-emails/<path:email>", methods=["DELETE"])
+@admin_required
+def api_admin_delete_vinculo_email(email):
+    email = str(email or "").strip().lower()
+    sub, idx = _find_subscription(email)
+    if idx < 0:
+        return jsonify({"success": False, "message": "Email não encontrado."}), 404
+    assigned_user = str((sub or {}).get("assigned_user", "")).strip().lower()
+    if assigned_user and not _admin_can_see_assignment(assigned_user):
+        return jsonify({"success": False, "message": "Sem permissão para remover este vínculo."}), 403
+    subs = load_subscriptions()
+    subs.pop(idx)
+    save_subscriptions(subs)
+    return jsonify({"success": True, "message": "Email removido com sucesso."})
+
+
 @app.route("/api/admin/assinaturas", methods=["GET"])
 @admin_required
 def api_admin_list_subscriptions():
@@ -4438,7 +4637,14 @@ def api_admin_compras_por_data():
             visible_assigned_user = str(o.get("assigned_user", "")).strip().lower()
             if sub and not visible_assigned_user:
                 visible_assigned_user = str(sub.get("assigned_user", "")).strip().lower()
+            if not visible_assigned_user:
+                legacy_owner = str(o.get("customer_name", "")).strip().lower()
+                if legacy_owner and legacy_owner in load_users():
+                    visible_assigned_user = legacy_owner
             if not _admin_can_see_assignment(visible_assigned_user):
+                continue
+            reset_at = _get_user_compras_reset_at(visible_assigned_user)
+            if reset_at and int(o.get("created_at", 0) or 0) <= reset_at:
                 continue
             if sub:
                 if not login_email:
@@ -4469,7 +4675,16 @@ def api_admin_compras_por_data():
         for sub in subs:
             if not isinstance(sub, dict):
                 continue
-            if not _admin_can_see_assignment(sub.get("assigned_user")):
+            manual_owner = str(sub.get("assigned_user", "")).strip().lower()
+            if not manual_owner:
+                legacy_owner = str(sub.get("cliente", "")).strip().lower()
+                if legacy_owner and legacy_owner in load_users():
+                    manual_owner = legacy_owner
+            if not _admin_can_see_assignment(manual_owner):
+                continue
+            reset_at = _get_user_compras_reset_at(manual_owner)
+            created_at = int(sub.get("created_at") or sub.get("start_at") or 0)
+            if reset_at and created_at <= reset_at:
                 continue
             email_sub = str(sub.get("email", "")).strip().lower()
             if not email_sub or email_sub in linked_emails:
