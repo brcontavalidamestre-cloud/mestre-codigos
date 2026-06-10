@@ -3114,7 +3114,7 @@ def api_check_reset_pin():
 @app.route("/api/admin/get-code", methods=["POST"])
 @admin_required
 def api_admin_get_code():
-    """Consulta administrativa: busca códigos apenas para emails liberados a administradores."""
+    """Consulta administrativa: permite buscar código de qualquer email apenas no painel admin."""
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"success": False, "message": "Dados invalidos."}), 400
@@ -3126,43 +3126,6 @@ def api_admin_get_code():
         return jsonify({"success": False, "message": "Email invalido."}), 400
     if platform not in PLATFORM_CONFIG:
         return jsonify({"success": False, "message": "Plataforma nao suportada."}), 400
-
-    sub, _idx = _find_subscription(user_email)
-    if sub is None:
-        return jsonify({
-            "success": False,
-            "message": "Este email nao esta liberado para a Consulta Livre do admin. Vincule o email a um administrador na Central de Usuarios."
-        }), 403
-
-    assigned_user = str((sub or {}).get("assigned_user", "")).strip().lower()
-    if not assigned_user:
-        return jsonify({
-            "success": False,
-            "message": "Este email ainda nao foi vinculado a um administrador na Central de Usuarios."
-        }), 403
-
-    users = load_users()
-    admin_target = users.get(assigned_user) or {}
-    assigned_role = str(admin_target.get("role") or "client").strip().lower()
-    if assigned_role != "admin":
-        return jsonify({
-            "success": False,
-            "message": "Este email nao esta liberado para a Consulta Livre do admin. Vincule-o a um usuario administrador."
-        }), 403
-
-    current_admin = str(session.get("username") or "").strip().lower()
-    if current_admin != "admin" and assigned_user != current_admin:
-        assigned_name = str(admin_target.get("name") or assigned_user)
-        return jsonify({
-            "success": False,
-            "message": f"Este email esta vinculado ao administrador {assigned_name}. Faça login com o admin correto para consultar."
-        }), 403
-
-    if not _sub_is_active(sub):
-        return jsonify({
-            "success": False,
-            "message": "Este email esta cadastrado, mas o vinculo esta inativo. Atualize ou vincule novamente na Central de Usuarios."
-        }), 403
 
     UNIFIED_MAP = {
         "netflix-all":   (["netflix", "netflix-login", "netflix-temp",
@@ -4300,10 +4263,6 @@ def api_admin_import_vinculos_emails():
     user_target = users.get(assigned_user)
     if not user_target:
         return jsonify({"success": False, "message": "Usuário vinculado não encontrado."}), 400
-
-    admin_only = bool(data.get("admin_only"))
-    if admin_only and str((user_target or {}).get("role") or "client").strip().lower() != "admin":
-        return jsonify({"success": False, "message": "Selecione um usuário administrador para liberar consulta livre do admin."}), 400
 
     current_admin = str(session.get("username") or "").strip().lower()
     if current_admin != "admin":
