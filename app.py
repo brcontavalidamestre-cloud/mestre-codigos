@@ -769,7 +769,13 @@ PLATFORM_CONFIG = {
             "código de verificación",
             "codigo de verificacion"
         ],
-        "negative_keywords": ["temporario", "temporário", "temporal", "temporary", "acceso temporal"],
+        "negative_keywords": [
+            "temporario", "temporário", "temporal", "temporary", "acceso temporal",
+            "redefinicao de senha", "redefinição de senha", "redefinir senha",
+            "reset password", "password reset", "complete your password reset",
+            "change your netflix password", "restablecimiento de contrasena",
+            "restablecer contraseña netflix", "cambiar contraseña netflix"
+        ],
         "name": "Netflix",
         "type": "code"
     },
@@ -818,6 +824,12 @@ PLATFORM_CONFIG = {
             "este codigo vence en 15 minutos",
             "código de verificación",
             "codigo de verificacion"
+        ],
+        "negative_keywords": [
+            "redefinicao de senha", "redefinição de senha", "redefinir senha",
+            "reset password", "password reset", "complete your password reset",
+            "change your netflix password", "restablecimiento de contrasena",
+            "restablecer contraseña netflix", "cambiar contraseña netflix"
         ],
         "name": "Netflix Login",
         "type": "code"
@@ -1749,6 +1761,26 @@ def _get_spam_boxes(mail, account_cfg=None):
 
 FWD_PREFIXES_SEARCH = ["ENC:", "Enc:", "FW:", "Fw:", "Fwd:", "FWD:", "RE:", "Re:"]
 
+def _eid_to_int(eid):
+    try:
+        if isinstance(eid, bytes):
+            eid = eid.decode("utf-8", errors="ignore")
+        return int(str(eid or "0").strip() or 0)
+    except Exception:
+        return 0
+
+
+def _extract_fetch_eid(fetch_meta, fallback_eid=None):
+    try:
+        meta = fetch_meta.decode("utf-8", errors="ignore") if isinstance(fetch_meta, bytes) else str(fetch_meta or "")
+        import re as _re
+        m = _re.match(r"\s*(\d+)\s+", meta)
+        if m:
+            return m.group(1).encode()
+    except Exception:
+        pass
+    return fallback_eid
+
 def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                            use_date_filter=True, since_date=None,
                            max_age_minutes=None, max_emails=100):
@@ -1793,7 +1825,8 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                     if isinstance(item, tuple):
                         if id_idx >= len(recent_ids):
                             break
-                        eid = recent_ids[id_idx]
+                        fallback_eid = recent_ids[id_idx]
+                        eid = _extract_fetch_eid(item[0], fallback_eid)
                         hdr  = email.message_from_bytes(item[1])
                         subj = decode_str(hdr.get("Subject", ""))
                         # filtro fino por idade (minutos) usando o header Date
@@ -1841,7 +1874,8 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                         if isinstance(item3, tuple):
                             if id_idx2 >= len(fwd_ids):
                                 break
-                            eid3 = fwd_ids[id_idx2]
+                            fallback_eid3 = fwd_ids[id_idx2]
+                            eid3 = _extract_fetch_eid(item3[0], fallback_eid3)
                             hdr3  = email.message_from_bytes(item3[1])
                             subj3 = decode_str(hdr3.get("Subject", ""))
                             subj_clean = clean_subject_prefixes(subj3)
@@ -1859,8 +1893,8 @@ def _batch_search_mailbox(mail, mailbox, from_kw, platform_configs, seen_ids,
                     continue
     except Exception:
         pass
-    # Reverter: IDs crescentes → queremos o MAIOR ID (mais recente) primeiro
-    matched.reverse()
+    # Ordena explicitamente pelo maior ID (mais recente) para evitar pegar email antigo
+    matched.sort(key=lambda item: _eid_to_int(item[2]), reverse=True)
     return matched
 
 
@@ -1922,7 +1956,8 @@ def _targeted_subject_search(mail, mailbox, from_kw, plat_key, seen_ids,
             if isinstance(item, tuple):
                 if idx >= len(recent_ids):
                     break
-                eid = recent_ids[idx]
+                fallback_eid = recent_ids[idx]
+                eid = _extract_fetch_eid(item[0], fallback_eid)
                 hdr = email.message_from_bytes(item[1])
                 subj = decode_str(hdr.get("Subject", ""))
                 subj_norm = normalize(subj)
@@ -1939,7 +1974,7 @@ def _targeted_subject_search(mail, mailbox, from_kw, plat_key, seen_ids,
     except Exception:
         pass
 
-    matched.reverse()
+    matched.sort(key=lambda item: _eid_to_int(item[2]), reverse=True)
     return matched
 
 
@@ -1983,7 +2018,8 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
             if isinstance(item, tuple):
                 if idx >= len(recent_ids):
                     break
-                eid = recent_ids[idx]
+                fallback_eid = recent_ids[idx]
+                eid = _extract_fetch_eid(item[0], fallback_eid)
                 hdr = email.message_from_bytes(item[1])
                 subj = decode_str(hdr.get("Subject", ""))
                 subj_upper = subj.upper()
@@ -2004,7 +2040,7 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
     except Exception:
         pass
 
-    matched.reverse()
+    matched.sort(key=lambda item: _eid_to_int(item[2]), reverse=True)
     return matched
 
 
@@ -2023,7 +2059,7 @@ def _search_kuku_webhook(user_email, platform):
 
     # Determina lista de plataformas a verificar
     UNIFIED = {
-        "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"],
+        "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence"],
         "disney-all":  ["disney", "disney-residence"],
         "globo-all":   ["bug-globo", "codigo-globo", "senha-globo"],
         "streaming-all": ["max", "prime-video"],
@@ -2121,8 +2157,8 @@ def search_code_unified(user_email, platform_list):
             # Hotmail/Outlook costuma atrasar ou cair no lixo eletrônico.
             # No Ceará, ampliamos a busca para reduzir falhas de consulta.
             if _is_ceara_request() or is_hotmail_family:
-                global_window_min = int(os.environ.get("HOTMAIL_TIME_WINDOW_MIN", "180"))
-                global_max_emails = int(os.environ.get("HOTMAIL_MAX_EMAILS", "120"))
+                global_window_min = int(os.environ.get("HOTMAIL_TIME_WINDOW_MIN", "15"))
+                global_max_emails = int(os.environ.get("HOTMAIL_MAX_EMAILS", "60"))
                 primary_since = since_2d
                 secondary_since = since_7d
                 spam_boxes = _get_spam_boxes(mail, account_cfg)
@@ -2160,9 +2196,9 @@ def search_code_unified(user_email, platform_list):
                     for mailbox in fallback_boxes:
                         matched = _batch_search_mailbox(
                             mail, mailbox, sender, plat_configs, seen_ids,
-                            use_date_filter=True, since_date=secondary_since,
-                            max_age_minutes=None,
-                            max_emails=max(global_max_emails, 180))
+                            use_date_filter=True, since_date=primary_since,
+                            max_age_minutes=15,
+                            max_emails=max(global_max_emails, 120))
 
                         for mb, plat_key, eid in matched:
                             code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
@@ -3129,7 +3165,7 @@ def api_admin_get_code():
 
     UNIFIED_MAP = {
         "netflix-all":   (["netflix", "netflix-login", "netflix-temp",
-                           "netflix-residence", "password-reset"],
+                           "netflix-residence"],
                           "Nenhum email Netflix encontrado para este endereço."),
         "disney-all":    (["disney", "disney-residence"],
                           "Nenhum email Disney+ encontrado para este endereço."),
@@ -3186,7 +3222,7 @@ def get_code():
     # ── Busca unificada: UMA conexão IMAP, batch-fetch de headers ──────────
     UNIFIED_MAP = {
         "netflix-all":   (["netflix", "netflix-login", "netflix-temp",
-                           "netflix-residence", "password-reset"],
+                           "netflix-residence"],
                           "Nenhum email Netflix encontrado para este endereço."),
         "disney-all":    (["disney", "disney-residence"],
                           "Nenhum email Disney+ encontrado para este endereço."),
