@@ -2230,7 +2230,15 @@ def _admin_can_see_assignment(assigned_user):
         return False
     if current_admin == "admin":
         return True
-    return assigned_user == current_admin
+    if assigned_user == current_admin:
+        return True
+    try:
+        users = load_users()
+        target = users.get(assigned_user) or {}
+        created_by = str(target.get("created_by") or "").strip().lower()
+        return created_by == current_admin
+    except Exception:
+        return False
 
 
 def _get_user_compras_reset_at(username):
@@ -2921,12 +2929,17 @@ def api_me():
 @app.route("/api/admin/users", methods=["GET"])
 @admin_required
 def api_list_users():
-    current_admin = session.get("username")
+    current_admin = str(session.get("username") or "").strip().lower()
     users = load_users()
     result = []
     for uname, udata in users.items():
-        if uname == current_admin:
-            continue  # nao lista a si mesmo
+        uname_norm = str(uname or "").strip().lower()
+        if uname_norm == current_admin:
+            continue  # nao lista a si mesmo; o front injeta o admin atual separadamente
+        if current_admin != "admin":
+            created_by = str(udata.get("created_by") or "").strip().lower()
+            if created_by != current_admin:
+                continue
         result.append({
             "username":         uname,
             "name":             udata.get("name", uname),
