@@ -358,6 +358,11 @@
                 <label class="flbl">⭐ Administrador</label>
                 <select class="fi" id="ua-admin-user" onchange="loadAdminOnlyVinculos()"><option value="">Todos os administradores</option></select>
               </div>
+              <div class="fgrp">
+                <label class="flbl">🔐 PIN de liberação</label>
+                <input class="fi" id="ua-admin-pin" type="password" inputmode="numeric" maxlength="4" placeholder="Digite o PIN para adicionar" autocomplete="new-password"/>
+                <div class="sinfo" style="margin:6px 0 0 0;">Para adicionar emails nesta área, informe o PIN de liberação.</div>
+              </div>
               <div class="fgrp" style="grid-column:1/-1;">
                 <label class="flbl">📥 Emails liberados</label>
                 <div class="sinfo" style="margin:6px 0 10px 0;">Cole um email por linha. Esses emails ficarão autorizados para consulta livre somente no admin correspondente.</div>
@@ -1723,8 +1728,17 @@
       if (ev) ev.preventDefault();
       const assignedUser = String(document.getElementById('ua-admin-user')?.value || '').trim().toLowerCase();
       const txt = String(document.getElementById('ua-admin-bulk-list')?.value || '').trim();
+      const pin = String(document.getElementById('ua-admin-pin')?.value || '').trim();
       if (!assignedUser) {
         showToast('✗ Selecione um administrador');
+        return;
+      }
+      if (!pin) {
+        showToast('✗ Informe o PIN para adicionar emails');
+        return;
+      }
+      if (!/^\d{4}$/.test(pin)) {
+        showToast('✗ O PIN deve ter 4 dígitos');
         return;
       }
       if (!txt) {
@@ -1740,7 +1754,7 @@
         const r = await fetch('/api/admin/vinculos-emails/import', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas, admin_only: true })
+          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas, admin_only: true, admin_only_pin: pin })
         });
         const j = await r.json();
         if (!j.success) {
@@ -1749,7 +1763,9 @@
         }
         showToast('✓ ' + (j.message || 'Emails vinculados'));
         const ta = document.getElementById('ua-admin-bulk-list');
+        const pinInput = document.getElementById('ua-admin-pin');
         if (ta) ta.value = '';
+        if (pinInput) pinInput.value = '';
         await loadAdminOnlyVinculos();
         if (document.getElementById('ve-tbody')) await loadVinculosEmails();
       } catch(e) {
