@@ -1731,7 +1731,8 @@
         showToast('✗ Cole os emails primeiro');
         return;
       }
-      const linhas = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      const linhas = txt.split(/?
+/).map(s => s.trim()).filter(Boolean);
       if (!linhas.length) {
         showToast('✗ Nenhum email válido na lista');
         return;
