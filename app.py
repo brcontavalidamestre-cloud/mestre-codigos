@@ -2182,6 +2182,18 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+
+def _admin_can_see_assignment(assigned_user):
+    assigned_user = str(assigned_user or "").strip().lower()
+    current_admin = str(session.get("username") or "").strip().lower()
+    if not assigned_user:
+        return True
+    if not current_admin:
+        return False
+    if current_admin == "admin":
+        return True
+    return assigned_user == current_admin
+
 # ─── ROTAS DE PAGINAS ──────────────────────────────────────────────────────────
 
 # ─── MIDDLEWARE DE LICENÇA ──────────────────────────────────────────────────────
@@ -4071,6 +4083,8 @@ def api_admin_list_subscriptions():
     for s in subs:
         if not isinstance(s, dict):
             continue
+        if not _admin_can_see_assignment(s.get("assigned_user")):
+            continue
         # Contas cadastradas manualmente devem aparecer apenas em Compras.
         # Só renderiza no quadro superior quando houver flag explícita show_in_panel=True.
         if s.get("show_in_panel") is not True:
@@ -4379,6 +4393,11 @@ def api_admin_compras_por_data():
             login_senha = o.get("delivered_password") or ""
             customer_email = (o.get("customer_email", "") or "").lower()
             sub = subs_idx.get((login_email or "").lower()) or subs_idx.get(customer_email)
+            visible_assigned_user = str(o.get("assigned_user", "")).strip().lower()
+            if sub and not visible_assigned_user:
+                visible_assigned_user = str(sub.get("assigned_user", "")).strip().lower()
+            if not _admin_can_see_assignment(visible_assigned_user):
+                continue
             if sub:
                 if not login_email:
                     login_email = sub.get("email", "")
@@ -4407,6 +4426,8 @@ def api_admin_compras_por_data():
 
         for sub in subs:
             if not isinstance(sub, dict):
+                continue
+            if not _admin_can_see_assignment(sub.get("assigned_user")):
                 continue
             email_sub = str(sub.get("email", "")).strip().lower()
             if not email_sub or email_sub in linked_emails:
