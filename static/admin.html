@@ -576,7 +576,7 @@
       <div style="font-size:1.6rem;color:#f9a8d4;">→</div>
     </div>
 
-    <div id="vinculos-launch" onclick="abrirVinculosEmails()" style="display:none;cursor:pointer;align-items:center;gap:14px;margin-top:20px;padding:20px 24px;border-radius:16px;background:linear-gradient(135deg,#061827,#0b2b3d);border:2px solid #38bdf8;box-shadow:0 6px 24px rgba(56,189,248,0.18);transition:transform .15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+    <div id="vinculos-launch" onclick="abrirVinculosEmails()" style="display:flex;cursor:pointer;align-items:center;gap:14px;margin-top:20px;padding:20px 24px;border-radius:16px;background:linear-gradient(135deg,#061827,#0b2b3d);border:2px solid #38bdf8;box-shadow:0 6px 24px rgba(56,189,248,0.18);transition:transform .15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
       <div style="font-size:2.4rem;">📩</div>
       <div style="flex:1;">
         <div style="font-weight:800;font-size:1.15rem;color:#7dd3fc;">Vincular Emails por Usuário</div>
@@ -1708,14 +1708,8 @@
     }
 
     async function showVinculosIfMaster() {
-      try {
-        const r = await fetch('/api/site-mode');
-        const j = await r.json();
-        if (j && j.is_master) {
-          const btn = document.getElementById('vinculos-launch');
-          if (btn) btn.style.display = 'flex';
-        }
-      } catch(e) {}
+      const btn = document.getElementById('vinculos-launch');
+      if (btn) btn.style.display = 'flex';
     }
 
     function showVinculosTab(tab) {
