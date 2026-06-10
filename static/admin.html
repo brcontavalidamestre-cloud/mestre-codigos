@@ -692,17 +692,35 @@
               <button type="button" class="btn-ref" onclick="document.getElementById('ve-bulk-list').value=''">🧹 Limpar lista</button>
             </div>
           </form>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px 0;">
-            <button type="button" class="btn-ref" onclick="selecionarTodosVinculosVisiveis()">☑️ Selecionar visíveis</button>
-            <button type="button" class="btn-ref" onclick="limparSelecaoVinculos()">🧹 Limpar seleção</button>
-            <button type="button" class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="excluirVinculosSelecionados()">🗑️ Excluir selecionados</button>
-            <div id="ve-selection-info" class="sinfo" style="margin:0;">0 email(s) selecionado(s)</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px 0;align-items:center;">
+            <button id="ve-tab-lista" type="button" class="btn-ref" style="background:rgba(124,58,237,.22);border-color:#a78bfa;color:#fff;" onclick="showVinculosTab('lista')">📋 Lista organizada</button>
+            <button id="ve-tab-search" type="button" class="btn-ref" onclick="showVinculosTab('search')">🔎 Pesquisar por email</button>
           </div>
-          <div class="twrap">
-            <table>
-              <thead><tr><th>Cliente / Usuário</th><th>Emails atribuídos</th><th>Status</th><th>Ações</th></tr></thead>
-              <tbody id="ve-tbody"><tr><td colspan="4" style="text-align:center;color:#888;">Carregando vínculos...</td></tr></tbody>
-            </table>
+
+          <div id="ve-lista-view">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px 0;">
+              <button type="button" class="btn-ref" onclick="selecionarTodosVinculosVisiveis()">☑️ Selecionar visíveis</button>
+              <button type="button" class="btn-ref" onclick="limparSelecaoVinculos()">🧹 Limpar seleção</button>
+              <button type="button" class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="excluirVinculosSelecionados()">🗑️ Excluir selecionados</button>
+              <div id="ve-selection-info" class="sinfo" style="margin:0;">0 email(s) selecionado(s)</div>
+            </div>
+            <div class="twrap">
+              <table>
+                <thead><tr><th>Cliente / Usuário</th><th>Emails atribuídos</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="ve-tbody"><tr><td colspan="4" style="text-align:center;color:#888;">Carregando vínculos...</td></tr></tbody>
+              </table>
+            </div>
+          </div>
+
+          <div id="ve-search-view" style="display:none;">
+            <div class="sinfo" style="margin-bottom:10px;">Pesquise pelo email para localizar rapidamente o cliente/usuário vinculado.</div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
+              <input class="fi" id="ve-search-input" placeholder="Ex: cliente@gmail.com" style="flex:1;min-width:280px;" onkeydown="if(event.key==='Enter'){event.preventDefault();searchVinculosEmails();}"/>
+              <button type="button" class="btn-ref" onclick="searchVinculosEmails()">🔎 Pesquisar</button>
+              <button type="button" class="btn-ref" onclick="clearVinculosSearch()">🧹 Limpar</button>
+            </div>
+            <div id="ve-search-summary" class="sinfo" style="margin-bottom:10px;"></div>
+            <div id="ve-search-results"></div>
           </div>
         </div>
       </div>
@@ -1063,6 +1081,7 @@
 
     let _users = [], _pwUser = null, _delUser = null, _meUser = null;
     let _vinculosSelecionados = new Set();
+    let _vinculosCache = [];
 
     function withNoCache(url) {
       const sep = url.includes('?') ? '&' : '?';
@@ -1546,6 +1565,8 @@
     async function abrirVinculosEmails() {
       const m = document.getElementById('vinculos-modal');
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+      showVinculosTab('lista');
+      clearVinculosSearch();
       await loadUsers();
       renderUserSelect('ve-user', 'Todos os usuários');
       await loadVinculosEmails();
@@ -1564,6 +1585,67 @@
           if (btn) btn.style.display = 'flex';
         }
       } catch(e) {}
+    }
+
+    function showVinculosTab(tab) {
+      const lista = document.getElementById('ve-lista-view');
+      const search = document.getElementById('ve-search-view');
+      const b1 = document.getElementById('ve-tab-lista');
+      const b2 = document.getElementById('ve-tab-search');
+      if (lista) lista.style.display = tab === 'lista' ? '' : 'none';
+      if (search) search.style.display = tab === 'search' ? '' : 'none';
+      if (b1) {
+        b1.style.background = tab === 'lista' ? 'rgba(124,58,237,.22)' : 'transparent';
+        b1.style.borderColor = tab === 'lista' ? '#a78bfa' : '';
+        b1.style.color = '#fff';
+      }
+      if (b2) {
+        b2.style.background = tab === 'search' ? 'rgba(124,58,237,.22)' : 'transparent';
+        b2.style.borderColor = tab === 'search' ? '#a78bfa' : '';
+        b2.style.color = '#fff';
+      }
+    }
+
+    function clearVinculosSearch() {
+      const inp = document.getElementById('ve-search-input');
+      const summary = document.getElementById('ve-search-summary');
+      const box = document.getElementById('ve-search-results');
+      if (inp) inp.value = '';
+      if (summary) summary.textContent = '';
+      if (box) box.innerHTML = '';
+    }
+
+    function searchVinculosEmails() {
+      const q = String(document.getElementById('ve-search-input')?.value || '').trim().toLowerCase();
+      const summary = document.getElementById('ve-search-summary');
+      const box = document.getElementById('ve-search-results');
+      if (!box || !summary) return;
+      if (!q) {
+        summary.textContent = 'Digite um email para pesquisar.';
+        box.innerHTML = '';
+        return;
+      }
+      const items = (_vinculosCache || []).filter(it => String(it.email || '').toLowerCase().includes(q));
+      if (!items.length) {
+        summary.textContent = 'Nenhum resultado encontrado.';
+        box.innerHTML = '<div class="sinfo">Nenhum email corresponde à pesquisa.</div>';
+        return;
+      }
+      summary.textContent = `${items.length} resultado(s) encontrado(s)`;
+      box.innerHTML = items.sort((a,b) => String(a.email||'').localeCompare(String(b.email||''), 'pt-BR')).map(it => {
+        const status = it.active
+          ? '<span style="color:#4caf50;">✓ liberado</span>'
+          : '<span style="color:#ff5252;">✗ inativo</span>';
+        return `<div style="display:flex;justify-content:space-between;gap:12px;align-items:center;padding:12px 14px;margin-bottom:10px;border:1px solid rgba(125,211,252,.18);border-radius:12px;background:rgba(15,23,42,.35);">
+          <div style="min-width:0;">
+            <div style="font-weight:800;color:#fff;">${x(it.assigned_user_name || it.assigned_user || '-')}</div>
+            <div style="font-size:.82rem;color:#93c5fd;margin-bottom:4px;">@${x(it.assigned_user || '-')}</div>
+            <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(it.email || '')}</div>
+            <div style="font-size:.78rem;color:#a5b4fc;">${status}</div>
+          </div>
+          <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(it.assigned_user || '')}'; showVinculosTab('lista'); loadVinculosEmails();">🎯 Abrir vínculo</button>
+        </div>`;
+      }).join('');
     }
 
     function updateVinculosSelectionInfo() {
@@ -1634,14 +1716,16 @@
           ? '/api/admin/vinculos-emails?assigned_user=' + encodeURIComponent(assignedUser)
           : '/api/admin/vinculos-emails';
         const { j } = await fetchJsonNoCache(url);
-        if (!j.success || !Array.isArray(j.items) || !j.items.length) {
+        _vinculosCache = Array.isArray(j.items) ? j.items.slice() : [];
+        if (!j.success || !_vinculosCache.length) {
           tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">Nenhum email vinculado encontrado.</td></tr>';
           updateVinculosSelectionInfo();
+          clearVinculosSearch();
           return;
         }
 
         const groups = {};
-        j.items.forEach(it => {
+        _vinculosCache.forEach(it => {
           const key = String(it.assigned_user || '').trim().toLowerCase() || '_sem_usuario';
           if (!groups[key]) {
             groups[key] = {
@@ -1670,15 +1754,13 @@
                 const safeEmail = String(it.email || '').replace(/'/g, "\'");
                 const normalizedEmail = String(it.email || '').trim().toLowerCase();
                 const isChecked = _vinculosSelecionados.has(normalizedEmail) ? 'checked' : '';
-                return `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 10px;margin-bottom:6px;border:1px solid rgba(125,211,252,.18);border-radius:10px;background:rgba(15,23,42,.35);">
-                  <div style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;">
-                    <input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:3px;accent-color:#22c55e;transform:scale(1.15);"/>
-                    <div style="min-width:0;">
-                      <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(it.email || '')}</div>
-                      <div style="font-size:.78rem;color:#93c5fd;">${badge}</div>
-                    </div>
+                return `<div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid rgba(125,211,252,.18);border-radius:12px;background:rgba(15,23,42,.35);">
+                  <input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>
+                  <div style="min-width:0;">
+                    <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(it.email || '')}</div>
+                    <div style="font-size:.78rem;color:#93c5fd;">${badge}</div>
                   </div>
-                  <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
+                  <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
                 </div>`;
               }).join('');
             return `<tr>
@@ -1686,7 +1768,9 @@
                 <div style="font-weight:800;color:#fff;">${x(group.assigned_user_name || group.assigned_user || '-')}</div>
                 <div style="font-size:.82rem;color:#93c5fd;">@${x(group.assigned_user || '-')}</div>
               </td>
-              <td>${emailsHtml}</td>
+              <td>
+                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;">${emailsHtml}</div>
+              </td>
               <td>${status}</td>
               <td>
                 <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(group.assigned_user || '')}'; loadVinculosEmails();">🎯 Ver só este</button>
@@ -1696,7 +1780,10 @@
 
         tb.innerHTML = rows;
         updateVinculosSelectionInfo();
+        const q = String(document.getElementById('ve-search-input')?.value || '').trim();
+        if (q) searchVinculosEmails();
       } catch(e) {
+        _vinculosCache = [];
         tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#ff8a80;">Erro ao carregar emails vinculados.</td></tr>';
         updateVinculosSelectionInfo();
       }
