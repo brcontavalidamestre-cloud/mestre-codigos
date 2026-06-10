@@ -338,6 +338,44 @@ def save_subscriptions(subs):
         subs = []
     return _write_json_file(SUBSCRIPTIONS_FILE, subs)
 
+_CARLOSADM_CLEANUP_MARKER = os.path.join(_data_dir, ".cleanup_carlosadm_done")
+_carlosadm_cleanup_done = False
+
+def _cleanup_customer_purchases_once():
+    global _carlosadm_cleanup_done
+    if _carlosadm_cleanup_done:
+        return
+    try:
+        if os.path.exists(_CARLOSADM_CLEANUP_MARKER):
+            _carlosadm_cleanup_done = True
+            return
+        target = "carlosadm"
+        orders = load_orders()
+        new_orders = [o for o in orders if not (isinstance(o, dict) and str(o.get("customer_name", "")).strip().lower() == target)]
+        removed_orders = len(orders) - len(new_orders)
+        if removed_orders > 0:
+            save_orders(new_orders)
+
+        subs = load_subscriptions()
+        new_subs = [s for s in subs if not (isinstance(s, dict) and str(s.get("cliente", "")).strip().lower() == target)]
+        removed_subs = len(subs) - len(new_subs)
+        if removed_subs > 0:
+            save_subscriptions(new_subs)
+
+        Path(_CARLOSADM_CLEANUP_MARKER).write_text(
+            json.dumps({
+                "customer_name": target,
+                "removed_orders": removed_orders,
+                "removed_subscriptions": removed_subs,
+                "timestamp": int(time.time())
+            }, ensure_ascii=False, indent=2),
+            encoding="utf-8"
+        )
+        print(f"[cleanup] carlosadm removido: pedidos={removed_orders} assinaturas={removed_subs}")
+        _carlosadm_cleanup_done = True
+    except Exception as e:
+        print(f"[cleanup] erro ao remover compras de carlosadm: {e}")
+
 def _sub_is_active(sub):
     """True se a assinatura está ativa (não vencida)."""
     if not isinstance(sub, dict):
@@ -2223,6 +2261,10 @@ def _jmp_autorestore_hook():
             _jmp_auto_restore_users()
         except Exception:
             pass
+    try:
+        _cleanup_customer_purchases_once()
+    except Exception:
+        pass
     return None
 
 @app.before_request
