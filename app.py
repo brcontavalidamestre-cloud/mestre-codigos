@@ -115,10 +115,10 @@ def load_users():
 
 # ╔═══ AUTO-RESTAURAÇÃO DE USUÁRIOS (apenas JMP) ═══╗
 # Se o JMP perder os usuários (redeploy sem volume), restaura automaticamente
-# do web-production-ea8b3 no primeiro acesso. Roda 1x por processo.
+# do painel Livre no primeiro acesso. Roda 1x por processo.
 JMP_AUTO_RESTORE_SOURCE = os.environ.get(
     "JMP_AUTO_RESTORE_SOURCE",
-    "https://web-production-ea8b3.up.railway.app"
+    "https://livre.up.railway.app"
 )
 JMP_AUTO_RESTORE_PASS = os.environ.get("JMP_AUTO_RESTORE_PASS", "admin123")
 _jmp_autorestore_done = False
