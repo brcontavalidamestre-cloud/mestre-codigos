@@ -692,6 +692,12 @@
               <button type="button" class="btn-ref" onclick="document.getElementById('ve-bulk-list').value=''">🧹 Limpar lista</button>
             </div>
           </form>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:0 0 12px 0;">
+            <button type="button" class="btn-ref" onclick="selecionarTodosVinculosVisiveis()">☑️ Selecionar visíveis</button>
+            <button type="button" class="btn-ref" onclick="limparSelecaoVinculos()">🧹 Limpar seleção</button>
+            <button type="button" class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="excluirVinculosSelecionados()">🗑️ Excluir selecionados</button>
+            <div id="ve-selection-info" class="sinfo" style="margin:0;">0 email(s) selecionado(s)</div>
+          </div>
           <div class="twrap">
             <table>
               <thead><tr><th>Cliente / Usuário</th><th>Emails atribuídos</th><th>Status</th><th>Ações</th></tr></thead>
@@ -1056,6 +1062,7 @@
     })();
 
     let _users = [], _pwUser = null, _delUser = null, _meUser = null;
+    let _vinculosSelecionados = new Set();
 
     function withNoCache(url) {
       const sep = url.includes('?') ? '&' : '?';
@@ -1559,6 +1566,64 @@
       } catch(e) {}
     }
 
+    function updateVinculosSelectionInfo() {
+      const box = document.getElementById('ve-selection-info');
+      if (box) box.textContent = `${_vinculosSelecionados.size} email(s) selecionado(s)`;
+    }
+
+    function toggleVinculoSelecionado(email, checked) {
+      email = String(email || '').trim().toLowerCase();
+      if (!email) return;
+      if (checked) _vinculosSelecionados.add(email);
+      else _vinculosSelecionados.delete(email);
+      updateVinculosSelectionInfo();
+    }
+
+    function limparSelecaoVinculos() {
+      _vinculosSelecionados.clear();
+      document.querySelectorAll('.ve-select-email').forEach(el => { el.checked = false; });
+      updateVinculosSelectionInfo();
+    }
+
+    function selecionarTodosVinculosVisiveis() {
+      document.querySelectorAll('.ve-select-email').forEach(el => {
+        el.checked = true;
+        const email = String(el.getAttribute('data-email') || '').trim().toLowerCase();
+        if (email) _vinculosSelecionados.add(email);
+      });
+      updateVinculosSelectionInfo();
+    }
+
+    async function excluirVinculosSelecionados() {
+      const emails = Array.from(_vinculosSelecionados);
+      if (!emails.length) {
+        showToast('✗ Selecione pelo menos um email');
+        return;
+      }
+      if (!confirm('Excluir ' + emails.length + ' email(s) selecionado(s)?')) return;
+      let ok = 0, erro = 0;
+      for (const email of emails) {
+        try {
+          const r = await fetch('/api/admin/vinculos-emails/' + encodeURIComponent(email), { method:'DELETE' });
+          const j = await r.json();
+          if (j.success) {
+            ok++;
+            _vinculosSelecionados.delete(email);
+          } else {
+            erro++;
+          }
+        } catch(e) {
+          erro++;
+        }
+      }
+      updateVinculosSelectionInfo();
+      if (ok && !erro) showToast('✓ ' + ok + ' email(s) removido(s)');
+      else if (ok) showToast('✓ ' + ok + ' removido(s) / ✗ ' + erro + ' erro(s)');
+      else showToast('✗ Não foi possível remover os emails selecionados');
+      await loadVinculosEmails();
+      await loadComprasPorData();
+    }
+
     async function loadVinculosEmails() {
       const tb = document.getElementById('ve-tbody');
       if (!tb) return;
@@ -1571,6 +1636,7 @@
         const { j } = await fetchJsonNoCache(url);
         if (!j.success || !Array.isArray(j.items) || !j.items.length) {
           tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">Nenhum email vinculado encontrado.</td></tr>';
+          updateVinculosSelectionInfo();
           return;
         }
 
@@ -1602,10 +1668,15 @@
                   ? '<span style="color:#4caf50;font-size:.78rem;">✓ liberado</span>'
                   : '<span style="color:#ff5252;font-size:.78rem;">✗ inativo</span>';
                 const safeEmail = String(it.email || '').replace(/'/g, "\'");
+                const normalizedEmail = String(it.email || '').trim().toLowerCase();
+                const isChecked = _vinculosSelecionados.has(normalizedEmail) ? 'checked' : '';
                 return `<div style="display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 10px;margin-bottom:6px;border:1px solid rgba(125,211,252,.18);border-radius:10px;background:rgba(15,23,42,.35);">
-                  <div>
-                    <div style="font-weight:700;color:#e0f2fe;">${x(it.email || '')}</div>
-                    <div style="font-size:.78rem;color:#93c5fd;">${badge}</div>
+                  <div style="display:flex;align-items:flex-start;gap:10px;flex:1;min-width:0;">
+                    <input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:3px;accent-color:#22c55e;transform:scale(1.15);"/>
+                    <div style="min-width:0;">
+                      <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(it.email || '')}</div>
+                      <div style="font-size:.78rem;color:#93c5fd;">${badge}</div>
+                    </div>
                   </div>
                   <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
                 </div>`;
@@ -1624,8 +1695,10 @@
           }).join('');
 
         tb.innerHTML = rows;
+        updateVinculosSelectionInfo();
       } catch(e) {
         tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#ff8a80;">Erro ao carregar emails vinculados.</td></tr>';
+        updateVinculosSelectionInfo();
       }
     }
 
@@ -1669,6 +1742,8 @@
         const r = await fetch('/api/admin/vinculos-emails/' + encodeURIComponent(email), { method:'DELETE' });
         const j = await r.json();
         if (j.success) {
+          _vinculosSelecionados.delete(String(email || '').trim().toLowerCase());
+          updateVinculosSelectionInfo();
           showToast('✓ Email removido');
           await loadVinculosEmails();
           await loadComprasPorData();
