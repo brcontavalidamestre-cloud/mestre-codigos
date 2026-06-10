@@ -3111,6 +3111,63 @@ def api_check_reset_pin():
         "pending": bool(_peek_pending_reset_link(username))
     })
 
+@app.route("/api/admin/get-code", methods=["POST"])
+@admin_required
+def api_admin_get_code():
+    """Consulta administrativa: permite buscar código de qualquer email apenas no painel admin."""
+    data = request.get_json(silent=True)
+    if not data:
+        return jsonify({"success": False, "message": "Dados invalidos."}), 400
+    user_email = data.get("email", "").strip().lower()
+    platform   = data.get("platform", "").strip().lower()
+    if not user_email:
+        return jsonify({"success": False, "message": "Por favor, informe o email."}), 400
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", user_email):
+        return jsonify({"success": False, "message": "Email invalido."}), 400
+    if platform not in PLATFORM_CONFIG:
+        return jsonify({"success": False, "message": "Plataforma nao suportada."}), 400
+
+    UNIFIED_MAP = {
+        "netflix-all":   (["netflix", "netflix-login", "netflix-temp",
+                           "netflix-residence", "password-reset"],
+                          "Nenhum email Netflix encontrado para este endereço."),
+        "disney-all":    (["disney", "disney-residence"],
+                          "Nenhum email Disney+ encontrado para este endereço."),
+        "globo-all":     (["bug-globo", "codigo-globo", "senha-globo"],
+                          "Nenhum email Globo encontrado para este endereço."),
+        "streaming-all": (["max", "prime-video"],
+                          "Nenhum email Max ou Prime Video encontrado para este endereço."),
+    }
+
+    if _is_rios_request():
+        _maybe_move_spam_async()
+
+    if _is_rios_request():
+        wh_code, wh_link, wh_plat = _search_kuku_webhook(user_email, platform)
+        if wh_code:
+            return jsonify({"success": True, "code": wh_code, "platform": wh_plat or platform, "type": "code"})
+        if wh_link:
+            return jsonify({"success": True, "link": wh_link, "platform": wh_plat or platform, "type": "link"})
+
+    if platform in UNIFIED_MAP:
+        subs, err_msg = UNIFIED_MAP[platform]
+        code, link, matched_plat, error = search_code_unified(user_email, subs)
+        if code:
+            return jsonify({"success": True, "code": code, "platform": matched_plat, "type": "code"})
+        elif link:
+            return jsonify({"success": True, "link": link, "platform": matched_plat, "type": "link"})
+        else:
+            return jsonify({"success": False, "message": error or err_msg})
+
+    code, link, error = search_code(user_email, platform)
+    if code:
+        return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})
+    elif link:
+        return jsonify({"success": True, "link": link, "platform": platform, "type": "link"})
+    else:
+        return jsonify({"success": False, "message": error or "Nao encontrado."})
+
+
 @app.route("/api/get-code", methods=["POST"])
 @login_required
 def get_code():

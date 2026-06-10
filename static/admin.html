@@ -567,6 +567,15 @@
 
 
         <!-- ============ BOTÃO QUE ABRE O PAINEL DE COBRANÇA (só no MESTRE) ============ -->
+    <div id="admin-code-launch" onclick="abrirConsultaAdminCodigos()" style="display:flex;cursor:pointer;align-items:center;gap:14px;margin-top:20px;padding:20px 24px;border-radius:16px;background:linear-gradient(135deg,#1a0f2c,#2c1450);border:2px solid #f472b6;box-shadow:0 6px 24px rgba(244,114,182,0.18);transition:transform .15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
+      <div style="font-size:2.4rem;">🛡️</div>
+      <div style="flex:1;">
+        <div style="font-weight:800;font-size:1.15rem;color:#f9a8d4;">Consulta Livre de Códigos</div>
+        <div style="font-size:.9rem;color:#fbcfe8;opacity:.9;">Somente admin: consultar código de qualquer email sem depender de vínculo — clique para abrir</div>
+      </div>
+      <div style="font-size:1.6rem;color:#f9a8d4;">→</div>
+    </div>
+
     <div id="vinculos-launch" onclick="abrirVinculosEmails()" style="display:none;cursor:pointer;align-items:center;gap:14px;margin-top:20px;padding:20px 24px;border-radius:16px;background:linear-gradient(135deg,#061827,#0b2b3d);border:2px solid #38bdf8;box-shadow:0 6px 24px rgba(56,189,248,0.18);transition:transform .15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
       <div style="font-size:2.4rem;">📩</div>
       <div style="flex:1;">
@@ -661,6 +670,56 @@
       </div>
     </div>
 
+
+    <div id="admin-code-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(18,6,24,0.94);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 14px;flex-direction:column;align-items:center;">
+      <div style="width:100%;max-width:1100px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;position:sticky;top:0;background:rgba(18,6,24,0.96);padding:8px 0;z-index:2;">
+          <div style="font-weight:800;font-size:1.4rem;color:#f9a8d4;">🛡️ Consulta Livre de Códigos</div>
+          <button onclick="fecharConsultaAdminCodigos()" style="background:#ff5252;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:1rem;">✕ Fechar</button>
+        </div>
+
+        <div class="panel" style="margin-bottom:24px;border:2px solid #f472b6;">
+          <div class="phdr">
+            <div class="ptit">📬 Consultar qualquer email</div>
+          </div>
+          <div class="sinfo" style="margin-bottom:10px;">Esta área existe somente no painel admin. Aqui o administrador pode consultar códigos de qualquer email. A consulta normal dos clientes continua exigindo vínculo.</div>
+          <form id="admin-code-form" onsubmit="buscarCodigoAdminLivre(event)" style="margin-bottom:16px;background:rgba(244,114,182,0.08);padding:14px;border-radius:10px;">
+            <div class="fgrid">
+              <div class="fgrp">
+                <label class="flbl">✉ Email</label>
+                <input class="fi" id="admin-code-email" placeholder="conta@exemplo.com" autocomplete="off"/>
+              </div>
+              <div class="fgrp">
+                <label class="flbl">🎯 Tipo de consulta</label>
+                <select class="fi" id="admin-code-platform">
+                  <option value="netflix-all">🎬 Netflix — Todos os Códigos</option>
+                  <option value="disney-all">✨ Disney+ — Todos os Códigos</option>
+                  <option value="streaming-all">🎞️ Max & Prime Video — Código</option>
+                  <option value="globo-all">📡 Globo — Todos os Códigos</option>
+                  <option value="netflix">Netflix</option>
+                  <option value="netflix-login">Netflix Login</option>
+                  <option value="netflix-temp">Netflix Temporário</option>
+                  <option value="netflix-residence">Netflix Residência</option>
+                  <option value="password-reset">Redefinição de Senha</option>
+                  <option value="disney">Disney+</option>
+                  <option value="disney-residence">Disney Residência</option>
+                  <option value="max">Max</option>
+                  <option value="prime-video">Prime Video</option>
+                  <option value="bug-globo">Bug Globo</option>
+                  <option value="codigo-globo">Código Globo</option>
+                  <option value="senha-globo">Senha Globo</option>
+                </select>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+              <button type="submit" class="btn-p">🔎 Consultar agora</button>
+              <div id="admin-code-status" class="sinfo" style="margin:0;">Pronto para consultar.</div>
+            </div>
+          </form>
+          <div id="admin-code-result" style="display:none;border:1px solid rgba(244,114,182,.35);border-radius:12px;padding:16px;background:rgba(15,23,42,.35);"></div>
+        </div>
+      </div>
+    </div>
 
     <div id="vinculos-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(2,10,20,0.94);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 14px;flex-direction:column;align-items:center;">
       <div style="width:100%;max-width:1100px;">
@@ -1118,6 +1177,7 @@
       showLoja2IfRios();
       showCobrancaIfMaster();
       showVinculosIfMaster();
+      showConsultaAdminCodigosIfMaster();
       loadBackupSummary();
     })();
 
@@ -1560,6 +1620,87 @@
     function fecharLojaPedidos() {
       const m = document.getElementById('loja-orders-modal');
       if (m) { m.style.display = 'none'; document.body.style.overflow = ''; }
+    }
+
+    async function showConsultaAdminCodigosIfMaster() {
+      try {
+        const r = await fetch('/api/site-mode');
+        const j = await r.json();
+        if (j && j.is_master) {
+          const btn = document.getElementById('admin-code-launch');
+          if (btn) btn.style.display = 'flex';
+        }
+      } catch(e) {}
+    }
+
+    async function abrirConsultaAdminCodigos() {
+      const m = document.getElementById('admin-code-modal');
+      if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
+      const res = document.getElementById('admin-code-result');
+      const st = document.getElementById('admin-code-status');
+      if (res) { res.style.display = 'none'; res.innerHTML = ''; }
+      if (st) st.textContent = 'Pronto para consultar.';
+    }
+    function fecharConsultaAdminCodigos() {
+      const m = document.getElementById('admin-code-modal');
+      if (m) { m.style.display = 'none'; document.body.style.overflow = ''; }
+    }
+
+    function renderAdminCodeResult(data, email) {
+      const box = document.getElementById('admin-code-result');
+      if (!box) return;
+      const plat = x(data.platform || '-');
+      let html = `<div style="font-size:1rem;font-weight:800;color:#fff;margin-bottom:10px;">Resultado para ${x(email || '')}</div>`;
+      html += `<div style="font-size:.88rem;color:#fbcfe8;margin-bottom:14px;">Plataforma detectada: <b style="color:#fff;">${plat}</b></div>`;
+      if (data.code) {
+        html += `<div style="display:inline-block;padding:14px 18px;border-radius:14px;background:linear-gradient(135deg,#f59e0b,#facc15);color:#111827;font-size:2rem;font-weight:900;letter-spacing:.18em;margin-bottom:14px;">${x(data.code)}</div>`;
+      }
+      if (data.link) {
+        const link = String(data.link || '');
+        html += `<div style="margin:10px 0 14px 0;"><a href="${link}" target="_blank" rel="noopener" style="color:#93c5fd;font-weight:700;word-break:break-all;">${x(link)}</a></div>`;
+      }
+      html += `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">`;
+      if (data.code) {
+        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.code || '').replace(/'/g, "\'")}').then(()=>showToast('📋 Código copiado')).catch(()=>showToast('✗ Falha ao copiar'))">📋 Copiar código</button>`;
+      }
+      if (data.link) {
+        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.link || '').replace(/'/g, "\'")}').then(()=>showToast('📋 Link copiado')).catch(()=>showToast('✗ Falha ao copiar'))">📋 Copiar link</button>`;
+      }
+      html += `</div>`;
+      box.innerHTML = html;
+      box.style.display = 'block';
+    }
+
+    async function buscarCodigoAdminLivre(ev) {
+      if (ev) ev.preventDefault();
+      const email = String(document.getElementById('admin-code-email')?.value || '').trim().toLowerCase();
+      const platform = String(document.getElementById('admin-code-platform')?.value || '').trim().toLowerCase();
+      const st = document.getElementById('admin-code-status');
+      const box = document.getElementById('admin-code-result');
+      if (!email) {
+        showToast('✗ Informe o email');
+        return;
+      }
+      if (st) st.textContent = 'Consultando...';
+      if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+      try {
+        const r = await fetch('/api/admin/get-code', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ email, platform })
+        });
+        const j = await r.json();
+        if (j.success && (j.code || j.link)) {
+          if (st) st.textContent = 'Consulta concluída.';
+          renderAdminCodeResult(j, email);
+          return;
+        }
+        if (st) st.textContent = j.message || 'Nada encontrado.';
+        showToast('✗ ' + (j.message || 'Nada encontrado'));
+      } catch(e) {
+        if (st) st.textContent = 'Erro de conexão.';
+        showToast('Erro de conexão');
+      }
     }
 
     async function abrirVinculosEmails() {
