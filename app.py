@@ -4304,10 +4304,6 @@ def api_admin_import_vinculos_emails():
     admin_only = bool(data.get("admin_only"))
     if admin_only and str((user_target or {}).get("role") or "client").strip().lower() != "admin":
         return jsonify({"success": False, "message": "Selecione um usuário administrador para liberar consulta livre do admin."}), 400
-    if admin_only:
-        admin_only_pin = str(data.get("admin_only_pin", "")).strip()
-        if admin_only_pin != "2002":
-            return jsonify({"success": False, "message": "PIN inválido para adicionar emails liberados aos administradores."}), 403
 
     current_admin = str(session.get("username") or "").strip().lower()
     if current_admin != "admin":
