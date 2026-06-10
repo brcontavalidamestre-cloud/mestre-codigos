@@ -1365,6 +1365,7 @@
           showToast('✓ Acesso adicionado');
           await loadLojaProdutos();
           await loadStock();
+          scrollToText('stk-tbody', email);
         } else { showToast(j.message||'Erro'); }
       } catch(e){ showToast('Erro de conexão'); }
     }
@@ -1477,7 +1478,7 @@
       };
       const r = await fetch('/api/admin/loja2/produtos', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
-      if (j.success) { showToast('✓ Produto criado'); document.getElementById('l2-prod-form').reset(); await loadLoja2Produtos(); }
+      if (j.success) { showToast('✓ Produto criado'); document.getElementById('l2-prod-form').reset(); await loadLoja2Produtos(); scrollToText('loja2-prod-list', body.name); }
       else showToast('✗ ' + (j.message||'Erro'));
     }
 
@@ -1527,7 +1528,7 @@
       };
       const r = await fetch('/api/admin/loja2/estoque/'+sel.value, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
-      if (j.success) { showToast('✓ Acesso adicionado'); document.getElementById('l2-stk-form').reset(); await loadLoja2Produtos(); await loadLoja2Stock(); }
+      if (j.success) { showToast('✓ Acesso adicionado'); document.getElementById('l2-stk-form').reset(); await loadLoja2Produtos(); await loadLoja2Stock(); scrollToText('l2-stk-tbody', body.email); }
       else showToast('✗ '+(j.message||'Erro'));
     }
 
@@ -1950,6 +1951,7 @@
       showToast(`✓ ${j.created || 0} criado(s), ${j.updated || 0} atualizado(s), ${j.invalid || 0} inválido(s)`);
       await loadVinculosEmails();
       await loadComprasPorData();
+      scrollToText('ve-tbody', linhas[0] || assignedUser);
     }
 
     async function deleteVinculoEmail(email) {
@@ -2092,7 +2094,7 @@
       };
       const r = await fetch('/api/admin/assinaturas', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       const j = await r.json();
-      if (j.success) { showToast('✓ Conta cadastrada'); document.getElementById('assin-form').reset(); document.getElementById('as-plat').value='Netflix'; document.getElementById('as-dias').value='30'; await loadAssinaturas(); await loadComprasPorData(); }
+      if (j.success) { showToast('✓ Conta cadastrada'); document.getElementById('assin-form').reset(); document.getElementById('as-plat').value='Netflix'; document.getElementById('as-dias').value='30'; await loadAssinaturas(); await loadComprasPorData(); scrollToText('assin-tbody', email); }
       else showToast('✗ '+(j.message||'Erro'));
     }
 
@@ -2158,6 +2160,7 @@
       document.getElementById('as-bulk-list').value = '';
       await loadAssinaturas();
       await loadComprasPorData();
+      scrollToText('assin-tbody', linhas[0] || '');
      
     }
 
@@ -2478,6 +2481,7 @@
           document.getElementById('lic-days').value = '30';
           await loadLicencas();
           await loadUsers(); // novo admin foi criado
+          scrollToText('lic-tbody', payload.domain);
         } else {
           showToast(j.message || 'Erro');
         }
@@ -2658,6 +2662,10 @@
           showOk(d.message || 'Usuário criado!');
           document.getElementById('cform').reset();
           await loadUsers();
+          const si = document.getElementById('s-in');
+          if (si) si.value = uname;
+          filterUsers(uname);
+          scrollToText('tbody', uname);
         } else {
           showErrA(d.message || 'Erro ao criar.');
         }
@@ -2723,6 +2731,30 @@
     function showErrA(m) { const el = document.getElementById('a-err'); document.getElementById('a-err-m').textContent = m; el.className = 'alert aerr show'; setTimeout(() => el.className = 'alert aerr', 5000); }
     function showTblErr(m) { document.getElementById('tbody').innerHTML = `<tr><td colspan="4"><div class="empty">${x(m)}</div></td></tr>`; }
     function hideAlerts() { document.getElementById('a-ok').className='alert aok'; document.getElementById('a-err').className='alert aerr'; }
+
+    function scrollToText(containerId, text='') {
+      const root = document.getElementById(containerId);
+      if (!root) return;
+      const needle = String(text || '').trim().toLowerCase();
+      let target = root;
+      if (needle) {
+        const candidates = Array.from(root.querySelectorAll('tr, div'));
+        const found = candidates.find(el => String(el.textContent || '').toLowerCase().includes(needle));
+        if (found) target = found;
+      }
+      try { target.scrollIntoView({ behavior:'smooth', block:'center' }); } catch(e) {}
+      const prevTransition = target.style.transition || '';
+      const prevBoxShadow = target.style.boxShadow || '';
+      const prevBg = target.style.backgroundColor || '';
+      target.style.transition = 'box-shadow .25s ease, background-color .25s ease';
+      target.style.boxShadow = '0 0 0 2px rgba(250,204,21,.65) inset';
+      target.style.backgroundColor = 'rgba(250,204,21,.12)';
+      setTimeout(() => {
+        target.style.boxShadow = prevBoxShadow;
+        target.style.backgroundColor = prevBg;
+        target.style.transition = prevTransition;
+      }, 1800);
+    }
 
     let _tt;
     function toast(msg, color) {
