@@ -216,13 +216,6 @@ CEARA_IMAP_PORT_2   = int(os.environ.get("CEARA_IMAP_PORT_2", 993))
 CEARA_EMAIL_USER_2  = os.environ.get("CEARA_EMAIL_USER_2", "")
 CEARA_EMAIL_PASS_2  = os.environ.get("CEARA_EMAIL_PASS_2", "")
 
-# ─── Caixa IMAP EXCLUSIVA do jmp.up.railway.app ───────────────────────────────
-# Só é usada no link JMP. Não altera rios, ceara, mestre ou outros domínios.
-JMP_IMAP_SERVER = os.environ.get("JMP_IMAP_SERVER", "gtxm1300.siteground.biz")
-JMP_IMAP_PORT   = int(os.environ.get("JMP_IMAP_PORT", 993))
-JMP_EMAIL_USER  = os.environ.get("JMP_EMAIL_USER", "jmp@mundial.log.br")
-JMP_EMAIL_PASS  = os.environ.get("JMP_EMAIL_PASS", "Mestre13579@")
-
 
 def _is_rios_request():
     """True se o request atual vem de rios.up.railway.app"""
@@ -236,14 +229,6 @@ def _is_ceara_request():
     """True se o request atual vem de ceara.up.railway.app"""
     try:
         return "ceara" in (request.host or "").lower()
-    except Exception:
-        return False
-
-
-def _is_jmp_request():
-    """True se o request atual vem de jmp.up.railway.app"""
-    try:
-        return "jmp" in (request.host or "").lower()
     except Exception:
         return False
 
@@ -281,16 +266,6 @@ def get_imap_accounts():
             "port": RIOS_IMAP_PORT,
             "user": RIOS_EMAIL_USER,
             "password": RIOS_EMAIL_PASS,
-        }]
-
-    # ╔══ JMP: usa SOMENTE a caixa jmp@mundial.log.br ══╗
-    if _is_jmp_request() and JMP_EMAIL_USER and JMP_EMAIL_PASS and JMP_IMAP_SERVER:
-        return [{
-            "name": "caixa-jmp-mundial",
-            "server": JMP_IMAP_SERVER,
-            "port": JMP_IMAP_PORT,
-            "user": JMP_EMAIL_USER,
-            "password": JMP_EMAIL_PASS,
         }]
 
     accounts = [
