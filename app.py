@@ -216,12 +216,17 @@ CEARA_IMAP_PORT_2   = int(os.environ.get("CEARA_IMAP_PORT_2", 993))
 CEARA_EMAIL_USER_2  = os.environ.get("CEARA_EMAIL_USER_2", "")
 CEARA_EMAIL_PASS_2  = os.environ.get("CEARA_EMAIL_PASS_2", "")
 
-# ╔══ Caixa EXCLUSIVA do JMP (Hostinger) ══╗
-# Só é incluída quando o host é jmp.up.railway.app
+# ╔══ Caixas EXCLUSIVAS do JMP ══╗
+# Só são incluídas quando o host é jmp.up.railway.app
 JMP_IMAP_SERVER = os.environ.get("JMP_IMAP_SERVER", "imap.hostinger.com")
 JMP_IMAP_PORT   = int(os.environ.get("JMP_IMAP_PORT", 993))
 JMP_EMAIL_USER  = os.environ.get("JMP_EMAIL_USER", "Primeiro0101@jmpfornecedor.store")
 JMP_EMAIL_PASS  = os.environ.get("JMP_EMAIL_PASS", "Bubu150603*")
+
+JMP_IMAP_SERVER_2 = os.environ.get("JMP_IMAP_SERVER_2", "mail.mundial.log.br")
+JMP_IMAP_PORT_2   = int(os.environ.get("JMP_IMAP_PORT_2", 993))
+JMP_EMAIL_USER_2  = os.environ.get("JMP_EMAIL_USER_2", "codigo@mundial.log.br")
+JMP_EMAIL_PASS_2  = os.environ.get("JMP_EMAIL_PASS_2", "Mestre13579@")
 
 
 def _is_rios_request():
@@ -283,15 +288,26 @@ def get_imap_accounts():
             "password": RIOS_EMAIL_PASS,
         }]
 
-    # ╔══ JMP: usa SOMENTE a caixa exclusiva Hostinger ══╗
-    if _is_jmp_request() and JMP_EMAIL_USER and JMP_EMAIL_PASS:
-        return [{
-            "name": "caixa-jmp-hostinger",
-            "server": JMP_IMAP_SERVER,
-            "port": JMP_IMAP_PORT,
-            "user": JMP_EMAIL_USER,
-            "password": JMP_EMAIL_PASS,
-        }]
+    # ╔══ JMP: usa SOMENTE as caixas exclusivas do próprio JMP ══╗
+    if _is_jmp_request():
+        jmp_accs = []
+        if JMP_EMAIL_USER and JMP_EMAIL_PASS:
+            jmp_accs.append({
+                "name": "caixa-jmp-hostinger",
+                "server": JMP_IMAP_SERVER,
+                "port": JMP_IMAP_PORT,
+                "user": JMP_EMAIL_USER,
+                "password": JMP_EMAIL_PASS,
+            })
+        if JMP_EMAIL_USER_2 and JMP_EMAIL_PASS_2:
+            jmp_accs.append({
+                "name": "caixa-jmp-mundial",
+                "server": JMP_IMAP_SERVER_2,
+                "port": JMP_IMAP_PORT_2,
+                "user": JMP_EMAIL_USER_2,
+                "password": JMP_EMAIL_PASS_2,
+            })
+        return jmp_accs
 
     accounts = [
         {
