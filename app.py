@@ -216,6 +216,13 @@ CEARA_IMAP_PORT_2   = int(os.environ.get("CEARA_IMAP_PORT_2", 993))
 CEARA_EMAIL_USER_2  = os.environ.get("CEARA_EMAIL_USER_2", "")
 CEARA_EMAIL_PASS_2  = os.environ.get("CEARA_EMAIL_PASS_2", "")
 
+# ╔══ Caixa EXCLUSIVA do JMP (Hostinger) ══╗
+# Só é incluída quando o host é jmp.up.railway.app
+JMP_IMAP_SERVER = os.environ.get("JMP_IMAP_SERVER", "imap.hostinger.com")
+JMP_IMAP_PORT   = int(os.environ.get("JMP_IMAP_PORT", 993))
+JMP_EMAIL_USER  = os.environ.get("JMP_EMAIL_USER", "Primeiro0101@jmpfornecedor.store")
+JMP_EMAIL_PASS  = os.environ.get("JMP_EMAIL_PASS", "Bubu150603*")
+
 
 def _is_rios_request():
     """True se o request atual vem de rios.up.railway.app"""
@@ -229,6 +236,14 @@ def _is_ceara_request():
     """True se o request atual vem de ceara.up.railway.app"""
     try:
         return "ceara" in (request.host or "").lower()
+    except Exception:
+        return False
+
+
+def _is_jmp_request():
+    """True se o request atual vem de jmp.up.railway.app"""
+    try:
+        return "jmp" in (request.host or "").lower()
     except Exception:
         return False
 
@@ -266,6 +281,16 @@ def get_imap_accounts():
             "port": RIOS_IMAP_PORT,
             "user": RIOS_EMAIL_USER,
             "password": RIOS_EMAIL_PASS,
+        }]
+
+    # ╔══ JMP: usa SOMENTE a caixa exclusiva Hostinger ══╗
+    if _is_jmp_request() and JMP_EMAIL_USER and JMP_EMAIL_PASS:
+        return [{
+            "name": "caixa-jmp-hostinger",
+            "server": JMP_IMAP_SERVER,
+            "port": JMP_IMAP_PORT,
+            "user": JMP_EMAIL_USER,
+            "password": JMP_EMAIL_PASS,
         }]
 
     accounts = [
