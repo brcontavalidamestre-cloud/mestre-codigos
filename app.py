@@ -3272,6 +3272,13 @@ def api_admin_get_code():
                           "Nenhum email Max ou Prime Video encontrado para este endereço."),
     }
 
+    # No mestre, a opção Netflix precisa priorizar o link de redefinição
+    # antes de retornar códigos de acesso comuns.
+    if is_master_host() and platform == "netflix-all":
+        _code_pr, link_pr, matched_pr, _error_pr = search_code_unified(user_email, ["password-reset"])
+        if link_pr and matched_pr == "password-reset":
+            return jsonify({"success": True, "link": link_pr, "platform": "password-reset", "type": "link"})
+
     if _is_rios_request():
         _maybe_move_spam_async()
 
@@ -3329,6 +3336,20 @@ def get_code():
                           "Nenhum email Max ou Prime Video encontrado para este endereço."),
     }
     username = session.get("username")
+    # No mestre, a opção Netflix precisa priorizar o link de redefinição
+    # antes de retornar códigos de acesso comuns.
+    if is_master_host() and platform == "netflix-all":
+        _clear_pending_reset_link(username)
+        _code_pr, link_pr, matched_pr, _error_pr = search_code_unified(user_email, ["password-reset"])
+        if link_pr and matched_pr == "password-reset":
+            _set_pending_reset_link(username, link_pr)
+            return jsonify({
+                "success": True,
+                "platform": "password-reset",
+                "type": "pin_required",
+                "pin_required": True,
+                "message": "PIN necessario para liberar o link de redefinicao."
+            })
     _clear_pending_reset_link(username)
 
     # ╔══ MESTRE: consulta liberada SOMENTE para login vinculado ══╗
