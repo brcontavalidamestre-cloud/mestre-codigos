@@ -649,6 +649,7 @@
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
             <button id="compras-tab-data" class="btn-ref" style="background:rgba(124,58,237,.22);border-color:#a78bfa;color:#fff;" onclick="showComprasTab('data')">📅 Compras por Data</button>
             <button id="compras-tab-search" class="btn-ref" onclick="showComprasTab('search')">🔎 Pesquisar Emails Vendidos</button>
+            <button id="compras-tab-blocks" class="btn-ref" onclick="showComprasTab('blocks')" style="display:none;">🧱 Blocos 1 a 31</button>
           </div>
 
           <div id="compras-data-view">
@@ -665,6 +666,17 @@
             </div>
             <div id="compras-search-summary" class="sinfo" style="margin-bottom:10px;"></div>
             <div id="compras-search-results"></div>
+          </div>
+
+          <div id="compras-blocks-view" style="display:none;">
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <div class="sinfo" style="margin:0;">31 blocos numerados para você colar os emails vendidos de cada dia do mês. Esta área fica somente no mestre.</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                <button class="btn-ref" onclick="loadBlocosEmailsVendidos()">🔄 Atualizar blocos</button>
+                <button class="btn-p" type="button" onclick="saveTodosBlocosEmailsVendidos()">💾 Salvar todos os blocos</button>
+              </div>
+            </div>
+            <div id="compras-blocks-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;"></div>
           </div>
         </div>
       </div>
@@ -1168,6 +1180,7 @@
       showVinculosIfMaster();
       showConsultaAdminCodigosIfMaster();
       loadBackupSummary();
+      syncBlocosEmailsTabVisibility();
     })();
 
     /* ============ BACKUP / RESTORE ============ */
@@ -1987,7 +2000,7 @@
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
       await loadAssinaturas();
       await loadComprasPorData();
-     
+      await syncBlocosEmailsTabVisibility();
     }
     function fecharCobranca() {
       const m = document.getElementById('cobranca-modal');
@@ -2184,6 +2197,7 @@
     }
 
     let comprasDataCache = [];
+    let comprasBlocksCache = {};
     let comprasTabAtual = 'data';
 
     function escapeHtml(v) {
@@ -2227,23 +2241,33 @@
     function showComprasTab(tab) {
       comprasTabAtual = tab;
       const isData = tab === 'data';
+      const isSearch = tab === 'search';
+      const isBlocks = tab === 'blocks';
       const dataView = document.getElementById('compras-data-view');
       const searchView = document.getElementById('compras-search-view');
+      const blocksView = document.getElementById('compras-blocks-view');
       const btnData = document.getElementById('compras-tab-data');
       const btnSearch = document.getElementById('compras-tab-search');
+      const btnBlocks = document.getElementById('compras-tab-blocks');
       if (dataView) dataView.style.display = isData ? 'block' : 'none';
-      if (searchView) searchView.style.display = isData ? 'none' : 'block';
+      if (searchView) searchView.style.display = isSearch ? 'block' : 'none';
+      if (blocksView) blocksView.style.display = isBlocks ? 'block' : 'none';
       if (btnData) {
         btnData.style.background = isData ? 'rgba(124,58,237,.22)' : 'transparent';
         btnData.style.borderColor = isData ? '#a78bfa' : '';
         btnData.style.color = '#fff';
       }
       if (btnSearch) {
-        btnSearch.style.background = !isData ? 'rgba(124,58,237,.22)' : 'transparent';
-        btnSearch.style.borderColor = !isData ? '#a78bfa' : '';
+        btnSearch.style.background = isSearch ? 'rgba(124,58,237,.22)' : 'transparent';
+        btnSearch.style.borderColor = isSearch ? '#a78bfa' : '';
         btnSearch.style.color = '#fff';
       }
-      if (!isData) {
+      if (btnBlocks) {
+        btnBlocks.style.background = isBlocks ? 'rgba(124,58,237,.22)' : 'transparent';
+        btnBlocks.style.borderColor = isBlocks ? '#a78bfa' : '';
+        btnBlocks.style.color = '#fff';
+      }
+      if (isSearch) {
         const input = document.getElementById('compras-search-input');
         if (input && input.value.trim()) searchComprasVendidas();
       }
@@ -2360,6 +2384,98 @@
         }
         showComprasTab(comprasTabAtual || 'data');
       } catch(e) { console.log('compras-data err', e); }
+    }
+
+    function renderBlocosEmailsVendidos(blocks) {
+      const grid = document.getElementById('compras-blocks-grid');
+      if (!grid) return;
+      const b = blocks || {};
+      grid.innerHTML = Array.from({length:31}, (_, idx) => {
+        const n = String(idx + 1);
+        const val = b[n] || '';
+        return `<div style="background:rgba(252,211,77,0.05);border:1px solid rgba(252,211,77,0.28);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+            <div style="font-weight:800;color:#fcd34d;">Bloco ${n}</div>
+            <button class="btn-ref" type="button" style="font-size:.78rem;padding:5px 10px;" onclick="saveBlocoEmailsVendidos('${n}')">💾 Salvar</button>
+          </div>
+          <textarea class="fi compras-block-text" data-day="${n}" id="compras-block-${n}" rows="7" placeholder="Cole aqui os emails vendidos do dia ${n}, um por linha." style="width:100%;resize:vertical;">${escapeHtml(val)}</textarea>
+        </div>`;
+      }).join('');
+    }
+
+    async function loadBlocosEmailsVendidos() {
+      try {
+        const { r, j } = await fetchJsonNoCache('/api/admin/blocos-emails-vendidos');
+        if (!r.ok || !(j && j.success)) {
+          const btn = document.getElementById('compras-tab-blocks');
+          const view = document.getElementById('compras-blocks-view');
+          if (btn) btn.style.display = 'none';
+          if (view) view.style.display = 'none';
+          return false;
+        }
+        comprasBlocksCache = j.blocks || {};
+        renderBlocosEmailsVendidos(comprasBlocksCache);
+        return true;
+      } catch(e) {
+        console.log('blocks err', e);
+        const btn = document.getElementById('compras-tab-blocks');
+        const view = document.getElementById('compras-blocks-view');
+        if (btn) btn.style.display = 'none';
+        if (view) view.style.display = 'none';
+        return false;
+      }
+    }
+
+    async function syncBlocosEmailsTabVisibility() {
+      const btn = document.getElementById('compras-tab-blocks');
+      const ok = await loadBlocosEmailsVendidos();
+      if (btn) btn.style.display = ok ? 'inline-flex' : 'none';
+      if (!ok && comprasTabAtual === 'blocks') showComprasTab('data');
+    }
+
+    async function saveBlocoEmailsVendidos(day) {
+      const ta = document.getElementById('compras-block-' + day);
+      if (!ta) return;
+      try {
+        const r = await fetch('/api/admin/blocos-emails-vendidos', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ day: String(day), emails: ta.value || '' })
+        });
+        const j = await r.json();
+        if (j && j.success) {
+          comprasBlocksCache = j.blocks || comprasBlocksCache;
+          showToast('✓ Bloco ' + day + ' salvo');
+        } else {
+          showToast('✗ ' + ((j && j.message) || 'Erro ao salvar bloco'));
+        }
+      } catch(e) {
+        showToast('Erro de conexão ao salvar bloco');
+      }
+    }
+
+    async function saveTodosBlocosEmailsVendidos() {
+      try {
+        const blocks = {};
+        document.querySelectorAll('.compras-block-text').forEach(el => {
+          const day = String(el.getAttribute('data-day') || '');
+          if (day) blocks[day] = el.value || '';
+        });
+        const r = await fetch('/api/admin/blocos-emails-vendidos', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({ blocks })
+        });
+        const j = await r.json();
+        if (j && j.success) {
+          comprasBlocksCache = j.blocks || blocks;
+          showToast('✓ 31 blocos salvos');
+        } else {
+          showToast('✗ ' + ((j && j.message) || 'Erro ao salvar blocos'));
+        }
+      } catch(e) {
+        showToast('Erro de conexão ao salvar blocos');
+      }
     }
 
 

@@ -367,6 +367,8 @@ LICENSES_FILE       = os.environ.get("LICENSES_FILE", os.path.join(_data_dir, "l
 SUBSCRIPTIONS_FILE  = os.environ.get("SUBSCRIPTIONS_FILE", os.path.join(_data_dir, "subscriptions.json"))
 SUB_DEFAULT_DAYS    = int(os.environ.get("SUB_DEFAULT_DAYS", "30"))
 SUB_RENEW_VALUE     = float(os.environ.get("SUB_RENEW_VALUE", "35.00"))
+DAILY_EMAIL_BLOCKS_FILE = os.environ.get("DAILY_EMAIL_BLOCKS_FILE", os.path.join(_data_dir, "daily_email_blocks.json"))
+DAILY_EMAIL_BLOCKS_ONLY_USER = os.environ.get("DAILY_EMAIL_BLOCKS_ONLY_USER", "admin").strip().lower()
 
 def load_subscriptions():
     data = _read_json_file(SUBSCRIPTIONS_FILE, [])
@@ -378,6 +380,39 @@ def save_subscriptions(subs):
     if not isinstance(subs, list):
         subs = []
     return _write_json_file(SUBSCRIPTIONS_FILE, subs)
+
+
+def load_daily_email_blocks():
+    data = _read_json_file(DAILY_EMAIL_BLOCKS_FILE, {})
+    if not isinstance(data, dict):
+        data = {}
+    normalized = {}
+    for i in range(1, 32):
+        key = str(i)
+        normalized[key] = str(data.get(key, "") or "")
+    return normalized
+
+
+def save_daily_email_blocks(blocks):
+    if not isinstance(blocks, dict):
+        blocks = {}
+    normalized = {}
+    for i in range(1, 32):
+        key = str(i)
+        normalized[key] = str(blocks.get(key, "") or "")
+    return _write_json_file(DAILY_EMAIL_BLOCKS_FILE, normalized)
+
+
+def _can_manage_daily_email_blocks():
+    username = str(session.get("username", "") or "").strip().lower()
+    role = str(session.get("role", "") or "").strip().lower()
+    if not is_master_host():
+        return False
+    if role != "admin":
+        return False
+    if not DAILY_EMAIL_BLOCKS_ONLY_USER:
+        return False
+    return username == DAILY_EMAIL_BLOCKS_ONLY_USER
 
 _CARLOSADM_CLEANUP_MARKER = os.path.join(_data_dir, ".cleanup_carlosadm_done")
 _carlosadm_cleanup_done = False
@@ -4764,6 +4799,36 @@ def api_admin_restore_volume():
             "data_dir": base,
             "message": f"{len(restored)} arquivo(s) restaurado(s) em {base}. Reinicie o servico (ja recarrega na proxima leitura)."
         })
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
+
+
+@app.route("/api/admin/blocos-emails-vendidos", methods=["GET", "POST"])
+@admin_required
+def api_admin_blocos_emails_vendidos():
+    """Blocos manuais 1..31 para registrar emails vendidos por dia (somente no mestre e no usuário autorizado)."""
+    if not _can_manage_daily_email_blocks():
+        return jsonify({"success": False, "message": "Disponível somente no mestre para o usuário autorizado."}), 403
+    try:
+        if request.method == "GET":
+            return jsonify({"success": True, "blocks": load_daily_email_blocks()})
+
+        data = request.get_json(silent=True) or {}
+        blocks = load_daily_email_blocks()
+
+        if "blocks" in data and isinstance(data.get("blocks"), dict):
+            for i in range(1, 32):
+                key = str(i)
+                if key in data["blocks"]:
+                    blocks[key] = str(data["blocks"].get(key, "") or "")
+        else:
+            day = str(data.get("day", "")).strip()
+            if day not in {str(i) for i in range(1, 32)}:
+                return jsonify({"success": False, "message": "Bloco inválido. Use 1 a 31."}), 400
+            blocks[day] = str(data.get("emails", "") or "")
+
+        save_daily_email_blocks(blocks)
+        return jsonify({"success": True, "blocks": blocks, "message": "Blocos salvos com sucesso."})
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro: {e}"}), 500
 
