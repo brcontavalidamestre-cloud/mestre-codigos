@@ -702,6 +702,75 @@ def is_loja_host():
         ".loja." in host
     )
 
+
+def _is_lojamestre_store():
+    """True somente no domínio da loja mestre pública."""
+    host = get_current_host()
+    return "lojamestre" in (host or "").lower()
+
+
+def _ensure_delivery_email_binding(order):
+    """Garante que o email entregue fique vinculado ao usuário comprador para consulta de códigos."""
+    delivered_email = str((order or {}).get("delivered_email", "")).strip().lower()
+    assigned_user = str((order or {}).get("assigned_user", "")).strip().lower()
+    if not delivered_email or not assigned_user:
+        return False
+
+    users = load_users()
+    user_target = users.get(assigned_user) or {}
+    if not user_target:
+        return False
+    assigned_user_name = str((order or {}).get("assigned_user_name") or user_target.get("name") or assigned_user).strip()
+
+    subs = load_subscriptions()
+    now = int(time.time())
+    long_days = 3650
+    long_exp = now + long_days * 86400
+    existing, idx = _find_subscription(delivered_email)
+
+    plataforma = str((order or {}).get("product_name") or "Conta entregue").strip()[:40]
+    cliente = str((order or {}).get("customer_name") or assigned_user_name or "").strip()[:80]
+    senha = str((order or {}).get("delivered_password") or "").strip()[:80]
+    telefone = str((order or {}).get("customer_phone") or "").strip()[:30]
+
+    if idx >= 0:
+        sub = existing or {}
+        sub["assigned_user"] = assigned_user
+        sub["assigned_user_name"] = assigned_user_name
+        sub["plataforma"] = sub.get("plataforma") or plataforma
+        sub["cliente"] = sub.get("cliente") or cliente
+        sub["telefone"] = sub.get("telefone") or telefone
+        if senha:
+            sub["senha"] = senha
+        sub["show_in_panel"] = False
+        if not sub.get("created_at"):
+            sub["created_at"] = now
+        if not sub.get("expires_at") or not _sub_is_active(sub):
+            sub["start_at"] = now
+            sub["expires_at"] = long_exp
+            sub["dur_days"] = long_days
+        subs[idx] = sub
+    else:
+        subs.append({
+            "email": delivered_email,
+            "senha": senha,
+            "plataforma": plataforma,
+            "cliente": cliente,
+            "telefone": telefone,
+            "valor": 0.0,
+            "dur_days": long_days,
+            "assigned_user": assigned_user,
+            "assigned_user_name": assigned_user_name,
+            "start_at": now,
+            "expires_at": long_exp,
+            "created_at": now,
+            "show_in_panel": False,
+            "renew_pix_txid": None,
+            "renew_count": 0,
+        })
+    save_subscriptions(subs)
+    return True
+
 # URL pública do painel MESTRE (sites filhos consultam a licença aqui)
 MASTER_API_URL    = os.environ.get(
     "MASTER_API_URL",
@@ -3458,12 +3527,15 @@ def api_loja_unlock():
 def _proxy_to_master(path, method="GET", json_body=None, params=None):
     """Faz proxy de requisições da loja standalone para o mestre via HTTP.
     Necessário pois cada serviço Railway tem disco isolado (stock.json/orders.json/products.json).
+    Preserva o host de origem para regras específicas por domínio (ex.: lojamestre).
     """
     try:
         import requests
         url = f"{MASTER_API_URL}{path}"
+        origin_host = get_current_host() or (request.host or "")
         headers = {
             "X-Loja-Proxy-Token": MASTER_API_TOKEN,
+            "X-Forwarded-Host": origin_host,
             "Content-Type": "application/json"
         }
         if method == "GET":
@@ -3571,11 +3643,41 @@ def _do_checkout():
     customer_name  = str(data.get("name", "")).strip()
     customer_email = str(data.get("email", "")).strip().lower()
     customer_phone = str(data.get("phone", "")).strip()
+    panel_username = str(data.get("panel_username", "")).strip().lower()
+    panel_password = str(data.get("panel_password", ""))
 
     if not product_id:
         return jsonify({"success": False, "message": "Produto inválido."}), 400
     if not customer_name or not customer_email:
         return jsonify({"success": False, "message": "Informe nome e email."}), 400
+    if not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", customer_email):
+        return jsonify({"success": False, "message": "Informe um email válido."}), 400
+
+    buyer_user_name = ""
+    if _is_lojamestre_store():
+        if not panel_username or not panel_password:
+            return jsonify({
+                "success": False,
+                "message": "Na lojamestre, o cliente precisa entrar com usuário e senha do painel antes de comprar."
+            }), 400
+        if not re.match(r"^[a-z0-9_\.]{3,30}$", panel_username):
+            return jsonify({
+                "success": False,
+                "message": "Usuário do painel inválido."
+            }), 400
+        users = load_users()
+        panel_user = users.get(panel_username)
+        if not panel_user or not check_password_hash(panel_user.get("password", ""), panel_password):
+            return jsonify({
+                "success": False,
+                "message": "Usuário ou senha do painel inválidos."
+            }), 401
+        if panel_user.get("role") not in ("client", "admin"):
+            return jsonify({
+                "success": False,
+                "message": "Usuário do painel sem permissão para compra."
+            }), 403
+        buyer_user_name = panel_user.get("name", panel_username)
 
     products = load_products()
     product  = next((p for p in products if p["id"] == product_id), None)
@@ -3604,6 +3706,8 @@ def _do_checkout():
         "customer_name": customer_name,
         "customer_email": customer_email,
         "customer_phone": customer_phone,
+        "buyer_username": panel_username,
+        "buyer_user_name": buyer_user_name,
         "assigned_user": product_assigned_user,
         "assigned_user_name": product_assigned_user_name,
         "status": "pending",
@@ -3923,12 +4027,32 @@ def efi_check_pix_status(txid):
         return {"paid": False, "reason": str(e)}
 
 def mark_order_paid_and_deliver(order_id):
-    """Marca pedido como pago e entrega o próximo acesso do estoque."""
+    """Marca pedido como pago, entrega o próximo acesso do estoque e vincula ao usuário comprador quando aplicável."""
     orders = load_orders()
     # Filtra apenas dicts válidos antes de procurar
     order  = next((o for o in orders if isinstance(o, dict) and o.get("id") == order_id), None)
     if not order or order.get("status") != "pending":
         return order
+
+    buyer_username = str(order.get("buyer_username", "")).strip().lower()
+    buyer_user_name = str(order.get("buyer_user_name", "")).strip()
+    if _is_lojamestre_store() and not buyer_username:
+        order["status"] = "error"
+        order["delivered_note"] = "Compra bloqueada: pedido sem login do painel vinculado."
+        save_orders(orders)
+        return order
+
+    if buyer_username:
+        users = load_users()
+        buyer_user = users.get(buyer_username)
+        if not buyer_user:
+            order["status"] = "error"
+            order["delivered_note"] = "Compra bloqueada: usuário do painel não encontrado para vinculação automática."
+            save_orders(orders)
+            return order
+        buyer_user_name = buyer_user_name or buyer_user.get("name", buyer_username)
+        order["buyer_user_name"] = buyer_user_name
+
     stock_item = get_next_stock_item(order.get("product_id"))
     order["status"]  = "paid"
     order["paid_at"] = int(time.time())
@@ -3936,17 +4060,26 @@ def mark_order_paid_and_deliver(order_id):
         order["delivered_email"]    = stock_item.get("email")
         order["delivered_password"] = stock_item.get("password")
         order["delivered_note"]     = stock_item.get("note")
-        if stock_item.get("assigned_user"):
+
+        if buyer_username:
+            order["assigned_user"] = buyer_username
+            order["assigned_user_name"] = buyer_user_name or buyer_username
+        elif stock_item.get("assigned_user"):
             order["assigned_user"] = str(stock_item.get("assigned_user", "")).strip().lower()
             order["assigned_user_name"] = stock_item.get("assigned_user_name") or order.get("assigned_user")
+
         # marca o item como entregue ao cliente
         st = load_stock()
         for it in st.get(order.get("product_id"), []):
             if isinstance(it, dict) and it.get("id") == stock_item.get("id"):
                 it["delivered_to"] = order.get("customer_email")
                 it["order_id"]     = order_id
+                if buyer_username:
+                    it["assigned_user"] = buyer_username
+                    it["assigned_user_name"] = buyer_user_name or buyer_username
                 break
         save_stock(st)
+        _ensure_delivery_email_binding(order)
     else:
         order["delivered_note"] = "Pagamento confirmado. Aguarde - entrega manual."
     save_orders(orders)

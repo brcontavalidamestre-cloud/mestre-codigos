@@ -1259,6 +1259,13 @@
         <input type="email" id="co-email" placeholder="seu@email.com" />
         <label>Telefone (opcional)</label>
         <input type="tel" id="co-phone" placeholder="(11) 99999-9999" />
+        <div id="panel-login-box" style="display:none">
+          <label>Usuário do painel de códigos</label>
+          <input type="text" id="co-panel-user" placeholder="Seu usuário do painel" autocomplete="username" />
+          <label>Senha do painel de códigos</label>
+          <input type="password" id="co-panel-pass" placeholder="Sua senha do painel" autocomplete="current-password" />
+          <div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)">Na Loja Mestre, a compra só é liberada com o usuário do painel para vincular automaticamente o email entregue e permitir a consulta de códigos.</div>
+        </div>
         <div class="checkout-actions">
           <button class="btn-cancel" onclick="closeCheckout()">Cancelar</button>
           <button class="btn-pay" id="btn-pay" onclick="finalizarCompra()">💰 Gerar Pix</button>
@@ -2807,6 +2814,8 @@
 
     function openCheckout(productId, productName, price) {
       currentCheckoutProduct = { id: productId, name: productName, price: price };
+      const host = (window.location.hostname || '').toLowerCase();
+      const isLojaMestre = host.includes('lojamestre');
       document.getElementById('checkout-title').textContent = `${productName} — R$ ${Number(price).toFixed(2).replace('.', ',')}`;
       document.getElementById('checkout-form-area').style.display = 'block';
       document.getElementById('pix-result-area').style.display = 'none';
@@ -2814,6 +2823,9 @@
       document.getElementById('co-name').value = '';
       document.getElementById('co-email').value = '';
       document.getElementById('co-phone').value = '';
+      document.getElementById('co-panel-user').value = '';
+      document.getElementById('co-panel-pass').value = '';
+      document.getElementById('panel-login-box').style.display = isLojaMestre ? 'block' : 'none';
       document.getElementById('checkout-modal').classList.add('show');
     }
 
@@ -2828,9 +2840,14 @@
       const name  = document.getElementById('co-name').value.trim();
       const email = document.getElementById('co-email').value.trim();
       const phone = document.getElementById('co-phone').value.trim();
+      const panelUsername = document.getElementById('co-panel-user').value.trim().toLowerCase();
+      const panelPassword = document.getElementById('co-panel-pass').value;
+      const host = (window.location.hostname || '').toLowerCase();
+      const isLojaMestre = host.includes('lojamestre');
       // Guarda email para pre-preencher histórico depois
       try { if (email) localStorage.setItem('mestre_last_buyer_email', email.toLowerCase()); } catch(e){}
       if (!name || !email) { showToast('Preencha nome e email'); return; }
+      if (isLojaMestre && (!panelUsername || !panelPassword)) { showToast('Informe usuário e senha do painel'); return; }
       const btn = document.getElementById('btn-pay');
       btn.disabled = true; btn.textContent = 'Gerando...';
       try {
@@ -2839,7 +2856,9 @@
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify({
             product_id: currentCheckoutProduct.id,
-            name, email, phone
+            name, email, phone,
+            panel_username: panelUsername,
+            panel_password: panelPassword
           })
         });
         const j = await r.json();
