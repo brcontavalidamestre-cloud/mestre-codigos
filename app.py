@@ -2196,8 +2196,15 @@ def search_code_unified(user_email, platform_list):
             since_7d  = (_dt.utcnow() - _td(days=7)).strftime("%d-%b-%Y")
 
             # Hotmail/Outlook costuma atrasar ou cair no lixo eletrônico.
-            # No Ceará, ampliamos a busca para reduzir falhas de consulta.
-            if _is_ceara_request() or is_hotmail_family:
+            # No Ceará, ampliamos ainda mais a busca e removemos o corte rígido de minutos,
+            # para não perder códigos que chegam com atraso.
+            if _is_ceara_request():
+                global_window_min = None
+                global_max_emails = int(os.environ.get("CEARA_MAX_EMAILS", "180"))
+                primary_since = since_2d
+                secondary_since = since_7d
+                spam_boxes = _get_spam_boxes(mail, account_cfg)
+            elif is_hotmail_family:
                 global_window_min = int(os.environ.get("HOTMAIL_TIME_WINDOW_MIN", "15"))
                 global_max_emails = int(os.environ.get("HOTMAIL_MAX_EMAILS", "60"))
                 primary_since = since_2d
@@ -2231,8 +2238,22 @@ def search_code_unified(user_email, platform_list):
                             return code, link, plat_key, None
                         found = found or bool(matched)
 
-                # Fallback extra para Ceará/Hotmail: busca maior e sem filtro de minutos
-                if (_is_ceara_request() or is_hotmail_family) and not found:
+                # Fallback extra para Ceará/Hotmail.
+                if _is_ceara_request() and not found:
+                    fallback_boxes = mailboxes_primary if mailboxes_primary else ["INBOX"]
+                    for mailbox in fallback_boxes:
+                        matched = _batch_search_mailbox(
+                            mail, mailbox, sender, plat_configs, seen_ids,
+                            use_date_filter=True, since_date=primary_since,
+                            max_age_minutes=None,
+                            max_emails=max(global_max_emails, 220))
+
+                        for mb, plat_key, eid in matched:
+                            code, link = _fetch_and_extract(mail, mb, eid, plat_key, user_email)
+                            if code or link:
+                                _safe_logout(mail)
+                                return code, link, plat_key, None
+                elif is_hotmail_family and not found:
                     fallback_boxes = mailboxes_primary if mailboxes_primary else ["INBOX"]
                     for mailbox in fallback_boxes:
                         matched = _batch_search_mailbox(
