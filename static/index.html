@@ -2781,6 +2781,8 @@
 
     async function loadProducts() {
       const grid = document.getElementById('products-grid');
+      const host = (window.location.hostname || '').toLowerCase();
+      const isLojaMestre = host.includes('lojamestre');
       grid.innerHTML = '<p style="text-align:center;color:#c4b5fd;grid-column:1/-1">Carregando produtos...</p>';
       try {
         const r = await fetch('/api/loja/produtos');
@@ -2789,21 +2791,28 @@
           grid.innerHTML = '<p style="text-align:center;color:#c4b5fd;grid-column:1/-1">Nenhum produto disponível.</p>';
           return;
         }
-        grid.innerHTML = j.products.map(p => `
+        grid.innerHTML = j.products.map(p => {
+          const qtd = Number(p.available || 0);
+          const stockLabel = p.has_stock
+            ? (isLojaMestre
+                ? `✓ ${qtd} ${qtd === 1 ? 'unidade em estoque' : 'unidades em estoque'}`
+                : '✓ Disponível agora')
+            : '✗ Sem estoque no momento';
+          return `
           <div class="product-card" style="--accent:${p.color || '#7e22ce'}">
             <div class="product-emoji">${p.emoji || '🛍️'}</div>
             <div class="product-name">${p.name}</div>
             <div class="product-desc">${p.description || ''}</div>
             <div class="product-price">R$ ${Number(p.price).toFixed(2).replace('.', ',')}</div>
             <div class="product-stock ${p.has_stock ? 'ok' : 'zero'}">
-              ${p.has_stock ? '✓ Disponível agora' : '✗ Sem estoque no momento'}
+              ${stockLabel}
             </div>
             <button class="product-buy" ${p.has_stock ? '' : 'disabled'}
               onclick="openCheckout('${p.id}','${p.name.replace(/'/g, "\\'")}',${p.price})">
               💳 Comprar com Pix
             </button>
           </div>
-        `).join('');
+        `;}).join('');
       } catch(e) {
         grid.innerHTML = '<p style="text-align:center;color:#f87171;grid-column:1/-1">Erro ao carregar produtos.</p>';
       }
