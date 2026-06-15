@@ -403,6 +403,55 @@ def save_daily_email_blocks(blocks):
     return _write_json_file(DAILY_EMAIL_BLOCKS_FILE, normalized)
 
 
+def _append_email_to_daily_block(block_text, email_addr):
+    email_addr = str(email_addr or "").strip().lower()
+    if not email_addr:
+        return str(block_text or "")
+    lines = [str(x or "").strip() for x in str(block_text or "").splitlines()]
+    lines = [x for x in lines if x]
+    existing = {x.lower() for x in lines}
+    if email_addr not in existing:
+        lines.append(email_addr)
+    return "\n".join(lines)
+
+
+def _sync_store_orders_to_daily_blocks(blocks=None, save=False):
+    """Sincroniza emails entregues dos pedidos pagos da loja para o bloco do dia da compra."""
+    import datetime as _dtmod
+    base = load_daily_email_blocks() if blocks is None else blocks
+    if not isinstance(base, dict):
+        base = {}
+    normalized = {}
+    for i in range(1, 32):
+        key = str(i)
+        normalized[key] = str(base.get(key, "") or "")
+
+    changed = False
+    for order in load_orders():
+        if not isinstance(order, dict):
+            continue
+        if str(order.get("status", "")).strip().lower() != "paid":
+            continue
+        delivered_email = str(order.get("delivered_email", "") or "").strip().lower()
+        created_at = int(order.get("created_at", 0) or 0)
+        if not delivered_email or not created_at:
+            continue
+        try:
+            day_key = str(_dtmod.datetime.utcfromtimestamp(created_at).day)
+        except Exception:
+            continue
+        if day_key not in normalized:
+            continue
+        updated = _append_email_to_daily_block(normalized.get(day_key, ""), delivered_email)
+        if updated != normalized.get(day_key, ""):
+            normalized[day_key] = updated
+            changed = True
+
+    if save and changed:
+        save_daily_email_blocks(normalized)
+    return normalized, changed
+
+
 def _can_manage_daily_email_blocks():
     username = str(session.get("username", "") or "").strip().lower()
     role = str(session.get("role", "") or "").strip().lower()
@@ -4080,6 +4129,7 @@ def mark_order_paid_and_deliver(order_id):
                 break
         save_stock(st)
         _ensure_delivery_email_binding(order)
+        _sync_store_orders_to_daily_blocks(save=True)
     else:
         order["delivered_note"] = "Pagamento confirmado. Aguarde - entrega manual."
     save_orders(orders)
@@ -4965,10 +5015,11 @@ def api_admin_blocos_emails_vendidos():
         return jsonify({"success": False, "message": "Disponível somente no mestre para o usuário autorizado."}), 403
     try:
         if request.method == "GET":
-            return jsonify({"success": True, "blocks": load_daily_email_blocks()})
+            blocks, _changed = _sync_store_orders_to_daily_blocks(save=True)
+            return jsonify({"success": True, "blocks": blocks})
 
         data = request.get_json(silent=True) or {}
-        blocks = load_daily_email_blocks()
+        blocks, _changed = _sync_store_orders_to_daily_blocks(save=False)
 
         if "blocks" in data and isinstance(data.get("blocks"), dict):
             for i in range(1, 32):
@@ -4981,6 +5032,7 @@ def api_admin_blocos_emails_vendidos():
                 return jsonify({"success": False, "message": "Bloco inválido. Use 1 a 31."}), 400
             blocks[day] = str(data.get("emails", "") or "")
 
+        blocks, _changed2 = _sync_store_orders_to_daily_blocks(blocks=blocks, save=False)
         save_daily_email_blocks(blocks)
         return jsonify({"success": True, "blocks": blocks, "message": "Blocos salvos com sucesso."})
     except Exception as e:
