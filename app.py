@@ -4626,6 +4626,26 @@ def api_admin_list_vinculos_emails():
     if assigned_user and not _admin_can_see_assignment(assigned_user):
         return jsonify({"success": False, "message": "Sem permissão para ver este usuário."}), 403
 
+    orders = load_orders()
+    purchase_idx = {}
+    for o in orders:
+        if not isinstance(o, dict):
+            continue
+        if str(o.get("status", "")).strip().lower() != "paid":
+            continue
+        delivered_email = str(o.get("delivered_email", "")).strip().lower()
+        if not delivered_email:
+            continue
+        created_at = int(o.get("created_at") or 0)
+        prev = purchase_idx.get(delivered_email)
+        if (not prev) or created_at > int(prev.get("purchase_created_at") or 0):
+            purchase_idx[delivered_email] = {
+                "purchase_created_at": created_at,
+                "purchase_customer_name": str(o.get("customer_name") or "").strip(),
+                "purchase_customer_email": str(o.get("customer_email") or "").strip().lower(),
+                "purchase_product_name": str(o.get("product_name") or "").strip(),
+            }
+
     subs = load_subscriptions()
     now = int(time.time())
     items = []
@@ -4640,13 +4660,19 @@ def api_admin_list_vinculos_emails():
         if not _admin_can_see_assignment(au):
             continue
         exp = int(s.get("expires_at") or 0)
+        email = str(s.get("email", "")).strip().lower()
+        purchase = purchase_idx.get(email) or {}
         items.append({
-            "email": str(s.get("email", "")).strip().lower(),
+            "email": email,
             "assigned_user": au,
             "assigned_user_name": s.get("assigned_user_name") or au,
             "plataforma": s.get("plataforma") or "Conta vinculada",
             "cliente": s.get("cliente") or "",
             "created_at": int(s.get("created_at") or 0),
+            "purchase_created_at": int(purchase.get("purchase_created_at") or 0),
+            "purchase_customer_name": purchase.get("purchase_customer_name") or "",
+            "purchase_customer_email": purchase.get("purchase_customer_email") or "",
+            "purchase_product_name": purchase.get("purchase_product_name") or (s.get("plataforma") or ""),
             "expires_at": exp,
             "active": (now < exp) if exp else False,
         })

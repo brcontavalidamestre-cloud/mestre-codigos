@@ -1892,11 +1892,18 @@
                 const safeEmail = String(it.email || '').replace(/'/g, "\'");
                 const normalizedEmail = String(it.email || '').trim().toLowerCase();
                 const isChecked = _vinculosSelecionados.has(normalizedEmail) ? 'checked' : '';
+                const purchaseDate = it.purchase_created_at
+                  ? new Date(it.purchase_created_at * 1000).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+                  : '';
+                const purchaseMeta = purchaseDate
+                  ? `<div style="font-size:.78rem;color:#fcd34d;">🗓️ Compra: ${x(purchaseDate)}</div>`
+                  : '';
                 return `<div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid rgba(125,211,252,.18);border-radius:12px;background:rgba(15,23,42,.35);">
                   <input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>
                   <div style="min-width:0;">
                     <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(it.email || '')}</div>
                     <div style="font-size:.78rem;color:#93c5fd;">${badge}</div>
+                    ${purchaseMeta}
                   </div>
                   <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
                 </div>`;
