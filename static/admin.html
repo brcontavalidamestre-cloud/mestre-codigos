@@ -2392,13 +2392,14 @@
       const b = blocks || {};
       grid.innerHTML = Array.from({length:31}, (_, idx) => {
         const n = String(idx + 1);
+        const dia = String(idx + 1).padStart(2, '0');
         const val = b[n] || '';
         return `<div style="background:rgba(252,211,77,0.05);border:1px solid rgba(252,211,77,0.28);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;">
           <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
-            <div style="font-weight:800;color:#fcd34d;">Bloco ${n}</div>
+            <div style="font-weight:800;color:#fcd34d;">Dia ${dia}</div>
             <button class="btn-ref" type="button" style="font-size:.78rem;padding:5px 10px;" onclick="saveBlocoEmailsVendidos('${n}')">💾 Salvar</button>
           </div>
-          <textarea class="fi compras-block-text" data-day="${n}" id="compras-block-${n}" rows="7" placeholder="Cole aqui os emails vendidos do dia ${n}, um por linha." style="width:100%;resize:vertical;">${escapeHtml(val)}</textarea>
+          <textarea class="fi compras-block-text" data-day="${n}" id="compras-block-${n}" rows="7" placeholder="Cole aqui os emails vendidos do dia ${dia}, um por linha." style="width:100%;resize:vertical;">${escapeHtml(val)}</textarea>
         </div>`;
       }).join('');
     }
@@ -2445,9 +2446,9 @@
         const j = await r.json();
         if (j && j.success) {
           comprasBlocksCache = j.blocks || comprasBlocksCache;
-          showToast('✓ Bloco ' + day + ' salvo');
+          showToast('✓ Dia ' + String(day).padStart(2, '0') + ' salvo');
         } else {
-          showToast('✗ ' + ((j && j.message) || 'Erro ao salvar bloco'));
+          showToast('✗ ' + ((j && j.message) || 'Erro ao salvar dia'));
         }
       } catch(e) {
         showToast('Erro de conexão ao salvar bloco');
