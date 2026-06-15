@@ -452,6 +452,74 @@ def _sync_store_orders_to_daily_blocks(blocks=None, save=False):
     return normalized, changed
 
 
+def _collect_daily_block_items():
+    """Retorna itens enriquecidos por dia para exibir comprador, produto e data da compra nos blocos."""
+    import datetime as _dtmod
+    items_by_day = {str(i): [] for i in range(1, 32)}
+
+    subs_idx = {}
+    for sub in load_subscriptions():
+        if isinstance(sub, dict) and sub.get("email"):
+            subs_idx[str(sub.get("email", "") or "").strip().lower()] = sub
+
+    seen = set()
+    paid_orders = [
+        o for o in load_orders()
+        if isinstance(o, dict) and str(o.get("status", "")).strip().lower() == "paid"
+    ]
+    paid_orders.sort(key=lambda o: int(o.get("created_at", 0) or 0))
+
+    for order in paid_orders:
+        delivered_email = str(order.get("delivered_email", "") or "").strip().lower()
+        created_at = int(order.get("created_at", 0) or 0)
+        if not delivered_email or not created_at:
+            continue
+        try:
+            dt = _dtmod.datetime.utcfromtimestamp(created_at)
+            day_key = str(dt.day)
+            purchase_date = dt.strftime("%d/%m/%Y %H:%M")
+        except Exception:
+            continue
+        if day_key not in items_by_day:
+            continue
+        unique_key = (day_key, delivered_email)
+        if unique_key in seen:
+            continue
+        seen.add(unique_key)
+
+        sub = subs_idx.get(delivered_email) or {}
+        buyer_username = str(
+            order.get("buyer_username")
+            or order.get("assigned_user")
+            or sub.get("assigned_user")
+            or ""
+        ).strip().lower()
+        buyer_user_name = str(
+            order.get("buyer_user_name")
+            or order.get("assigned_user_name")
+            or sub.get("assigned_user_name")
+            or order.get("customer_name")
+            or sub.get("cliente")
+            or buyer_username
+        ).strip()
+        customer_name = str(order.get("customer_name") or "").strip()
+        customer_email = str(order.get("customer_email") or "").strip().lower()
+        product_name = str(order.get("product_name") or sub.get("plataforma") or "").strip()
+
+        items_by_day[day_key].append({
+            "email": delivered_email,
+            "buyer_username": buyer_username,
+            "buyer_user_name": buyer_user_name,
+            "customer_name": customer_name,
+            "customer_email": customer_email,
+            "product_name": product_name,
+            "purchase_date": purchase_date,
+            "created_at": created_at,
+            "linked": bool(sub),
+        })
+    return items_by_day
+
+
 def _can_manage_daily_email_blocks():
     username = str(session.get("username", "") or "").strip().lower()
     role = str(session.get("role", "") or "").strip().lower()
@@ -5016,7 +5084,8 @@ def api_admin_blocos_emails_vendidos():
     try:
         if request.method == "GET":
             blocks, _changed = _sync_store_orders_to_daily_blocks(save=True)
-            return jsonify({"success": True, "blocks": blocks})
+            items = _collect_daily_block_items()
+            return jsonify({"success": True, "blocks": blocks, "items": items})
 
         data = request.get_json(silent=True) or {}
         blocks, _changed = _sync_store_orders_to_daily_blocks(save=False)
@@ -5034,7 +5103,8 @@ def api_admin_blocos_emails_vendidos():
 
         blocks, _changed2 = _sync_store_orders_to_daily_blocks(blocks=blocks, save=False)
         save_daily_email_blocks(blocks)
-        return jsonify({"success": True, "blocks": blocks, "message": "Blocos salvos com sucesso."})
+        items = _collect_daily_block_items()
+        return jsonify({"success": True, "blocks": blocks, "items": items, "message": "Blocos salvos com sucesso."})
     except Exception as e:
         return jsonify({"success": False, "message": f"Erro: {e}"}), 500
 
