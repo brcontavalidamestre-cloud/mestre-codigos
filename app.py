@@ -3479,16 +3479,17 @@ def api_admin_get_code():
                           "Nenhum email Max ou Prime Video encontrado para este endereço."),
     }
 
-    # No mestre, para Netflix, tenta primeiro retornar o código de 6 dígitos.
-    # Se não houver código recente, cai no fluxo de redefinição de senha.
+    # No mestre, para Netflix, deve SEMPRE prevalecer o email mais recente,
+    # seja ele código, link temporário, residência ou redefinição de senha.
     if is_master_host() and platform == "netflix-all":
-        code_nf, _link_nf, matched_nf, _error_nf = search_code_unified(user_email, ["netflix", "netflix-login"])
+        code_nf, link_nf, matched_nf, _error_nf = search_code_unified(
+            user_email,
+            ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"]
+        )
         if code_nf:
             return jsonify({"success": True, "code": code_nf, "platform": matched_nf or "netflix", "type": "code"})
-
-        _code_pr, link_pr, matched_pr, _error_pr = search_code_unified(user_email, ["password-reset"])
-        if link_pr and matched_pr == "password-reset":
-            return jsonify({"success": True, "link": link_pr, "platform": "password-reset", "type": "link"})
+        if link_nf:
+            return jsonify({"success": True, "link": link_nf, "platform": matched_nf or "password-reset", "type": "link"})
 
     if _is_rios_request():
         _maybe_move_spam_async()
@@ -3547,11 +3548,14 @@ def get_code():
                           "Nenhum email Max ou Prime Video encontrado para este endereço."),
     }
     username = session.get("username")
-    # No mestre, para Netflix, tenta primeiro retornar o código de 6 dígitos.
-    # Se não houver código recente, cai no fluxo de redefinição de senha.
+    # No mestre, para Netflix, deve SEMPRE prevalecer o email mais recente,
+    # seja ele código, link temporário, residência ou redefinição de senha.
     if is_master_host() and platform == "netflix-all":
         _clear_pending_reset_link(username)
-        code_nf, _link_nf, matched_nf, _error_nf = search_code_unified(user_email, ["netflix", "netflix-login"])
+        code_nf, link_nf, matched_nf, _error_nf = search_code_unified(
+            user_email,
+            ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"]
+        )
         if code_nf:
             return jsonify({
                 "success": True,
@@ -3559,16 +3563,21 @@ def get_code():
                 "platform": matched_nf or "netflix",
                 "type": "code"
             })
-
-        _code_pr, link_pr, matched_pr, _error_pr = search_code_unified(user_email, ["password-reset"])
-        if link_pr and matched_pr == "password-reset":
-            _set_pending_reset_link(username, link_pr)
+        if link_nf:
+            if matched_nf == "password-reset":
+                _set_pending_reset_link(username, link_nf)
+                return jsonify({
+                    "success": True,
+                    "platform": "password-reset",
+                    "type": "pin_required",
+                    "pin_required": True,
+                    "message": "PIN necessario para liberar o link de redefinicao."
+                })
             return jsonify({
                 "success": True,
-                "platform": "password-reset",
-                "type": "pin_required",
-                "pin_required": True,
-                "message": "PIN necessario para liberar o link de redefinicao."
+                "link": link_nf,
+                "platform": matched_nf or "netflix-temp",
+                "type": "link"
             })
     _clear_pending_reset_link(username)
 
