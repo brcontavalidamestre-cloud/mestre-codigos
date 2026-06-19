@@ -228,6 +228,13 @@ JMP_IMAP_PORT_2   = int(os.environ.get("JMP_IMAP_PORT_2", 993))
 JMP_EMAIL_USER_2  = os.environ.get("JMP_EMAIL_USER_2", "codigo@mundial.log.br")
 JMP_EMAIL_PASS_2  = os.environ.get("JMP_EMAIL_PASS_2", "Mestre13579@")
 
+# ╔══ Caixa EXTRA EXCLUSIVA do MESTRE ══╗
+# Só é incluída quando o host é mestre-codigos-production.up.railway.app
+MASTER_EXTRA_IMAP_SERVER = os.environ.get("MASTER_EXTRA_IMAP_SERVER", "imap.hostinger.com")
+MASTER_EXTRA_IMAP_PORT   = int(os.environ.get("MASTER_EXTRA_IMAP_PORT", 993))
+MASTER_EXTRA_EMAIL_USER  = os.environ.get("MASTER_EXTRA_EMAIL_USER", "margos@outlok.space")
+MASTER_EXTRA_EMAIL_PASS  = os.environ.get("MASTER_EXTRA_EMAIL_PASS", "Fisica10a@")
+
 
 def _is_rios_request():
     """True se o request atual vem de rios.up.railway.app"""
@@ -337,6 +344,20 @@ def get_imap_accounts():
                 "port": THIRD_IMAP_PORT,
                 "user": THIRD_EMAIL_USER,
                 "password": THIRD_EMAIL_PASS,
+            })
+    # Caixa extra exclusiva do MESTRE — não é usada em outros links
+    if is_master_host() and MASTER_EXTRA_EMAIL_USER and MASTER_EXTRA_EMAIL_PASS:
+        already = any(
+            a["user"].lower() == MASTER_EXTRA_EMAIL_USER.lower() and a["server"] == MASTER_EXTRA_IMAP_SERVER
+            for a in accounts
+        )
+        if not already:
+            accounts.append({
+                "name": "caixa-master-extra",
+                "server": MASTER_EXTRA_IMAP_SERVER,
+                "port": MASTER_EXTRA_IMAP_PORT,
+                "user": MASTER_EXTRA_EMAIL_USER,
+                "password": MASTER_EXTRA_EMAIL_PASS,
             })
     # Caixas extras genéricas (IMAP_SERVER_4, IMAP_SERVER_5, etc) — para expansão futura
     for i in range(4, 11):
