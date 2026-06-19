@@ -3479,9 +3479,13 @@ def api_admin_get_code():
                           "Nenhum email Max ou Prime Video encontrado para este endereço."),
     }
 
-    # No mestre, a opção Netflix precisa priorizar o link de redefinição
-    # antes de retornar códigos de acesso comuns.
+    # No mestre, para Netflix, tenta primeiro retornar o código de 6 dígitos.
+    # Se não houver código recente, cai no fluxo de redefinição de senha.
     if is_master_host() and platform == "netflix-all":
+        code_nf, _link_nf, matched_nf, _error_nf = search_code_unified(user_email, ["netflix", "netflix-login"])
+        if code_nf:
+            return jsonify({"success": True, "code": code_nf, "platform": matched_nf or "netflix", "type": "code"})
+
         _code_pr, link_pr, matched_pr, _error_pr = search_code_unified(user_email, ["password-reset"])
         if link_pr and matched_pr == "password-reset":
             return jsonify({"success": True, "link": link_pr, "platform": "password-reset", "type": "link"})
@@ -3543,10 +3547,19 @@ def get_code():
                           "Nenhum email Max ou Prime Video encontrado para este endereço."),
     }
     username = session.get("username")
-    # No mestre, a opção Netflix precisa priorizar o link de redefinição
-    # antes de retornar códigos de acesso comuns.
+    # No mestre, para Netflix, tenta primeiro retornar o código de 6 dígitos.
+    # Se não houver código recente, cai no fluxo de redefinição de senha.
     if is_master_host() and platform == "netflix-all":
         _clear_pending_reset_link(username)
+        code_nf, _link_nf, matched_nf, _error_nf = search_code_unified(user_email, ["netflix", "netflix-login"])
+        if code_nf:
+            return jsonify({
+                "success": True,
+                "code": code_nf,
+                "platform": matched_nf or "netflix",
+                "type": "code"
+            })
+
         _code_pr, link_pr, matched_pr, _error_pr = search_code_unified(user_email, ["password-reset"])
         if link_pr and matched_pr == "password-reset":
             _set_pending_reset_link(username, link_pr)
