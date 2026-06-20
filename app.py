@@ -244,6 +244,12 @@ INSTADDR_KUKU_INBOX_ADDRESS = os.environ.get("INSTADDR_KUKU_INBOX_ADDRESS", "").
 INSTADDR_KUKU_ACCOUNT_ID    = os.environ.get("INSTADDR_KUKU_ACCOUNT_ID", "568621635037").strip()
 INSTADDR_KUKU_ACCOUNT_PASS  = os.environ.get("INSTADDR_KUKU_ACCOUNT_PASS", "NPyEoXlcc0Nup}@").strip()
 INSTADDR_KUKU_WEBHOOK_FILE  = os.environ.get("INSTADDR_KUKU_WEBHOOK_FILE", os.path.join(_data_dir, "instaddr_kuku_mails.json"))
+INSTADDR_KUKU_COOKIE_HEADER = os.environ.get("INSTADDR_KUKU_COOKIE_HEADER", "").strip()
+INSTADDR_KUKU_COOKIE_SESSIONHASH = os.environ.get("INSTADDR_KUKU_COOKIE_SESSIONHASH", "").strip()
+INSTADDR_KUKU_COOKIE_CSRF_TOKEN = os.environ.get("INSTADDR_KUKU_COOKIE_CSRF_TOKEN", "").strip()
+INSTADDR_KUKU_COOKIE_CF_CLEARANCE = os.environ.get("INSTADDR_KUKU_COOKIE_CF_CLEARANCE", "").strip()
+INSTADDR_KUKU_CSRF_CHECK = os.environ.get("INSTADDR_KUKU_CSRF_CHECK", "").strip()
+INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK = os.environ.get("INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK", "").strip()
 
 
 def _is_rios_request():
@@ -2366,143 +2372,220 @@ def _get_kuku_store_file():
     return KUKU_WEBHOOK_FILE
 
 
+def _instaddr_cookie_mode_enabled():
+    return any([
+        INSTADDR_KUKU_COOKIE_HEADER,
+        INSTADDR_KUKU_COOKIE_SESSIONHASH,
+        INSTADDR_KUKU_COOKIE_CSRF_TOKEN,
+        INSTADDR_KUKU_COOKIE_CF_CLEARANCE,
+        INSTADDR_KUKU_CSRF_CHECK,
+        INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK,
+    ])
+
+
+def _new_instaddr_kuku_session():
+    import requests
+    sess = requests.Session()
+    sess.headers.update({
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "ja,en-US;q=0.9,en;q=0.8,pt-BR;q=0.7,pt;q=0.6",
+        "Referer": "https://m.kuku.lu/",
+        "Origin": "https://m.kuku.lu",
+    })
+    raw_cookie = str(INSTADDR_KUKU_COOKIE_HEADER or "").strip()
+    if raw_cookie:
+        sess.headers["Cookie"] = raw_cookie
+    cookie_pairs = [
+        ("cookie_sessionhash", INSTADDR_KUKU_COOKIE_SESSIONHASH),
+        ("sessionhash", INSTADDR_KUKU_COOKIE_SESSIONHASH),
+        ("cookie_csrf_token", INSTADDR_KUKU_COOKIE_CSRF_TOKEN),
+        ("csrf_token", INSTADDR_KUKU_COOKIE_CSRF_TOKEN),
+        ("cf_clearance", INSTADDR_KUKU_COOKIE_CF_CLEARANCE),
+    ]
+    for cname, cval in cookie_pairs:
+        cval = str(cval or "").strip()
+        if not cval:
+            continue
+        try:
+            sess.cookies.set(cname, cval, domain="m.kuku.lu", path="/")
+        except Exception:
+            pass
+    return sess
+
+
+def _extract_instaddr_mailboxes(addr_text):
+    mailbox_list = []
+    raw_lines = (addr_text or "").strip().splitlines()[1:]
+    for line in raw_lines:
+        data = line.replace('"', '').split(',')
+        if len(data) >= 4:
+            addr = (data[3] or data[0] or "").strip()
+            if addr and "@" in addr:
+                mailbox_list.append(addr)
+    return list(dict.fromkeys(mailbox_list))
+
+
+def _discover_instaddr_csrf(sess):
+    csrf = str(INSTADDR_KUKU_CSRF_CHECK or "").strip()
+    csrf_sub = str(INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK or "").strip()
+    if csrf and csrf_sub:
+        return csrf, csrf_sub
+    for landing_url in ("https://m.kuku.lu/ja.php", "https://m.kuku.lu/en.php", "https://m.kuku.lu/"):
+        try:
+            landing = sess.get(landing_url, timeout=20)
+            landing_html = landing.text or ""
+            if not landing.ok or not landing_html:
+                continue
+            if not csrf:
+                m_csrf = re.search(r"csrf_token_check=([A-Za-z0-9_-]+)", landing_html)
+                if m_csrf:
+                    csrf = m_csrf.group(1)
+            if not csrf_sub:
+                m_sub = re.search(r"csrf_subtoken_check=([A-Za-z0-9_-]+)", landing_html)
+                if m_sub:
+                    csrf_sub = m_sub.group(1)
+            if csrf:
+                break
+        except Exception:
+            pass
+    return csrf, csrf_sub
+
+
+def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub):
+    if not mailbox_list or not csrf:
+        return (None, None, None)
+    UNIFIED = {
+        "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"],
+        "disney-all":  ["disney", "disney-residence"],
+        "globo-all":   ["bug-globo", "codigo-globo", "senha-globo"],
+        "streaming-all": ["max", "prime-video"],
+    }
+    plats = UNIFIED.get(platform, [platform])
+    ulow = (user_email or "").strip().lower()
+
+    for mailbox in mailbox_list:
+        q_addr = mailbox.replace("@", "%40")
+        params = {
+            "q": q_addr,
+            "nopost": "1",
+            "csrf_token_check": csrf,
+        }
+        if csrf_sub:
+            params["csrf_subtoken_check"] = csrf_sub
+        r = sess.get("https://m.kuku.lu/recv._ajax.php", params=params, timeout=20)
+        html = r.text or ""
+        entries = re.findall(r"openMailData\(['\"]?(\d+)['\"]?,\s*['\"]?([a-f0-9]+)['\"]?", html, re.IGNORECASE)
+        if not entries:
+            continue
+
+        for num, key in reversed(entries[-80:]):
+            vr = sess.post(
+                "https://m.kuku.lu/smphone.app.recv.view.php",
+                data={"num": num, "key": key, "noscroll": "1"},
+                timeout=20,
+            )
+            body = vr.text or ""
+            title_match = re.search(r'class="full"[^>]*>(.*?)<', body, re.IGNORECASE | re.DOTALL)
+            subject = re.sub(r"<[^>]+>", " ", title_match.group(1)).strip() if title_match else ""
+            text_match = re.search(r'<div[^>]+dir="ltr"[^>]*>(.*?)</div>', body, re.IGNORECASE | re.DOTALL)
+            content = text_match.group(1) if text_match else body
+            combined = f"{subject}\n{content}"
+            clow = combined.lower()
+            if ulow and ulow not in clow:
+                continue
+            for plat in plats:
+                pcfg = PLATFORM_CONFIG.get(plat, {})
+                if not pcfg:
+                    continue
+                from_kw = (pcfg.get("from_keyword") or "").lower()
+                subj_kws = [k.lower() for k in pcfg.get("subject_keywords", [])]
+                neg_kws  = [k.lower() for k in pcfg.get("negative_keywords", [])]
+                if from_kw and from_kw not in clow:
+                    continue
+                if any(nk in clow for nk in neg_kws):
+                    continue
+                if subj_kws and not any(sk in clow for sk in subj_kws):
+                    continue
+                if pcfg.get("type") == "link" or plat in ("netflix-temp", "netflix-residence", "password-reset", "disney-residence"):
+                    link_pat = pcfg.get("link_pattern")
+                    if link_pat:
+                        m = re.search(link_pat, combined)
+                        if m:
+                            return (None, m.group(0), plat)
+                    m = re.search(r'https?://[^\s"\'<>]+', combined)
+                    if m:
+                        return (None, m.group(0), plat)
+                code = extract_code_from_html(combined)
+                if code:
+                    return (code, None, plat)
+    return (None, None, None)
+
+
+def _search_instaddr_kuku_by_cookies(user_email, platform):
+    if not _instaddr_cookie_mode_enabled():
+        return (None, None, None)
+    try:
+        sess = _new_instaddr_kuku_session()
+        csrf, csrf_sub = _discover_instaddr_csrf(sess)
+        mailbox_list = []
+        try:
+            addr_resp = sess.get("https://m.kuku.lu/datagen.php?action=getAddrList", timeout=20)
+            if addr_resp.ok:
+                mailbox_list = _extract_instaddr_mailboxes(addr_resp.text or "")
+        except Exception:
+            pass
+        fallback_mailbox = str(INSTADDR_KUKU_INBOX_ADDRESS or "").strip()
+        if fallback_mailbox and fallback_mailbox not in mailbox_list:
+            mailbox_list.append(fallback_mailbox)
+        return _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub)
+    except Exception as e:
+        print(f"[instaddr-kuku-cookie] erro na consulta por cookies: {e}")
+        return (None, None, None)
+
+
 def _search_instaddr_kuku_live(user_email, platform):
-    """Consulta a conta InstAddr/Kuku via AccountID + senha, apenas no host instaddr."""
+    """Consulta a caixa InstAddr/Kuku por cookies e, em fallback, por AccountID + senha."""
+    cookie_code, cookie_link, cookie_plat = _search_instaddr_kuku_by_cookies(user_email, platform)
+    if cookie_code or cookie_link:
+        return (cookie_code, cookie_link, cookie_plat)
+
     account_id = str(INSTADDR_KUKU_ACCOUNT_ID or "").strip()
     account_pass = str(INSTADDR_KUKU_ACCOUNT_PASS or "").strip()
     fallback_mailbox = str(INSTADDR_KUKU_INBOX_ADDRESS or "").strip()
     if not account_id or not account_pass:
-        if not fallback_mailbox:
-            return (None, None, None)
+        return (None, None, None)
     try:
-        import requests
-        sess = requests.Session()
-        sess.headers.update({
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8,pt-BR;q=0.7,pt;q=0.6",
-            "Referer": "https://m.kuku.lu/",
-            "Origin": "https://m.kuku.lu",
-        })
-        csrf = ""
-        csrf_sub = ""
-        mailbox_list = []
-
-        if account_id and account_pass:
-            landing_html = ""
-            for landing_url in ("https://m.kuku.lu/ja.php", "https://m.kuku.lu/en.php", "https://m.kuku.lu/"):
-                try:
-                    landing = sess.get(landing_url, timeout=20)
-                    if landing.ok and landing.text:
-                        landing_html = landing.text or ""
-                        m_csrf = re.search(r"csrf_token_check=([A-Za-z0-9_-]+)", landing_html)
-                        m_sub  = re.search(r"csrf_subtoken_check=([A-Za-z0-9_-]+)", landing_html)
-                        if m_csrf:
-                            csrf = m_csrf.group(1)
-                        if m_sub:
-                            csrf_sub = m_sub.group(1)
-                        if csrf and csrf_sub:
-                            break
-                except Exception:
-                    pass
-            if not csrf or not csrf_sub:
-                return (None, None, None)
-
-            login_resp = sess.post(
-                "https://m.kuku.lu/index.php",
-                data={
-                    "action": "checkLogin",
-                    "confirmcode": "",
-                    "nopost": "1",
-                    "csrf_token_check": csrf,
-                    "csrf_subtoken_check": csrf_sub,
-                    "number": account_id,
-                    "password": account_pass,
-                    "syncconfirm": "yes",
-                },
-                timeout=20,
-            )
-            if not (login_resp.text or "").startswith("OK:"):
-                return (None, None, None)
-
-            addr_resp = sess.get("https://m.kuku.lu/datagen.php?action=getAddrList", timeout=20)
-            raw_lines = (addr_resp.text or "").strip().splitlines()[1:]
-            for line in raw_lines:
-                data = line.replace('"', '').split(',')
-                if len(data) >= 4:
-                    addr = (data[3] or data[0] or "").strip()
-                    if addr and "@" in addr:
-                        mailbox_list.append(addr)
-
-        if fallback_mailbox and fallback_mailbox not in mailbox_list:
-            mailbox_list.append(fallback_mailbox)
-        if not mailbox_list:
+        sess = _new_instaddr_kuku_session()
+        csrf, csrf_sub = _discover_instaddr_csrf(sess)
+        if not csrf or not csrf_sub:
             return (None, None, None)
-
-        UNIFIED = {
-            "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"],
-            "disney-all":  ["disney", "disney-residence"],
-            "globo-all":   ["bug-globo", "codigo-globo", "senha-globo"],
-            "streaming-all": ["max", "prime-video"],
-        }
-        plats = UNIFIED.get(platform, [platform])
-        ulow = (user_email or "").strip().lower()
-
-        for mailbox in mailbox_list:
-            q_addr = mailbox.replace("@", "%40")
-            params = {
-                "q": q_addr,
+        login_resp = sess.post(
+            "https://m.kuku.lu/index.php",
+            data={
+                "action": "checkLogin",
+                "confirmcode": "",
                 "nopost": "1",
                 "csrf_token_check": csrf,
-            }
-            if csrf_sub:
-                params["csrf_subtoken_check"] = csrf_sub
-            r = sess.get("https://m.kuku.lu/recv._ajax.php", params=params, timeout=20)
-            html = r.text or ""
-            entries = re.findall(r"openMailData\(['\"]?(\d+)['\"]?,\s*['\"]?([a-f0-9]+)['\"]?", html, re.IGNORECASE)
-            if not entries:
-                continue
-
-            for num, key in reversed(entries[-60:]):
-                vr = sess.post(
-                    "https://m.kuku.lu/smphone.app.recv.view.php",
-                    data={"num": num, "key": key, "noscroll": "1"},
-                    timeout=20,
-                )
-                body = vr.text or ""
-                title_match = re.search(r'class="full"[^>]*>(.*?)<', body, re.IGNORECASE | re.DOTALL)
-                subject = re.sub(r"<[^>]+>", " ", title_match.group(1)).strip() if title_match else ""
-                text_match = re.search(r'<div[^>]+dir="ltr"[^>]*>(.*?)</div>', body, re.IGNORECASE | re.DOTALL)
-                content = text_match.group(1) if text_match else body
-                combined = f"{subject}\n{content}"
-                clow = combined.lower()
-                if ulow and ulow not in clow:
-                    continue
-                for plat in plats:
-                    pcfg = PLATFORM_CONFIG.get(plat, {})
-                    if not pcfg:
-                        continue
-                    from_kw = (pcfg.get("from_keyword") or "").lower()
-                    subj_kws = [k.lower() for k in pcfg.get("subject_keywords", [])]
-                    neg_kws  = [k.lower() for k in pcfg.get("negative_keywords", [])]
-                    if from_kw and from_kw not in clow:
-                        continue
-                    if any(nk in clow for nk in neg_kws):
-                        continue
-                    if subj_kws and not any(sk in clow for sk in subj_kws):
-                        continue
-                    if pcfg.get("type") == "link" or plat in ("netflix-temp", "netflix-residence", "password-reset", "disney-residence"):
-                        link_pat = pcfg.get("link_pattern")
-                        if link_pat:
-                            m = re.search(link_pat, combined)
-                            if m:
-                                return (None, m.group(0), plat)
-                        m = re.search(r'https?://[^\s"\'<>]+', combined)
-                        if m:
-                            return (None, m.group(0), plat)
-                    code = extract_code_from_html(combined)
-                    if code:
-                        return (code, None, plat)
+                "csrf_subtoken_check": csrf_sub,
+                "number": account_id,
+                "password": account_pass,
+                "syncconfirm": "yes",
+            },
+            timeout=20,
+        )
+        if not (login_resp.text or "").startswith("OK:"):
+            return (None, None, None)
+        mailbox_list = []
+        try:
+            addr_resp = sess.get("https://m.kuku.lu/datagen.php?action=getAddrList", timeout=20)
+            if addr_resp.ok:
+                mailbox_list = _extract_instaddr_mailboxes(addr_resp.text or "")
+        except Exception:
+            pass
+        if fallback_mailbox and fallback_mailbox not in mailbox_list:
+            mailbox_list.append(fallback_mailbox)
+        return _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub)
     except Exception as e:
         print(f"[instaddr-kuku] erro na consulta ao InstAddr: {e}")
     return (None, None, None)
@@ -3836,7 +3919,7 @@ def get_code():
             return jsonify({"success": True, "link": wh_link, "platform": wh_plat or platform, "type": "link"})
         return jsonify({
             "success": False,
-            "message": "Caixa InstAddr sem emails localizáveis. Verifique o AccountID/senha da conta Kuku ou, se preferir, defina INSTADDR_KUKU_INBOX_ADDRESS com um endereço fixo da caixa."
+            "message": "Caixa InstAddr sem emails localizáveis. Configure os cookies da sessão Kuku (sessionhash/csrf/cf_clearance), ou verifique o AccountID/senha da conta Kuku; se preferir, defina também INSTADDR_KUKU_INBOX_ADDRESS com um endereço fixo da caixa."
         })
 
     # ╔══ RIOS: tentar PRIMEIRO os emails recebidos via webhook kuku.lu ══╗
