@@ -2384,8 +2384,12 @@ def _instaddr_cookie_mode_enabled():
 
 
 def _new_instaddr_kuku_session():
-    import requests
-    sess = requests.Session()
+    try:
+        import cloudscraper
+        sess = cloudscraper.create_scraper(browser={"browser": "chrome", "platform": "windows", "mobile": False})
+    except Exception:
+        import requests
+        sess = requests.Session()
     sess.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
