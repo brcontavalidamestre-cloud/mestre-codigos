@@ -2455,6 +2455,8 @@ def _discover_instaddr_csrf(sess):
 def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub):
     if not mailbox_list or not csrf:
         return (None, None, None)
+    mailbox_list = [str(m or '').strip() for m in mailbox_list if str(m or '').strip()]
+    mailbox_list = list(dict.fromkeys(mailbox_list))
     UNIFIED = {
         "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"],
         "disney-all":  ["disney", "disney-residence"],
@@ -2463,6 +2465,12 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
     }
     plats = UNIFIED.get(platform, [platform])
     ulow = (user_email or "").strip().lower()
+
+    if ulow:
+        exact = [m for m in mailbox_list if m.strip().lower() == ulow]
+        if exact:
+            others = [m for m in mailbox_list if m.strip().lower() != ulow]
+            mailbox_list = exact + others
 
     for mailbox in mailbox_list:
         q_addr = mailbox.replace("@", "%40")
@@ -2492,7 +2500,9 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
             content = text_match.group(1) if text_match else body
             combined = f"{subject}\n{content}"
             clow = combined.lower()
-            if ulow and ulow not in clow:
+            mailbox_low = str(mailbox or '').strip().lower()
+            exact_mailbox = bool(ulow and mailbox_low == ulow)
+            if ulow and not exact_mailbox and ulow not in clow:
                 continue
             for plat in plats:
                 pcfg = PLATFORM_CONFIG.get(plat, {})
@@ -2501,11 +2511,16 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
                 from_kw = (pcfg.get("from_keyword") or "").lower()
                 subj_kws = [k.lower() for k in pcfg.get("subject_keywords", [])]
                 neg_kws  = [k.lower() for k in pcfg.get("negative_keywords", [])]
-                if from_kw and from_kw not in clow:
-                    continue
+                subject_hit = (not subj_kws) or any(sk in clow for sk in subj_kws)
+                from_hit = (not from_kw) or (from_kw in clow)
+                if from_kw and not from_hit:
+                    # No modo cookie/caixa exata, o HTML do InstAddr às vezes não expõe
+                    # claramente o remetente. Se o assunto bater fortemente, aceita.
+                    if not (exact_mailbox and subject_hit):
+                        continue
                 if any(nk in clow for nk in neg_kws):
                     continue
-                if subj_kws and not any(sk in clow for sk in subj_kws):
+                if subj_kws and not subject_hit:
                     continue
                 if pcfg.get("type") == "link" or plat in ("netflix-temp", "netflix-residence", "password-reset", "disney-residence"):
                     link_pat = pcfg.get("link_pattern")
@@ -2535,8 +2550,11 @@ def _search_instaddr_kuku_by_cookies(user_email, platform):
                 mailbox_list = _extract_instaddr_mailboxes(addr_resp.text or "")
         except Exception:
             pass
+        direct_mailbox = str(user_email or "").strip().lower()
+        if direct_mailbox and "@" in direct_mailbox and direct_mailbox not in [m.lower() for m in mailbox_list]:
+            mailbox_list.insert(0, direct_mailbox)
         fallback_mailbox = str(INSTADDR_KUKU_INBOX_ADDRESS or "").strip()
-        if fallback_mailbox and fallback_mailbox not in mailbox_list:
+        if fallback_mailbox and fallback_mailbox.lower() not in [m.lower() for m in mailbox_list]:
             mailbox_list.append(fallback_mailbox)
         return _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub)
     except Exception as e:
@@ -2583,7 +2601,10 @@ def _search_instaddr_kuku_live(user_email, platform):
                 mailbox_list = _extract_instaddr_mailboxes(addr_resp.text or "")
         except Exception:
             pass
-        if fallback_mailbox and fallback_mailbox not in mailbox_list:
+        direct_mailbox = str(user_email or "").strip().lower()
+        if direct_mailbox and "@" in direct_mailbox and direct_mailbox not in [m.lower() for m in mailbox_list]:
+            mailbox_list.insert(0, direct_mailbox)
+        if fallback_mailbox and fallback_mailbox.lower() not in [m.lower() for m in mailbox_list]:
             mailbox_list.append(fallback_mailbox)
         return _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub)
     except Exception as e:
