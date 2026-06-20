@@ -250,6 +250,7 @@ INSTADDR_KUKU_COOKIE_CSRF_TOKEN = os.environ.get("INSTADDR_KUKU_COOKIE_CSRF_TOKE
 INSTADDR_KUKU_COOKIE_CF_CLEARANCE = os.environ.get("INSTADDR_KUKU_COOKIE_CF_CLEARANCE", "").strip()
 INSTADDR_KUKU_CSRF_CHECK = os.environ.get("INSTADDR_KUKU_CSRF_CHECK", "").strip()
 INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK = os.environ.get("INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK", "").strip()
+INSTADDR_KUKU_BROWSER_SESSION_FILE = os.environ.get("INSTADDR_KUKU_BROWSER_SESSION_FILE", os.path.join(_data_dir, "instaddr_kuku_browser_session.json"))
 
 
 def _is_rios_request():
@@ -2372,7 +2373,38 @@ def _get_kuku_store_file():
     return KUKU_WEBHOOK_FILE
 
 
+def _load_instaddr_browser_session():
+    data = _read_json_safe(INSTADDR_KUKU_BROWSER_SESSION_FILE, {})
+    return data if isinstance(data, dict) else {}
+
+
+def _parse_cookie_header(raw_cookie):
+    cookies = {}
+    for part in str(raw_cookie or '').split(';'):
+        if '=' not in part:
+            continue
+        k, v = part.split('=', 1)
+        k = k.strip()
+        v = v.strip()
+        if k:
+            cookies[k] = v
+    return cookies
+
+
+def _save_instaddr_browser_session(payload):
+    current = _load_instaddr_browser_session()
+    payload = payload if isinstance(payload, dict) else {}
+    for key in ("cookie_header", "sessionhash", "csrf_token", "cf_clearance", "csrf_check", "csrf_subtoken_check", "page_url", "user_agent"):
+        val = str(payload.get(key) or '').strip()
+        if val:
+            current[key] = val
+    current["updated_at"] = int(time.time())
+    _write_json_file(INSTADDR_KUKU_BROWSER_SESSION_FILE, current)
+    return current
+
+
 def _instaddr_cookie_mode_enabled():
+    stored = _load_instaddr_browser_session()
     return any([
         INSTADDR_KUKU_COOKIE_HEADER,
         INSTADDR_KUKU_COOKIE_SESSIONHASH,
@@ -2380,6 +2412,12 @@ def _instaddr_cookie_mode_enabled():
         INSTADDR_KUKU_COOKIE_CF_CLEARANCE,
         INSTADDR_KUKU_CSRF_CHECK,
         INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK,
+        stored.get("cookie_header"),
+        stored.get("sessionhash"),
+        stored.get("csrf_token"),
+        stored.get("cf_clearance"),
+        stored.get("csrf_check"),
+        stored.get("csrf_subtoken_check"),
     ])
 
 
@@ -2390,22 +2428,25 @@ def _new_instaddr_kuku_session():
     except Exception:
         import requests
         sess = requests.Session()
+    stored = _load_instaddr_browser_session()
+    user_agent = str((stored.get("user_agent") if isinstance(stored, dict) else '') or '').strip()
     sess.headers.update({
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+        "User-Agent": user_agent or "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "ja,en-US;q=0.9,en;q=0.8,pt-BR;q=0.7,pt;q=0.6",
         "Referer": "https://m.kuku.lu/",
         "Origin": "https://m.kuku.lu",
     })
-    raw_cookie = str(INSTADDR_KUKU_COOKIE_HEADER or "").strip()
+    raw_cookie = str(INSTADDR_KUKU_COOKIE_HEADER or stored.get("cookie_header") or "").strip()
+    parsed_cookie = _parse_cookie_header(raw_cookie)
     if raw_cookie:
         sess.headers["Cookie"] = raw_cookie
     cookie_pairs = [
-        ("cookie_sessionhash", INSTADDR_KUKU_COOKIE_SESSIONHASH),
-        ("sessionhash", INSTADDR_KUKU_COOKIE_SESSIONHASH),
-        ("cookie_csrf_token", INSTADDR_KUKU_COOKIE_CSRF_TOKEN),
-        ("csrf_token", INSTADDR_KUKU_COOKIE_CSRF_TOKEN),
-        ("cf_clearance", INSTADDR_KUKU_COOKIE_CF_CLEARANCE),
+        ("cookie_sessionhash", INSTADDR_KUKU_COOKIE_SESSIONHASH or stored.get("sessionhash") or parsed_cookie.get("cookie_sessionhash") or parsed_cookie.get("sessionhash")),
+        ("sessionhash", INSTADDR_KUKU_COOKIE_SESSIONHASH or stored.get("sessionhash") or parsed_cookie.get("sessionhash") or parsed_cookie.get("cookie_sessionhash")),
+        ("cookie_csrf_token", INSTADDR_KUKU_COOKIE_CSRF_TOKEN or stored.get("csrf_token") or parsed_cookie.get("cookie_csrf_token") or parsed_cookie.get("csrf_token")),
+        ("csrf_token", INSTADDR_KUKU_COOKIE_CSRF_TOKEN or stored.get("csrf_token") or parsed_cookie.get("csrf_token") or parsed_cookie.get("cookie_csrf_token")),
+        ("cf_clearance", INSTADDR_KUKU_COOKIE_CF_CLEARANCE or stored.get("cf_clearance") or parsed_cookie.get("cf_clearance")),
     ]
     for cname, cval in cookie_pairs:
         cval = str(cval or "").strip()
@@ -2431,8 +2472,9 @@ def _extract_instaddr_mailboxes(addr_text):
 
 
 def _discover_instaddr_csrf(sess):
-    csrf = str(INSTADDR_KUKU_CSRF_CHECK or "").strip()
-    csrf_sub = str(INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK or "").strip()
+    stored = _load_instaddr_browser_session()
+    csrf = str(INSTADDR_KUKU_CSRF_CHECK or stored.get("csrf_check") or "").strip()
+    csrf_sub = str(INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK or stored.get("csrf_subtoken_check") or "").strip()
     if csrf and csrf_sub:
         return csrf, csrf_sub
     for landing_url in ("https://m.kuku.lu/ja.php", "https://m.kuku.lu/en.php", "https://m.kuku.lu/"):
@@ -6629,6 +6671,43 @@ def _save_kuku_mails(mails):
             json.dump(mails, f, ensure_ascii=False)
     except Exception as e:
         print(f"[kuku-webhook] erro salvar: {e}")
+
+@app.route("/api/instaddr/browser-session", methods=["POST", "GET"])
+def api_instaddr_browser_session():
+    if request.method == "GET":
+        saved = _load_instaddr_browser_session()
+        return jsonify({
+            "success": True,
+            "configured": bool(saved.get("cookie_header") or saved.get("sessionhash") or saved.get("cf_clearance")),
+            "updated_at": saved.get("updated_at", 0),
+            "page_url": saved.get("page_url", "")
+        })
+
+    data = request.get_json(silent=True) or {}
+    if not data and request.form:
+        data = request.form.to_dict()
+    raw_cookie = str(data.get("cookie_header") or data.get("cookie") or "").strip()
+    parsed = _parse_cookie_header(raw_cookie)
+    payload = {
+        "cookie_header": raw_cookie,
+        "sessionhash": data.get("sessionhash") or parsed.get("cookie_sessionhash") or parsed.get("sessionhash") or "",
+        "csrf_token": data.get("csrf_token") or parsed.get("cookie_csrf_token") or parsed.get("csrf_token") or "",
+        "cf_clearance": data.get("cf_clearance") or parsed.get("cf_clearance") or "",
+        "csrf_check": data.get("csrf_check") or "",
+        "csrf_subtoken_check": data.get("csrf_subtoken_check") or "",
+        "page_url": data.get("page_url") or "",
+        "user_agent": data.get("user_agent") or request.headers.get("User-Agent", ""),
+    }
+    if not any([payload.get("cookie_header"), payload.get("sessionhash"), payload.get("csrf_token"), payload.get("cf_clearance")]):
+        return jsonify({"success": False, "message": "Nenhum cookie de sessão recebido."}), 400
+    saved = _save_instaddr_browser_session(payload)
+    return jsonify({
+        "success": True,
+        "configured": True,
+        "updated_at": saved.get("updated_at", 0),
+        "has_sessionhash": bool(saved.get("sessionhash")),
+        "has_cf_clearance": bool(saved.get("cf_clearance"))
+    })
 
 @app.route("/api/kuku-webhook", methods=["POST", "GET"])
 def api_kuku_webhook():
