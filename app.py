@@ -4120,6 +4120,39 @@ def _get_efi_runtime_config(loja2=False):
     }
 
 
+def _resolve_efi_certificate_path(loja2=False):
+    """Resolve o caminho do certificado Efi com fallback para arquivos versionados no projeto."""
+    cfg = _get_efi_runtime_config(loja2=loja2)
+    raw_path = str(cfg.get("certificate") or "").strip()
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    cert_dir = os.path.join(base_dir, "certs")
+
+    candidates = []
+    if raw_path:
+        candidates.append(raw_path)
+        candidates.append(os.path.join(cert_dir, os.path.basename(raw_path)))
+
+    if loja2:
+        candidates.append(os.path.join(cert_dir, "producao-918104-lojario-pix-producao.pem"))
+        candidates.append("/app/certs/producao-918104-lojario-pix-producao.pem")
+    else:
+        candidates.append(os.path.join(cert_dir, "producao-916938-mestre.pem"))
+        candidates.append("/app/certs/producao-916938-mestre.pem")
+
+    seen = set()
+    for cand in candidates:
+        cand = str(cand or "").strip()
+        if not cand or cand in seen:
+            continue
+        seen.add(cand)
+        try:
+            if os.path.exists(cand):
+                return cand
+        except Exception:
+            continue
+    return raw_path
+
+
 def efi_is_configured(loja2=False):
     cfg = _get_efi_runtime_config(loja2=loja2)
     return bool(cfg["client_id"] and cfg["client_secret"] and cfg["pix_key"])
@@ -4130,7 +4163,7 @@ def efi_create_pix_charge(order, loja2=False):
     cfg = _get_efi_runtime_config(loja2=loja2)
     if not efi_is_configured(loja2=loja2):
         return {"success": False, "message": f"Gateway Efi não configurado para {cfg['label']}."}
-    cert_path = cfg["certificate"]
+    cert_path = _resolve_efi_certificate_path(loja2=loja2)
     if not os.path.exists(cert_path):
         return {"success": False, "message": f"Certificado não encontrado: {cert_path}"}
     try:
@@ -4189,7 +4222,7 @@ def efi_check_pix_status(txid, loja2=False):
         options = {
             "client_id": cfg["client_id"],
             "client_secret": cfg["client_secret"],
-            "certificate": cfg["certificate"],
+            "certificate": _resolve_efi_certificate_path(loja2=loja2),
             "sandbox": cfg["sandbox"],
         }
         efi = EfiPay(options)
@@ -4365,7 +4398,7 @@ def api_admin_loja2_efi_setup_webhook():
         options = {
             "client_id": cfg["client_id"],
             "client_secret": cfg["client_secret"],
-            "certificate": cfg["certificate"],
+            "certificate": _resolve_efi_certificate_path(loja2=True),
             "sandbox": cfg["sandbox"],
         }
         efi = EfiPay(options)
@@ -4390,7 +4423,7 @@ def api_admin_loja2_efi_status_webhook():
         options = {
             "client_id": cfg["client_id"],
             "client_secret": cfg["client_secret"],
-            "certificate": cfg["certificate"],
+            "certificate": _resolve_efi_certificate_path(loja2=True),
             "sandbox": cfg["sandbox"],
         }
         efi = EfiPay(options)
