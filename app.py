@@ -640,6 +640,15 @@ EFI_PIX_KEY         = os.environ.get("EFI_PIX_KEY", "efi@mundial.log.br")
 EFI_SANDBOX         = os.environ.get("EFI_SANDBOX", "false").lower() == "true"
 EFI_WEBHOOK_TOKEN   = os.environ.get("EFI_WEBHOOK_TOKEN", "mestre-codigos-webhook")
 
+# Credenciais Efi EXCLUSIVAS da Loja Rio / Loja 2.
+# Só entram no fluxo da lojario.up.railway.app / Loja 2.
+LOJA2_EFI_CLIENT_ID     = os.environ.get("LOJA2_EFI_CLIENT_ID", "")
+LOJA2_EFI_CLIENT_SECRET = os.environ.get("LOJA2_EFI_CLIENT_SECRET", "")
+LOJA2_EFI_CERT_PATH     = os.environ.get("LOJA2_EFI_CERT_PATH", "/app/certs/producao-918104-lojario-pix-producao.pem")
+LOJA2_EFI_PIX_KEY       = os.environ.get("LOJA2_EFI_PIX_KEY", "")
+LOJA2_EFI_WEBHOOK_TOKEN = os.environ.get("LOJA2_EFI_WEBHOOK_TOKEN", "lojario-webhook")
+LOJA2_EFI_SANDBOX       = os.environ.get("LOJA2_EFI_SANDBOX", os.environ.get("EFI_SANDBOX", "false")).lower() == "true"
+
 DEFAULT_PRODUCTS = [
     {"id": "netflix-premium",  "name": "Netflix Premium",       "price": 35.00, "emoji": "🎬", "color": "#e50914", "description": "Acesso Netflix Premium - liberação automática"},
     {"id": "disney-premium",   "name": "Disney+ Premium",       "price": 25.00, "emoji": "✨", "color": "#0066cc", "description": "Acesso Disney+ Premium - liberação automática"},
@@ -4087,103 +4096,113 @@ def _do_force_check(order_id):
         return jsonify({"success": False, "message": f"Erro: {e}"}), 500
 
 # ─── EFI PIX HELPERS ────────────────────────────────────────────────────────────────
-def efi_is_configured():
-    return bool(EFI_CLIENT_ID and EFI_CLIENT_SECRET and EFI_PIX_KEY)
+def _get_efi_runtime_config(loja2=False):
+    """Seleciona credenciais Pix conforme a loja/origem."""
+    use_loja2 = bool(loja2 or _is_lojario_origin())
+    if use_loja2:
+        return {
+            "label": "lojario",
+            "client_id": LOJA2_EFI_CLIENT_ID,
+            "client_secret": LOJA2_EFI_CLIENT_SECRET,
+            "certificate": LOJA2_EFI_CERT_PATH,
+            "pix_key": LOJA2_EFI_PIX_KEY,
+            "webhook_token": LOJA2_EFI_WEBHOOK_TOKEN,
+            "sandbox": LOJA2_EFI_SANDBOX,
+        }
+    return {
+        "label": "mestre",
+        "client_id": EFI_CLIENT_ID,
+        "client_secret": EFI_CLIENT_SECRET,
+        "certificate": EFI_CERT_PATH,
+        "pix_key": EFI_PIX_KEY,
+        "webhook_token": EFI_WEBHOOK_TOKEN,
+        "sandbox": EFI_SANDBOX,
+    }
 
-def efi_create_pix_charge(order):
+
+def efi_is_configured(loja2=False):
+    cfg = _get_efi_runtime_config(loja2=loja2)
+    return bool(cfg["client_id"] and cfg["client_secret"] and cfg["pix_key"])
+
+
+def efi_create_pix_charge(order, loja2=False):
     """Cria cobrança Pix imediata na Efi. Retorna dict com qrcode_image e copia_cola."""
-    if not efi_is_configured():
-        return {
-            "success": False,
-            "message": "Gateway Efi não configurado."
-        }
-    # Verifica se certificado existe
-    if not os.path.exists(EFI_CERT_PATH):
-        return {
-            "success": False,
-            "message": f"Certificado não encontrado: {EFI_CERT_PATH}"
-        }
+    cfg = _get_efi_runtime_config(loja2=loja2)
+    if not efi_is_configured(loja2=loja2):
+        return {"success": False, "message": f"Gateway Efi não configurado para {cfg['label']}."}
+    cert_path = cfg["certificate"]
+    if not os.path.exists(cert_path):
+        return {"success": False, "message": f"Certificado não encontrado: {cert_path}"}
     try:
         try:
             from efipay import EfiPay
         except ImportError as e:
-            return {
-                "success": False,
-                "message": f"SDK Efi não instalado: {e}"
-            }
+            return {"success": False, "message": f"SDK Efi não instalado: {e}"}
 
         options = {
-            "client_id":     EFI_CLIENT_ID,
-            "client_secret": EFI_CLIENT_SECRET,
-            "certificate":   EFI_CERT_PATH,
-            "sandbox":       EFI_SANDBOX
+            "client_id": cfg["client_id"],
+            "client_secret": cfg["client_secret"],
+            "certificate": cert_path,
+            "sandbox": cfg["sandbox"],
         }
         efi = EfiPay(options)
-
-        # Devedor exige CPF/CNPJ na Efi — como não coletamos CPF do cliente, não enviamos devedor.
-        # A Efi aceita cobrança Pix sem devedor (campo opcional).
         body = {
             "calendario": {"expiracao": 3600},
             "valor": {"original": f"{float(order['price']):.2f}"},
-            "chave": EFI_PIX_KEY,
-            "solicitacaoPagador": f"{order['product_name']} - {order['id']}"[:140]
+            "chave": cfg["pix_key"],
+            "solicitacaoPagador": f"{order['product_name']} - {order['id']}"[:140],
         }
         resp = efi.pix_create_immediate_charge(body=body)
-        print(f"[efi] resposta criar cobranca: {resp}")
-
+        print(f"[efi:{cfg['label']}] resposta criar cobranca: {resp}")
         if not isinstance(resp, dict):
             return {"success": False, "message": f"Resposta inválida da Efi: {resp}"}
-
         if resp.get("nome") or resp.get("erro"):
             return {"success": False, "message": f"Efi rejeitou cobranca: {resp.get('mensagem') or resp.get('erro')}"}
-
         txid = resp.get("txid")
-        loc  = (resp.get("loc") or {}).get("id")
-
+        loc = (resp.get("loc") or {}).get("id")
         if not loc:
             return {"success": False, "message": f"Sem 'loc.id' na resposta Efi: {resp}"}
-
         try:
             qr = efi.pix_generate_qrcode(params={"id": loc})
         except Exception as e:
             return {"success": False, "message": f"Erro ao gerar QR Code: {e}"}
-
         return {
             "success": True,
             "txid": txid,
             "qrcode_image": qr.get("imagemQrcode"),
-            "copia_cola":   qr.get("qrcode"),
-            "expires_at":   int(time.time()) + 3600
+            "copia_cola": qr.get("qrcode"),
+            "expires_at": int(time.time()) + 3600,
         }
     except Exception as e:
         import traceback
-        print(f"[efi] erro ao criar cobranca: {e}\n{traceback.format_exc()}")
+        print(f"[efi:{cfg['label']}] erro ao criar cobranca: {e}\n{traceback.format_exc()}")
         return {"success": False, "message": f"Erro Efi: {e}"}
 
-def efi_check_pix_status(txid):
+
+def efi_check_pix_status(txid, loja2=False):
     """Consulta Efi e retorna {paid: bool, status: str, raw: dict}."""
-    if not efi_is_configured() or not txid:
+    cfg = _get_efi_runtime_config(loja2=loja2)
+    if not efi_is_configured(loja2=loja2) or not txid:
         return {"paid": False, "reason": "no_config_or_txid"}
     try:
         from efipay import EfiPay
         options = {
-            "client_id":     EFI_CLIENT_ID,
-            "client_secret": EFI_CLIENT_SECRET,
-            "certificate":   EFI_CERT_PATH,
-            "sandbox":       EFI_SANDBOX
+            "client_id": cfg["client_id"],
+            "client_secret": cfg["client_secret"],
+            "certificate": cfg["certificate"],
+            "sandbox": cfg["sandbox"],
         }
-        efi  = EfiPay(options)
+        efi = EfiPay(options)
         resp = efi.pix_detail_charge(params={"txid": txid})
         if not isinstance(resp, dict):
             return {"paid": False, "reason": "resposta_nao_dict", "raw": str(resp)}
         status = (resp.get("status") or "").upper()
-        # Considera paga se status concluida OU se ja tem array 'pix' com valor recebido
         is_paid = (status == "CONCLUIDA") or bool(resp.get("pix"))
-        print(f"[efi] txid={txid} status={status} pix_array_len={len(resp.get('pix') or [])} paid={is_paid}")
+        print(f"[efi:{cfg['label']}] txid={txid} status={status} pix_array_len={len(resp.get('pix') or [])} paid={is_paid}")
         return {"paid": is_paid, "status": status, "raw": resp}
     except Exception as e:
         import traceback
-        print(f"[efi] erro ao consultar txid {txid}: {e}\n{traceback.format_exc()}")
+        print(f"[efi:{cfg['label']}] erro ao consultar txid {txid}: {e}\n{traceback.format_exc()}")
         return {"paid": False, "reason": str(e)}
 
 def mark_order_paid_and_deliver(order_id):
@@ -4333,6 +4352,53 @@ def api_admin_efi_status_webhook():
             "success": False,
             "message": f"Sem webhook ou erro: {e}"
         })
+
+@app.route("/api/admin/loja2/efi-setup-webhook", methods=["POST"])
+@admin_required
+def api_admin_loja2_efi_setup_webhook():
+    """Cadastra o webhook Pix da Loja Rio / Loja 2 na Efi."""
+    cfg = _get_efi_runtime_config(loja2=True)
+    if not efi_is_configured(loja2=True):
+        return jsonify({"success": False, "message": "Efi da Loja Rio nao configurado."}), 400
+    try:
+        from efipay import EfiPay
+        options = {
+            "client_id": cfg["client_id"],
+            "client_secret": cfg["client_secret"],
+            "certificate": cfg["certificate"],
+            "sandbox": cfg["sandbox"],
+        }
+        efi = EfiPay(options)
+        webhook_url = f"https://rios.up.railway.app/api/loja2/webhook/efi?hmac={cfg['webhook_token']}"
+        params = {"chave": cfg["pix_key"]}
+        body = {"webhookUrl": webhook_url}
+        resp = efi.pix_config_webhook(params=params, body=body, headers={"x-skip-mtls-checking": "true"})
+        return jsonify({"success": True, "message": "Webhook da Loja Rio cadastrado.", "webhook_url": webhook_url, "pix_key": cfg["pix_key"], "response": resp})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Erro ao cadastrar webhook da Loja Rio: {e}"}), 500
+
+
+@app.route("/api/admin/loja2/efi-status-webhook", methods=["GET"])
+@admin_required
+def api_admin_loja2_efi_status_webhook():
+    """Consulta o webhook Pix da Loja Rio / Loja 2 na Efi."""
+    cfg = _get_efi_runtime_config(loja2=True)
+    if not efi_is_configured(loja2=True):
+        return jsonify({"success": False, "message": "Efi da Loja Rio nao configurado."}), 400
+    try:
+        from efipay import EfiPay
+        options = {
+            "client_id": cfg["client_id"],
+            "client_secret": cfg["client_secret"],
+            "certificate": cfg["certificate"],
+            "sandbox": cfg["sandbox"],
+        }
+        efi = EfiPay(options)
+        resp = efi.pix_detail_webhook(params={"chave": cfg["pix_key"]})
+        return jsonify({"success": True, "webhook": resp, "pix_key": cfg["pix_key"]})
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Sem webhook da Loja Rio ou erro: {e}"})
+
 
 # ─── ROTAS ADMIN LOJA ───────────────────────────────────────────────────────────────────────
 @app.route("/api/admin/loja/produtos", methods=["GET"])
@@ -5383,7 +5449,7 @@ def _do_checkout2():
         "pix_txid": None, "pix_qrcode": None, "pix_copia_cola": None,
     }
     try:
-        pix_data = efi_create_pix_charge(order)
+        pix_data = efi_create_pix_charge(order, loja2=True)
     except Exception as e:
         print(f"[checkout2] excecao efi: {e}")
         pix_data = {"success": False, "message": f"Erro Efi: {e}"}
@@ -5412,6 +5478,17 @@ _LOJA2_VITRINE_HOSTS = {
     "lojario.up.railway.app",
 }
 
+
+def _is_lojario_origin():
+    """True quando a origem efetiva da requisição é a Loja Rio."""
+    try:
+        h = (get_current_host() or request.host or "").lower()
+        if h in _LOJA2_VITRINE_HOSTS:
+            return True
+        return ("loja2" in h) or ("lojario" in h) or ("rioapps" in h)
+    except Exception:
+        return False
+
 def _is_loja2_vitrine():
     """True se este servico e a loja vitrine 2.
     Detecção: env LOJA2_VITRINE=true OU host contendo 'loja2'/'lojario' OU host na lista."""
@@ -5430,7 +5507,7 @@ def _proxy_loja2(path, method="GET", json_body=None, params=None):
     try:
         import requests
         url = f"{LOJA2_MASTER_URL}{path}"
-        headers = {"X-Loja-Proxy-Token": LOJA2_PROXY_TOKEN, "Content-Type": "application/json"}
+        headers = {"X-Loja-Proxy-Token": LOJA2_PROXY_TOKEN, "Content-Type": "application/json", "X-Forwarded-Host": request.host or ""}
         if method == "GET":
             r = requests.get(url, headers=headers, params=params, timeout=15)
         else:
@@ -5496,7 +5573,7 @@ def _do_meus_pedidos2():
     for o in my[:20]:
         if o.get("status") == "pending" and o.get("pix_txid") and (now - (o.get("created_at") or 0)) < 7200:
             try:
-                check = efi_check_pix_status(o["pix_txid"])
+                check = efi_check_pix_status(o["pix_txid"], loja2=True)
                 if check.get("paid"):
                     _mark_order2_paid_and_deliver(o["id"])
             except Exception:
@@ -5529,6 +5606,10 @@ def api_internal_loja2_meus_pedidos():
 def api_loja2_webhook_efi():
     if request.method == "GET":
         return jsonify({"success": True}), 200
+    cfg = _get_efi_runtime_config(loja2=True)
+    token = (request.args.get("token", "") or request.args.get("hmac", "") or request.headers.get("X-Webhook-Token", ""))
+    if token and token != cfg.get("webhook_token"):
+        return jsonify({"success": False, "message": "Token invalido."}), 403
     data = request.get_json(silent=True) or {}
     for px in data.get("pix", []):
         txid = px.get("txid")
