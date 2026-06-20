@@ -2627,7 +2627,7 @@ def _search_kuku_webhook(user_email, platform):
 
     # Determina lista de plataformas a verificar
     UNIFIED = {
-        "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence"],
+        "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"],
         "disney-all":  ["disney", "disney-residence"],
         "globo-all":   ["bug-globo", "codigo-globo", "senha-globo"],
         "streaming-all": ["max", "prime-video"],
@@ -3758,7 +3758,7 @@ def api_admin_get_code():
 
     UNIFIED_MAP = {
         "netflix-all":   (["netflix", "netflix-login", "netflix-temp",
-                           "netflix-residence"],
+                           "netflix-residence", "password-reset"],
                           "Nenhum email Netflix encontrado para este endereço."),
         "disney-all":    (["disney", "disney-residence"],
                           "Nenhum email Disney+ encontrado para este endereço."),
@@ -3828,7 +3828,7 @@ def get_code():
     # ── Busca unificada: UMA conexão IMAP, batch-fetch de headers ──────────
     UNIFIED_MAP = {
         "netflix-all":   (["netflix", "netflix-login", "netflix-temp",
-                           "netflix-residence"],
+                           "netflix-residence", "password-reset"],
                           "Nenhum email Netflix encontrado para este endereço."),
         "disney-all":    (["disney", "disney-residence"],
                           "Nenhum email Disney+ encontrado para este endereço."),
