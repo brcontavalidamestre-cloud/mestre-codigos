@@ -4121,23 +4121,24 @@ def _get_efi_runtime_config(loja2=False):
 
 
 def _resolve_efi_certificate_path(loja2=False):
-    """Resolve o caminho do certificado Efi com fallback para arquivos versionados no projeto."""
+    """Resolve o caminho do certificado Efi com fallback e conversão automática do .p12 para .pem."""
+    import subprocess
+
     cfg = _get_efi_runtime_config(loja2=loja2)
     raw_path = str(cfg.get("certificate") or "").strip()
     base_dir = os.path.dirname(os.path.abspath(__file__))
     cert_dir = os.path.join(base_dir, "certs")
 
+    label = "lojario" if loja2 else "mestre"
+    default_pem_name = "producao-918104-lojario-pix-producao.pem" if loja2 else "producao-916938-mestre.pem"
+    default_p12_name = "producao-918104-lojario-pix-producao.p12" if loja2 else "producao-916938-mestre.p12"
+
     candidates = []
     if raw_path:
         candidates.append(raw_path)
         candidates.append(os.path.join(cert_dir, os.path.basename(raw_path)))
-
-    if loja2:
-        candidates.append(os.path.join(cert_dir, "producao-918104-lojario-pix-producao.pem"))
-        candidates.append("/app/certs/producao-918104-lojario-pix-producao.pem")
-    else:
-        candidates.append(os.path.join(cert_dir, "producao-916938-mestre.pem"))
-        candidates.append("/app/certs/producao-916938-mestre.pem")
+    candidates.append(os.path.join(cert_dir, default_pem_name))
+    candidates.append(f"/app/certs/{default_pem_name}")
 
     seen = set()
     for cand in candidates:
@@ -4150,7 +4151,52 @@ def _resolve_efi_certificate_path(loja2=False):
                 return cand
         except Exception:
             continue
-    return raw_path
+
+    p12_candidates = []
+    if raw_path:
+        raw_p12 = raw_path[:-4] + ".p12" if raw_path.lower().endswith(".pem") else raw_path + ".p12"
+        p12_candidates.append(raw_p12)
+        p12_candidates.append(os.path.join(cert_dir, os.path.basename(raw_p12)))
+    p12_candidates.append(os.path.join(cert_dir, default_p12_name))
+    p12_candidates.append(f"/app/certs/{default_p12_name}")
+
+    cache_dir = os.path.join(tempfile.gettempdir(), "efi-certs")
+    try:
+        os.makedirs(cache_dir, exist_ok=True)
+    except Exception:
+        pass
+    generated_pem = os.path.join(cache_dir, f"{label}-runtime.pem")
+
+    for p12_path in p12_candidates:
+        p12_path = str(p12_path or "").strip()
+        if not p12_path:
+            continue
+        try:
+            if not os.path.exists(p12_path):
+                continue
+            if os.path.exists(generated_pem) and os.path.getsize(generated_pem) > 0:
+                return generated_pem
+            proc = subprocess.run(
+                [
+                    "openssl", "pkcs12",
+                    "-in", p12_path,
+                    "-out", generated_pem,
+                    "-nodes",
+                    "-passin", "pass:"
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=20,
+                check=False,
+            )
+            if proc.returncode == 0 and os.path.exists(generated_pem) and os.path.getsize(generated_pem) > 0:
+                return generated_pem
+            print(f"[efi:{label}] falha ao converter p12 em pem: {p12_path} -> {proc.stderr[:300]}")
+        except Exception as e:
+            print(f"[efi:{label}] erro ao preparar certificado via p12 {p12_path}: {e}")
+
+    return raw_path or os.path.join(cert_dir, default_pem_name)
 
 
 def efi_is_configured(loja2=False):
