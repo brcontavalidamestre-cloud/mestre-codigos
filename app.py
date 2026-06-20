@@ -3915,19 +3915,9 @@ def get_code():
     if _is_rios_request():
         _maybe_move_spam_async()
 
-    # ╔══ InstAddr: consulta SOMENTE a caixa dedicada do InstAddr/Kuku ══╗
+    # ╔══ InstAddr: prioriza o ÚLTIMO email recebido via webhook; se não houver,
+    # consulta a caixa dedicada do InstAddr/Kuku ao vivo. ══╗
     if _is_instaddr_request():
-        live_code, live_link, live_plat = _search_instaddr_kuku_live(user_email, platform)
-        if live_code:
-            return jsonify({"success": True, "code": live_code, "platform": live_plat or platform, "type": "code"})
-        if live_link:
-            if live_plat == "password-reset":
-                _set_pending_reset_link(pending_owner, live_link)
-                return jsonify({"success": True, "platform": "password-reset",
-                                "type": "pin_required", "pin_required": True,
-                                "message": "PIN necessario para liberar o link de redefinicao."})
-            return jsonify({"success": True, "link": live_link, "platform": live_plat or platform, "type": "link"})
-
         wh_code, wh_link, wh_plat = _search_kuku_webhook(user_email, platform)
         if wh_code:
             return jsonify({"success": True, "code": wh_code, "platform": wh_plat or platform, "type": "code"})
@@ -3938,6 +3928,17 @@ def get_code():
                                 "type": "pin_required", "pin_required": True,
                                 "message": "PIN necessario para liberar o link de redefinicao."})
             return jsonify({"success": True, "link": wh_link, "platform": wh_plat or platform, "type": "link"})
+
+        live_code, live_link, live_plat = _search_instaddr_kuku_live(user_email, platform)
+        if live_code:
+            return jsonify({"success": True, "code": live_code, "platform": live_plat or platform, "type": "code"})
+        if live_link:
+            if live_plat == "password-reset":
+                _set_pending_reset_link(pending_owner, live_link)
+                return jsonify({"success": True, "platform": "password-reset",
+                                "type": "pin_required", "pin_required": True,
+                                "message": "PIN necessario para liberar o link de redefinicao."})
+            return jsonify({"success": True, "link": live_link, "platform": live_plat or platform, "type": "link"})
         return jsonify({
             "success": False,
             "message": "Caixa InstAddr sem emails localizáveis. Configure os cookies da sessão Kuku (sessionhash/csrf/cf_clearance), ou verifique o AccountID/senha da conta Kuku; se preferir, defina também INSTADDR_KUKU_INBOX_ADDRESS com um endereço fixo da caixa."
