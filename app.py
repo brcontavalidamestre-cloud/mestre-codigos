@@ -235,6 +235,16 @@ MASTER_EXTRA_IMAP_PORT   = int(os.environ.get("MASTER_EXTRA_IMAP_PORT", 993))
 MASTER_EXTRA_EMAIL_USER  = os.environ.get("MASTER_EXTRA_EMAIL_USER", "margos@outlok.space")
 MASTER_EXTRA_EMAIL_PASS  = os.environ.get("MASTER_EXTRA_EMAIL_PASS", "Fisica10a@")
 
+# ╔══ Consulta LIVRE do InstAddr (somente instaddr.up.railway.app) ══╗
+# Esta vitrine pública NÃO usa login e NÃO reutiliza caixas dos outros links.
+# Se houver um endereço fixo do InstAddr/Kuku, informe-o em INSTADDR_KUKU_INBOX_ADDRESS.
+INSTADDR_KUKU_INBOX_ADDRESS = os.environ.get("INSTADDR_KUKU_INBOX_ADDRESS", "").strip()
+# Credenciais temporárias da conta InstAddr/Kuku usada SOMENTE no host instaddr.
+# Recomendado mover para variáveis do Railway depois do deploy.
+INSTADDR_KUKU_ACCOUNT_ID    = os.environ.get("INSTADDR_KUKU_ACCOUNT_ID", "568621635037").strip()
+INSTADDR_KUKU_ACCOUNT_PASS  = os.environ.get("INSTADDR_KUKU_ACCOUNT_PASS", "NPyEoXlcc0Nup}@").strip()
+INSTADDR_KUKU_WEBHOOK_FILE  = os.environ.get("INSTADDR_KUKU_WEBHOOK_FILE", os.path.join(_data_dir, "instaddr_kuku_mails.json"))
+
 
 def _is_rios_request():
     """True se o request atual vem de rios.up.railway.app"""
@@ -256,6 +266,15 @@ def _is_jmp_request():
     """True se o request atual vem de jmp.up.railway.app"""
     try:
         return "jmp" in (request.host or "").lower()
+    except Exception:
+        return False
+
+
+def _is_instaddr_request():
+    """True se o request atual vem de instaddr.up.railway.app."""
+    try:
+        host = (request.host or "").lower()
+        return "instaddr" in host
     except Exception:
         return False
 
@@ -294,6 +313,11 @@ def get_imap_accounts():
             "user": RIOS_EMAIL_USER,
             "password": RIOS_EMAIL_PASS,
         }]
+
+    # ╔══ InstAddr: não reutiliza caixas IMAP dos outros links ══╗
+    # A consulta pública deste host usa SOMENTE a caixa dedicada do InstAddr/Kuku.
+    if _is_instaddr_request():
+        return []
 
     # ╔══ JMP: usa SOMENTE as caixas exclusivas do próprio JMP ══╗
     if _is_jmp_request():
@@ -2336,12 +2360,160 @@ def _targeted_forwarded_search(mail, mailbox, plat_key, seen_ids,
     return matched
 
 
+def _get_kuku_store_file():
+    if _is_instaddr_request():
+        return INSTADDR_KUKU_WEBHOOK_FILE
+    return KUKU_WEBHOOK_FILE
+
+
+def _search_instaddr_kuku_live(user_email, platform):
+    """Consulta a conta InstAddr/Kuku via AccountID + senha, apenas no host instaddr."""
+    account_id = str(INSTADDR_KUKU_ACCOUNT_ID or "").strip()
+    account_pass = str(INSTADDR_KUKU_ACCOUNT_PASS or "").strip()
+    fallback_mailbox = str(INSTADDR_KUKU_INBOX_ADDRESS or "").strip()
+    if not account_id or not account_pass:
+        if not fallback_mailbox:
+            return (None, None, None)
+    try:
+        import requests
+        sess = requests.Session()
+        sess.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "ja,en-US;q=0.9,en;q=0.8,pt-BR;q=0.7,pt;q=0.6",
+            "Referer": "https://m.kuku.lu/",
+            "Origin": "https://m.kuku.lu",
+        })
+        csrf = ""
+        csrf_sub = ""
+        mailbox_list = []
+
+        if account_id and account_pass:
+            landing_html = ""
+            for landing_url in ("https://m.kuku.lu/ja.php", "https://m.kuku.lu/en.php", "https://m.kuku.lu/"):
+                try:
+                    landing = sess.get(landing_url, timeout=20)
+                    if landing.ok and landing.text:
+                        landing_html = landing.text or ""
+                        m_csrf = re.search(r"csrf_token_check=([A-Za-z0-9_-]+)", landing_html)
+                        m_sub  = re.search(r"csrf_subtoken_check=([A-Za-z0-9_-]+)", landing_html)
+                        if m_csrf:
+                            csrf = m_csrf.group(1)
+                        if m_sub:
+                            csrf_sub = m_sub.group(1)
+                        if csrf and csrf_sub:
+                            break
+                except Exception:
+                    pass
+            if not csrf or not csrf_sub:
+                return (None, None, None)
+
+            login_resp = sess.post(
+                "https://m.kuku.lu/index.php",
+                data={
+                    "action": "checkLogin",
+                    "confirmcode": "",
+                    "nopost": "1",
+                    "csrf_token_check": csrf,
+                    "csrf_subtoken_check": csrf_sub,
+                    "number": account_id,
+                    "password": account_pass,
+                    "syncconfirm": "yes",
+                },
+                timeout=20,
+            )
+            if not (login_resp.text or "").startswith("OK:"):
+                return (None, None, None)
+
+            addr_resp = sess.get("https://m.kuku.lu/datagen.php?action=getAddrList", timeout=20)
+            raw_lines = (addr_resp.text or "").strip().splitlines()[1:]
+            for line in raw_lines:
+                data = line.replace('"', '').split(',')
+                if len(data) >= 4:
+                    addr = (data[3] or data[0] or "").strip()
+                    if addr and "@" in addr:
+                        mailbox_list.append(addr)
+
+        if fallback_mailbox and fallback_mailbox not in mailbox_list:
+            mailbox_list.append(fallback_mailbox)
+        if not mailbox_list:
+            return (None, None, None)
+
+        UNIFIED = {
+            "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"],
+            "disney-all":  ["disney", "disney-residence"],
+            "globo-all":   ["bug-globo", "codigo-globo", "senha-globo"],
+            "streaming-all": ["max", "prime-video"],
+        }
+        plats = UNIFIED.get(platform, [platform])
+        ulow = (user_email or "").strip().lower()
+
+        for mailbox in mailbox_list:
+            q_addr = mailbox.replace("@", "%40")
+            params = {
+                "q": q_addr,
+                "nopost": "1",
+                "csrf_token_check": csrf,
+            }
+            if csrf_sub:
+                params["csrf_subtoken_check"] = csrf_sub
+            r = sess.get("https://m.kuku.lu/recv._ajax.php", params=params, timeout=20)
+            html = r.text or ""
+            entries = re.findall(r"openMailData\(['\"]?(\d+)['\"]?,\s*['\"]?([a-f0-9]+)['\"]?", html, re.IGNORECASE)
+            if not entries:
+                continue
+
+            for num, key in reversed(entries[-60:]):
+                vr = sess.post(
+                    "https://m.kuku.lu/smphone.app.recv.view.php",
+                    data={"num": num, "key": key, "noscroll": "1"},
+                    timeout=20,
+                )
+                body = vr.text or ""
+                title_match = re.search(r'class="full"[^>]*>(.*?)<', body, re.IGNORECASE | re.DOTALL)
+                subject = re.sub(r"<[^>]+>", " ", title_match.group(1)).strip() if title_match else ""
+                text_match = re.search(r'<div[^>]+dir="ltr"[^>]*>(.*?)</div>', body, re.IGNORECASE | re.DOTALL)
+                content = text_match.group(1) if text_match else body
+                combined = f"{subject}\n{content}"
+                clow = combined.lower()
+                if ulow and ulow not in clow:
+                    continue
+                for plat in plats:
+                    pcfg = PLATFORM_CONFIG.get(plat, {})
+                    if not pcfg:
+                        continue
+                    from_kw = (pcfg.get("from_keyword") or "").lower()
+                    subj_kws = [k.lower() for k in pcfg.get("subject_keywords", [])]
+                    neg_kws  = [k.lower() for k in pcfg.get("negative_keywords", [])]
+                    if from_kw and from_kw not in clow:
+                        continue
+                    if any(nk in clow for nk in neg_kws):
+                        continue
+                    if subj_kws and not any(sk in clow for sk in subj_kws):
+                        continue
+                    if pcfg.get("type") == "link" or plat in ("netflix-temp", "netflix-residence", "password-reset", "disney-residence"):
+                        link_pat = pcfg.get("link_pattern")
+                        if link_pat:
+                            m = re.search(link_pat, combined)
+                            if m:
+                                return (None, m.group(0), plat)
+                        m = re.search(r'https?://[^\s"\'<>]+', combined)
+                        if m:
+                            return (None, m.group(0), plat)
+                    code = extract_code_from_html(combined)
+                    if code:
+                        return (code, None, plat)
+    except Exception as e:
+        print(f"[instaddr-kuku] erro na consulta ao InstAddr: {e}")
+    return (None, None, None)
+
+
 def _search_kuku_webhook(user_email, platform):
     """Procura código/link nos emails recebidos via webhook do kuku.lu.
-    Retorna (code, link, matched_platform). Usado apenas no rios.
+    Retorna (code, link, matched_platform). Usado no rios e, se configurado, no InstAddr.
     """
     try:
-        mails = _read_json_safe(KUKU_WEBHOOK_FILE, [])
+        mails = _read_json_safe(_get_kuku_store_file(), [])
     except Exception:
         return (None, None, None)
     if not mails:
@@ -3131,8 +3303,8 @@ def api_license_status():
 
 @app.route("/")
 def index():
-    # LOJA SEPARADA: domínio da loja não exige login — acesso direto
-    if is_loja_host():
+    # LOJA SEPARADA e InstAddr público: acesso direto
+    if is_loja_host() or _is_instaddr_request():
         return send_from_directory("static", "index.html")
     if not session.get("logged_in"):
         return redirect("/login")
@@ -3140,8 +3312,8 @@ def index():
 
 @app.route("/login")
 def login_page():
-    # LOJA SEPARADA: redireciona /login para / (loja não tem tela de login)
-    if is_loja_host():
+    # LOJA SEPARADA e InstAddr público: não têm tela de login
+    if is_loja_host() or _is_instaddr_request():
         return redirect("/")
     if session.get("logged_in"):
         if session.get("role") == "admin":
@@ -3412,19 +3584,23 @@ def api_set_reset_pin(username):
 
 
 @app.route("/api/verify-reset-pin", methods=["POST"])
-@login_required
 def api_verify_reset_pin():
     """Cliente verifica o PIN antes de receber o link de redefinição de senha."""
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"success": False, "message": "Dados invalidos."}), 400
 
+    if not _is_instaddr_request() and not session.get("logged_in"):
+        return jsonify({"success": False, "message": "Nao autenticado.", "redirect": "/login"}), 401
+
     pin = str(data.get("pin", "")).strip()
     username = session.get("username")
+    public_email = str(data.get("email", "")).strip().lower()
+    pending_owner = public_email if _is_instaddr_request() else username
     users = load_users()
     user  = users.get(username, {})
 
-    pending_link = _peek_pending_reset_link(username)
+    pending_link = _peek_pending_reset_link(pending_owner)
     if not pending_link:
         return jsonify({"success": False, "message": "Nenhum link protegido pendente. Faça a busca novamente."}), 409
 
@@ -3434,7 +3610,7 @@ def api_verify_reset_pin():
     if not _verify_reset_pin_value(user, pin):
         return jsonify({"success": False, "message": "PIN incorreto."}), 403
 
-    released_link = _pop_pending_reset_link(username)
+    released_link = _pop_pending_reset_link(pending_owner)
     if not released_link:
         return jsonify({"success": False, "message": "Link expirado. Faça a busca novamente."}), 410
 
@@ -3530,8 +3706,9 @@ def api_admin_get_code():
 
 
 @app.route("/api/get-code", methods=["POST"])
-@login_required
 def get_code():
+    if not _is_instaddr_request() and not session.get("logged_in"):
+        return jsonify({"success": False, "message": "Nao autenticado.", "redirect": "/login"}), 401
     data = request.get_json(silent=True)
     if not data:
         return jsonify({"success": False, "message": "Dados invalidos."}), 400
@@ -3557,6 +3734,7 @@ def get_code():
                           "Nenhum email Max ou Prime Video encontrado para este endereço."),
     }
     username = session.get("username")
+    pending_owner = username or user_email
     # No mestre, para Netflix, deve SEMPRE prevalecer o email mais recente,
     # seja ele código, link temporário, residência ou redefinição de senha.
     if is_master_host() and platform == "netflix-all":
@@ -3574,7 +3752,7 @@ def get_code():
             })
         if link_nf:
             if matched_nf == "password-reset":
-                _set_pending_reset_link(username, link_nf)
+                _set_pending_reset_link(pending_owner, link_nf)
                 return jsonify({
                     "success": True,
                     "platform": "password-reset",
@@ -3633,6 +3811,34 @@ def get_code():
     if _is_rios_request():
         _maybe_move_spam_async()
 
+    # ╔══ InstAddr: consulta SOMENTE a caixa dedicada do InstAddr/Kuku ══╗
+    if _is_instaddr_request():
+        live_code, live_link, live_plat = _search_instaddr_kuku_live(user_email, platform)
+        if live_code:
+            return jsonify({"success": True, "code": live_code, "platform": live_plat or platform, "type": "code"})
+        if live_link:
+            if live_plat == "password-reset":
+                _set_pending_reset_link(pending_owner, live_link)
+                return jsonify({"success": True, "platform": "password-reset",
+                                "type": "pin_required", "pin_required": True,
+                                "message": "PIN necessario para liberar o link de redefinicao."})
+            return jsonify({"success": True, "link": live_link, "platform": live_plat or platform, "type": "link"})
+
+        wh_code, wh_link, wh_plat = _search_kuku_webhook(user_email, platform)
+        if wh_code:
+            return jsonify({"success": True, "code": wh_code, "platform": wh_plat or platform, "type": "code"})
+        if wh_link:
+            if wh_plat == "password-reset":
+                _set_pending_reset_link(pending_owner, wh_link)
+                return jsonify({"success": True, "platform": "password-reset",
+                                "type": "pin_required", "pin_required": True,
+                                "message": "PIN necessario para liberar o link de redefinicao."})
+            return jsonify({"success": True, "link": wh_link, "platform": wh_plat or platform, "type": "link"})
+        return jsonify({
+            "success": False,
+            "message": "Caixa InstAddr sem emails localizáveis. Verifique o AccountID/senha da conta Kuku ou, se preferir, defina INSTADDR_KUKU_INBOX_ADDRESS com um endereço fixo da caixa."
+        })
+
     # ╔══ RIOS: tentar PRIMEIRO os emails recebidos via webhook kuku.lu ══╗
     if _is_rios_request():
         wh_code, wh_link, wh_plat = _search_kuku_webhook(user_email, platform)
@@ -3640,7 +3846,7 @@ def get_code():
             return jsonify({"success": True, "code": wh_code, "platform": wh_plat or platform, "type": "code"})
         if wh_link:
             if wh_plat == "password-reset":
-                _set_pending_reset_link(username, wh_link)
+                _set_pending_reset_link(pending_owner, wh_link)
                 return jsonify({"success": True, "platform": "password-reset",
                                 "type": "pin_required", "pin_required": True,
                                 "message": "PIN necessário para liberar o link de redefinição."})
@@ -3654,7 +3860,7 @@ def get_code():
             return jsonify({"success": True, "code": code, "platform": matched_plat, "type": "code"})
         elif link:
             if matched_plat == "password-reset":
-                _set_pending_reset_link(username, link)
+                _set_pending_reset_link(pending_owner, link)
                 return jsonify({
                     "success": True,
                     "platform": "password-reset",
@@ -3671,7 +3877,7 @@ def get_code():
         return jsonify({"success": True, "code": code, "platform": platform, "type": "code"})
     elif link:
         if platform == "password-reset":
-            _set_pending_reset_link(username, link)
+            _set_pending_reset_link(pending_owner, link)
             return jsonify({
                 "success": True,
                 "platform": "password-reset",
@@ -6301,14 +6507,16 @@ def _kuku_forward_to_mailbox(to_addr, from_addr, subject, body, original_raw="")
 
 
 def _load_kuku_mails():
-    return _read_json_safe(KUKU_WEBHOOK_FILE, [])
+    store_file = _get_kuku_store_file()
+    return _read_json_safe(store_file, [])
 
 def _save_kuku_mails(mails):
     try:
-        parent = os.path.dirname(KUKU_WEBHOOK_FILE)
+        store_file = _get_kuku_store_file()
+        parent = os.path.dirname(store_file)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        with open(KUKU_WEBHOOK_FILE, "w") as f:
+        with open(store_file, "w") as f:
             json.dump(mails, f, ensure_ascii=False)
     except Exception as e:
         print(f"[kuku-webhook] erro salvar: {e}")
@@ -6429,7 +6637,7 @@ def api_kuku_webhook():
             "raw_body": raw_body[:5000],
             "parsed_result": {"to": to_addr, "from": from_addr, "subject": subject, "body": body[:500]},
         }
-        dbg_path = os.path.join(os.path.dirname(KUKU_WEBHOOK_FILE), "kuku_webhook_debug.json")
+        dbg_path = os.path.join(os.path.dirname(_get_kuku_store_file()), "kuku_webhook_debug.json")
         with open(dbg_path, "w") as f:
             json.dump(debug_info, f, ensure_ascii=False, indent=2)
     except Exception as _e:
@@ -6444,9 +6652,11 @@ def api_kuku_webhook_status():
     """Mostra os últimos emails recebidos via webhook (diagnóstico)."""
     mails = _load_kuku_mails()
     recent = mails[-15:][::-1]
+    base = request.host_url.rstrip('/')
     return jsonify({
         "total": len(mails),
-        "webhook_url": f"https://rios.up.railway.app/api/kuku-webhook?token={KUKU_WEBHOOK_TOKEN}",
+        "store_file": _get_kuku_store_file(),
+        "webhook_url": f"{base}/api/kuku-webhook?token={KUKU_WEBHOOK_TOKEN}",
         "recent": [{
             "to": m.get("to", ""),
             "from": m.get("from", ""),
@@ -6459,7 +6669,7 @@ def api_kuku_webhook_status():
 @admin_required
 def api_kuku_webhook_debug():
     """Mostra a ÚLTIMA requisição crua recebida no webhook (para diagnosticar formato)."""
-    dbg_path = os.path.join(os.path.dirname(KUKU_WEBHOOK_FILE), "kuku_webhook_debug.json")
+    dbg_path = os.path.join(os.path.dirname(_get_kuku_store_file()), "kuku_webhook_debug.json")
     return jsonify(_read_json_safe(dbg_path, {"message": "nenhuma requisição capturada ainda"}))
 
 

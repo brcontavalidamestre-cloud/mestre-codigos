@@ -2181,6 +2181,25 @@
       });
     })();
 
+    // ── MODO PÚBLICO INSTADDR ──
+    (function() {
+      const host = (window.location.hostname || '').toLowerCase();
+      const isInstAddr = host.includes('instaddr');
+      if (!isInstAddr) return;
+
+      document.title = 'InstAddr Códigos ✦';
+      document.addEventListener('DOMContentLoaded', function() {
+        const titleEl = document.getElementById('site-title-h1');
+        if (titleEl) titleEl.textContent = 'InstAddr Códigos';
+        const subEl = document.querySelector('.subtitle');
+        if (subEl) subEl.textContent = 'Consulta livre de códigos • sem login • caixa dedicada do InstAddr';
+        const logoutBtn = document.querySelector('.logout-btn');
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        const lojaBtn = document.getElementById('btn-view-loja');
+        if (lojaBtn) lojaBtn.style.display = 'none';
+      });
+    })();
+
     // ── ESTRELAS ──
     const canvas = document.getElementById('stars-canvas');
     const ctx = canvas.getContext('2d');
@@ -2304,10 +2323,11 @@
       }
       btn.disabled = true; btn.textContent = 'Verificando...';
       try {
+        const currentEmail = (document.getElementById('email-input')?.value || '').trim().toLowerCase();
         const r = await fetch('/api/verify-reset-pin', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ pin })
+          body: JSON.stringify({ pin, email: currentEmail })
         });
         const d = await r.json();
         if (d.success && d.unlocked && d.link) {
@@ -2743,6 +2763,11 @@
     }
 
     async function doLogout() {
+      const host = (window.location.hostname || '').toLowerCase();
+      if (host.includes('instaddr')) {
+        window.location.href = '/';
+        return;
+      }
       if (!confirm('Deseja sair?')) return;
       try {
         await fetch('/api/auth/logout', { method:'POST' });
