@@ -205,6 +205,25 @@
       font-family: 'Cinzel', serif;
       letter-spacing: 0.8px;
     }
+    .manual-copy-box {
+      width: 100%;
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px dashed var(--border-gold);
+      background: rgba(10, 0, 20, 0.55);
+      color: var(--gold-light);
+      font-family: monospace;
+      font-size: 0.88rem;
+      line-height: 1.45;
+      resize: none;
+      min-height: 64px;
+    }
+    .manual-copy-tip {
+      margin-top: 6px;
+      font-size: 0.74rem;
+      color: var(--text-muted);
+    }
     .btn-pix-copy { background:#7e22ce; color:#fff; }
     .btn-pix-recheck { background:#10b981; color:#fff; }
     .btn-pix-show-qr { background:#374151; color:#fff; }
@@ -3052,7 +3071,10 @@
           <button style="margin-top:14px;background:var(--purple-mid);color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.85rem"
             onclick="copyVal('Email: ${data.delivered_email.replace(/'/g, "\\'")}\\nSenha: ${data.delivered_password.replace(/'/g, "\\'")}')">
             📋 Copiar tudo
-          </button>`;
+          </button>
+          <textarea class="manual-copy-box" readonly onclick="this.focus();this.select();" onfocus="this.select()">Email: ${data.delivered_email}
+Senha: ${data.delivered_password}</textarea>
+          <div class="manual-copy-tip">Clique no campo acima e use Ctrl+C se o navegador bloquear o botão.</div>`;
         if (data.delivered_note) {
           html += `<p style="margin-top:12px;font-size:0.82rem;color:var(--text-muted)">📌 ${data.delivered_note}</p>`;
         }
@@ -3160,6 +3182,9 @@
               style="width:100%;margin-top:10px;background:var(--purple-mid);color:#fff;border:none;padding:9px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.82rem;letter-spacing:1px">
               📋 Copiar Email + Senha
             </button>
+            <textarea class="manual-copy-box" readonly onclick="this.focus();this.select();" onfocus="this.select()">Email: ${escapeHtml(o.delivered_email)}
+Senha: ${escapeHtml(o.delivered_password)}</textarea>
+            <div class="manual-copy-tip">Clique no campo acima e use Ctrl+C se o navegador bloquear o botão.</div>
           </div>
         `;
       } else if (isPaid) {
