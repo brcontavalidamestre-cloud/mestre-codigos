@@ -3058,17 +3058,17 @@
               <div class="label">EMAIL</div>
               <div class="value">${data.delivered_email}</div>
             </div>
-            <button onclick="copyVal('${data.delivered_email.replace(/'/g, "\\'")}')">📋 Copiar</button>
+            <button onclick="copyVal('${data.delivered_email.replace(/'/g, "\\'")}', this)">📋 Copiar</button>
           </div>
           <div class="credential-row">
             <div>
               <div class="label">SENHA</div>
               <div class="value">${data.delivered_password}</div>
             </div>
-            <button onclick="copyVal('${data.delivered_password.replace(/'/g, "\\'")}')">📋 Copiar</button>
+            <button onclick="copyVal('${data.delivered_password.replace(/'/g, "\\'")}', this)">📋 Copiar</button>
           </div>
           <button style="margin-top:14px;background:var(--purple-mid);color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.85rem"
-            onclick="copyVal('Email: ${data.delivered_email.replace(/'/g, "\\'")}\\nSenha: ${data.delivered_password.replace(/'/g, "\\'")}')">
+            onclick="copyVal('Email: ${data.delivered_email.replace(/'/g, "\\'")}\\nSenha: ${data.delivered_password.replace(/'/g, "\\'")}', this)">
             📋 Copiar tudo
           </button>
           <textarea class="manual-copy-box" readonly onclick="this.focus();this.select();" onfocus="this.select()">Email: ${data.delivered_email}
@@ -3085,8 +3085,26 @@ Senha: ${data.delivered_password}</textarea>
       area.innerHTML = html;
     }
 
-    function copyVal(v) {
-      const ok = copyTextNow(v);
+    function copyFromVisibleBox(text, triggerEl) {
+      try {
+        const scope = triggerEl && triggerEl.closest ? triggerEl.closest('.hist-credentials, .paid-box') : null;
+        const box = scope ? scope.querySelector('.manual-copy-box') : null;
+        if (!box) return copyTextNow(text);
+        const original = box.value;
+        box.value = String(text || '');
+        box.focus();
+        box.select();
+        box.setSelectionRange(0, box.value.length);
+        const ok = document.execCommand('copy');
+        box.value = original;
+        return !!ok;
+      } catch (e) {
+        return copyTextNow(text);
+      }
+    }
+
+    function copyVal(v, triggerEl) {
+      const ok = copyFromVisibleBox(v, triggerEl);
       if (!ok) highlightManualBoxes(v);
       showToast(ok ? '✓ Copiado!' : '⚠️ Selecione a caixa e pressione Ctrl+C');
     }
@@ -3164,17 +3182,17 @@ Senha: ${data.delivered_password}</textarea>
                 <div class="lbl">EMAIL</div>
                 <div class="val">${escapeHtml(o.delivered_email)}</div>
               </div>
-              <button onclick="copyVal(${JSON.stringify(o.delivered_email)})">📋 Copiar</button>
+              <button onclick="copyVal(${JSON.stringify(o.delivered_email)}, this)">📋 Copiar</button>
             </div>
             <div class="hist-cred-row">
               <div style="flex:1">
                 <div class="lbl">SENHA</div>
                 <div class="val">${escapeHtml(o.delivered_password)}</div>
               </div>
-              <button onclick="copyVal(${JSON.stringify(o.delivered_password)})">📋 Copiar</button>
+              <button onclick="copyVal(${JSON.stringify(o.delivered_password)}, this)">📋 Copiar</button>
             </div>
             ${o.delivered_note ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px">📌 ${escapeHtml(o.delivered_note)}</div>` : ''}
-            <button onclick="copyVal(${JSON.stringify('Email: ' + o.delivered_email + '\nSenha: ' + o.delivered_password)})"
+            <button onclick="copyVal(${JSON.stringify('Email: ' + o.delivered_email + '\nSenha: ' + o.delivered_password)}, this)"
               style="width:100%;margin-top:10px;background:var(--purple-mid);color:#fff;border:none;padding:9px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.82rem;letter-spacing:1px">
               📋 Copiar Email + Senha
             </button>
