@@ -1531,6 +1531,24 @@ def normalize(text):
     nfkd = unicodedata.normalize("NFKD", text)
     return "".join(c for c in nfkd if not unicodedata.combining(c))
 
+def email_match_aliases(email_addr):
+    raw = str(email_addr or "").strip().lower()
+    if not raw or "@" not in raw:
+        return [raw] if raw else []
+    local, domain = raw.split("@", 1)
+    aliases = [raw]
+    compact_local = re.sub(r"[^a-z0-9]", "", normalize(local))
+    if compact_local:
+        aliases.append(f"{compact_local}@{domain}")
+    out = []
+    seen = set()
+    for item in aliases:
+        item = str(item or "").strip().lower()
+        if item and item not in seen:
+            seen.add(item)
+            out.append(item)
+    return out
+
 FORWARD_PREFIX_RE = re.compile(r'^\s*((?:fw|fwd|enc|re)\s*:\s*)+', re.IGNORECASE)
 
 def clean_subject_prefixes(subject):
@@ -2511,11 +2529,12 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
     }
     plats = UNIFIED.get(platform, [platform])
     ulow = (user_email or "").strip().lower()
+    email_aliases = email_match_aliases(user_email)
 
-    if ulow:
-        exact = [m for m in mailbox_list if m.strip().lower() == ulow]
+    if email_aliases:
+        exact = [m for m in mailbox_list if m.strip().lower() in email_aliases]
         if exact:
-            others = [m for m in mailbox_list if m.strip().lower() != ulow]
+            others = [m for m in mailbox_list if m.strip().lower() not in email_aliases]
             mailbox_list = exact + others
 
     for mailbox in mailbox_list:
@@ -2548,8 +2567,9 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
             clow = combined.lower()
             cnorm = normalize(combined)
             mailbox_low = str(mailbox or '').strip().lower()
-            exact_mailbox = bool(ulow and mailbox_low == ulow)
-            if ulow and not exact_mailbox and ulow not in clow and normalize(ulow) not in cnorm:
+            exact_mailbox = bool(email_aliases and mailbox_low in email_aliases)
+            alias_hit = any(a and (a in clow or normalize(a) in cnorm) for a in email_aliases)
+            if email_aliases and not exact_mailbox and not alias_hit:
                 continue
             for plat in plats:
                 pcfg = PLATFORM_CONFIG.get(plat, {})
@@ -2601,9 +2621,11 @@ def _search_instaddr_kuku_by_cookies(user_email, platform):
                 mailbox_list = _extract_instaddr_mailboxes(addr_resp.text or "")
         except Exception:
             pass
-        direct_mailbox = str(user_email or "").strip().lower()
-        if direct_mailbox and "@" in direct_mailbox and direct_mailbox not in [m.lower() for m in mailbox_list]:
-            mailbox_list.insert(0, direct_mailbox)
+        known = [m.lower() for m in mailbox_list]
+        for direct_mailbox in reversed(email_match_aliases(user_email)):
+            if direct_mailbox and "@" in direct_mailbox and direct_mailbox not in known:
+                mailbox_list.insert(0, direct_mailbox)
+                known.insert(0, direct_mailbox)
         fallback_mailbox = str(INSTADDR_KUKU_INBOX_ADDRESS or "").strip()
         if fallback_mailbox and fallback_mailbox.lower() not in [m.lower() for m in mailbox_list]:
             mailbox_list.append(fallback_mailbox)
@@ -2652,9 +2674,11 @@ def _search_instaddr_kuku_live(user_email, platform):
                 mailbox_list = _extract_instaddr_mailboxes(addr_resp.text or "")
         except Exception:
             pass
-        direct_mailbox = str(user_email or "").strip().lower()
-        if direct_mailbox and "@" in direct_mailbox and direct_mailbox not in [m.lower() for m in mailbox_list]:
-            mailbox_list.insert(0, direct_mailbox)
+        known = [m.lower() for m in mailbox_list]
+        for direct_mailbox in reversed(email_match_aliases(user_email)):
+            if direct_mailbox and "@" in direct_mailbox and direct_mailbox not in known:
+                mailbox_list.insert(0, direct_mailbox)
+                known.insert(0, direct_mailbox)
         if fallback_mailbox and fallback_mailbox.lower() not in [m.lower() for m in mailbox_list]:
             mailbox_list.append(fallback_mailbox)
         return _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub)
@@ -2675,6 +2699,7 @@ def _search_kuku_webhook(user_email, platform):
         return (None, None, None)
 
     ulow = (user_email or "").strip().lower()
+    email_aliases = email_match_aliases(user_email)
 
     # Determina lista de plataformas a verificar
     UNIFIED = {
@@ -2689,9 +2714,9 @@ def _search_kuku_webhook(user_email, platform):
     for mail in reversed(mails):
         to_addr = (mail.get("to") or "").lower()
         # Filtro destinatário (precisa bater)
-        if ulow and ulow not in to_addr and to_addr not in ulow:
-            # também verifica se o email aparece no corpo (forward pode mudar o To)
-            if ulow not in (mail.get("body") or "").lower():
+        if email_aliases and not any(a and (a in to_addr or to_addr in a) for a in email_aliases):
+            body_low = (mail.get("body") or "").lower()
+            if not any(a and a in body_low for a in email_aliases):
                 continue
         subject = (mail.get("subject") or "")
         body    = (mail.get("body") or "")
