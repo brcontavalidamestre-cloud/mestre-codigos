@@ -2606,24 +2606,24 @@ def _ensure_instaddr_mailbox(sess, mailbox, csrf="", csrf_sub=""):
     local, domain = mailbox.split("@", 1)
     csrf = str(csrf or "").strip()
     csrf_sub = str(csrf_sub or csrf or "").strip()
-    payload = {
+    params = {
         "action": "addMailAddrByManual",
         "nopost": "1",
         "by_system": "1",
         "t": str(int(time.time())),
-        "newdomain": domain,
+        "newdomain": mailbox,
         "newuser": local,
         "recaptcha_token": "",
         "_": str(int(time.time() * 1000)),
     }
     if csrf:
-        payload["csrf_token_check"] = csrf
+        params["csrf_token_check"] = csrf
     if csrf_sub:
-        payload["csrf_subtoken_check"] = csrf_sub
+        params["csrf_subtoken_check"] = csrf_sub
     try:
-        resp = sess.post("https://m.kuku.lu/index.php", data=payload, timeout=20)
+        resp = sess.get("https://m.kuku.lu/index.php", params=params, timeout=20)
         text = (resp.text or "").strip().lower()
-        if mailbox in text or text.startswith("ok:") or "already" in text or "exists" in text:
+        if resp.ok and (not text or mailbox in text or text.startswith("ok:") or "already" in text or "exists" in text):
             return True
     except Exception:
         return False
@@ -2674,9 +2674,8 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
             mailbox_list = exact + others
 
     for mailbox in mailbox_list:
-        q_addr = mailbox.replace("@", "%40")
         params = {
-            "q": q_addr,
+            "q": mailbox,
             "nopost": "1",
             "csrf_token_check": csrf,
             "_": str(int(time.time() * 1000)),
@@ -2778,21 +2777,19 @@ def _search_instaddr_kuku_live(user_email, platform):
             csrf = direct_csrf
         if not csrf:
             return (None, None, None)
-        login_resp = sess.post(
-            "https://m.kuku.lu/index.php",
-            data={
-                "action": "checkLogin",
-                "confirmcode": "",
-                "nopost": "1",
-                "csrf_token_check": csrf,
-                "csrf_subtoken_check": csrf_sub,
-                "number": account_id,
-                "password": account_pass,
-                "syncconfirm": "yes",
-            },
-            timeout=20,
-        )
-        if not (login_resp.text or "").startswith("OK:"):
+        login_params = {
+            "action": "checkLogin",
+            "confirmcode": "",
+            "nopost": "1",
+            "csrf_token_check": csrf,
+            "number": account_id,
+            "password": account_pass,
+            "syncconfirm": "yes",
+        }
+        if csrf_sub:
+            login_params["csrf_subtoken_check"] = csrf_sub
+        login_resp = sess.get("https://m.kuku.lu/index.php", params=login_params, timeout=20)
+        if not login_resp.ok:
             return (None, None, None)
         mailbox_list = _prepare_instaddr_mailboxes(sess, user_email, csrf, csrf_sub)
         if fallback_mailbox and fallback_mailbox.lower() not in [m.lower() for m in mailbox_list]:
