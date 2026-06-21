@@ -2489,12 +2489,73 @@ def _extract_instaddr_mailboxes(addr_text):
     return list(dict.fromkeys(mailbox_list))
 
 
+def _extract_instaddr_mailboxes_from_addrlist_html(html):
+    out = []
+    for addr in re.findall(r'openMailAddrData\(["\']([^"\']+@[^"\']+)["\']\)', html or "", re.IGNORECASE):
+        addr = str(addr or "").strip()
+        if addr and "@" in addr:
+            out.append(addr)
+    return list(dict.fromkeys(out))
+
+
+def _bootstrap_instaddr_kuku_direct_session(sess):
+    """Inicializa sessão via endpoints diretos que já devolvem cookies válidos."""
+    csrf = ""
+    sessionhash = ""
+    direct_urls = [
+        "https://m.kuku.lu/index.php?action=addMailAddrByAuto&nopost=1&by_system=1",
+        "https://m.kuku.lu/datagen.php?action=getAddrList",
+    ]
+    for url in direct_urls:
+        try:
+            resp = sess.get(url, timeout=20)
+        except Exception:
+            continue
+        try:
+            cookie_map = sess.cookies.get_dict()
+        except Exception:
+            cookie_map = {}
+        if not csrf:
+            csrf = str(cookie_map.get("cookie_csrf_token") or cookie_map.get("csrf_token") or "").strip()
+        if not sessionhash:
+            sessionhash = str(cookie_map.get("cookie_sessionhash") or cookie_map.get("sessionhash") or "").strip()
+        for cname, cval in (("cookie_csrf_token", csrf), ("csrf_token", csrf), ("cookie_sessionhash", sessionhash), ("sessionhash", sessionhash)):
+            cval = str(cval or "").strip()
+            if not cval:
+                continue
+            try:
+                sess.cookies.set(cname, cval, domain="m.kuku.lu", path="/")
+            except Exception:
+                pass
+        if resp is not None and csrf and sessionhash:
+            break
+    if csrf or sessionhash:
+        try:
+            _save_instaddr_browser_session({
+                "csrf_token": csrf,
+                "sessionhash": sessionhash,
+                "page_url": "https://m.kuku.lu/",
+                "user_agent": sess.headers.get("User-Agent") or "",
+                "cookie_header": "; ".join([f"{k}={v}" for k, v in (sess.cookies.get_dict() or {}).items()]),
+            })
+        except Exception:
+            pass
+    return csrf, sessionhash
+
+
 def _discover_instaddr_csrf(sess):
     stored = _load_instaddr_browser_session()
-    csrf = str(INSTADDR_KUKU_CSRF_CHECK or stored.get("csrf_check") or "").strip()
+    csrf = str(INSTADDR_KUKU_CSRF_CHECK or stored.get("csrf_check") or stored.get("csrf_token") or "").strip()
     csrf_sub = str(INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK or stored.get("csrf_subtoken_check") or "").strip()
-    if csrf and csrf_sub:
+    if not csrf:
+        direct_csrf, _direct_session = _bootstrap_instaddr_kuku_direct_session(sess)
+        if direct_csrf:
+            csrf = direct_csrf
+    if csrf and not csrf_sub:
+        csrf_sub = csrf
+    if csrf:
         return csrf, csrf_sub
+
     for landing_url in ("https://m.kuku.lu/ja.php", "https://m.kuku.lu/en.php", "https://m.kuku.lu/"):
         try:
             landing = sess.get(landing_url, timeout=20)
@@ -2509,11 +2570,86 @@ def _discover_instaddr_csrf(sess):
                 m_sub = re.search(r"csrf_subtoken_check=([A-Za-z0-9_-]+)", landing_html)
                 if m_sub:
                     csrf_sub = m_sub.group(1)
-            if csrf:
+            if csrf and csrf_sub:
                 break
         except Exception:
             pass
-    return csrf, csrf_sub
+    return csrf, (csrf_sub or csrf)
+
+
+def _fetch_instaddr_mailboxes(sess, csrf="", csrf_sub=""):
+    mailbox_list = []
+    seen = set()
+    fetchers = []
+    fetchers.append(("https://m.kuku.lu/index._addrlist.php", {}, _extract_instaddr_mailboxes_from_addrlist_html))
+    fetchers.append(("https://m.kuku.lu/datagen.php?action=getAddrList", {}, _extract_instaddr_mailboxes))
+    for url, params, parser in fetchers:
+        try:
+            resp = sess.get(url, params=params or None, timeout=20)
+            if not resp.ok:
+                continue
+            parsed = parser(resp.text or "")
+            for mailbox in parsed:
+                low = mailbox.lower()
+                if low not in seen:
+                    seen.add(low)
+                    mailbox_list.append(mailbox)
+        except Exception:
+            continue
+    return mailbox_list
+
+
+def _ensure_instaddr_mailbox(sess, mailbox, csrf="", csrf_sub=""):
+    mailbox = str(mailbox or "").strip().lower()
+    if not mailbox or "@" not in mailbox:
+        return False
+    local, domain = mailbox.split("@", 1)
+    csrf = str(csrf or "").strip()
+    csrf_sub = str(csrf_sub or csrf or "").strip()
+    payload = {
+        "action": "addMailAddrByManual",
+        "nopost": "1",
+        "by_system": "1",
+        "t": str(int(time.time())),
+        "newdomain": domain,
+        "newuser": local,
+        "recaptcha_token": "",
+        "_": str(int(time.time() * 1000)),
+    }
+    if csrf:
+        payload["csrf_token_check"] = csrf
+    if csrf_sub:
+        payload["csrf_subtoken_check"] = csrf_sub
+    try:
+        resp = sess.post("https://m.kuku.lu/index.php", data=payload, timeout=20)
+        text = (resp.text or "").strip().lower()
+        if mailbox in text or text.startswith("ok:") or "already" in text or "exists" in text:
+            return True
+    except Exception:
+        return False
+    return False
+
+
+def _prepare_instaddr_mailboxes(sess, user_email, csrf="", csrf_sub=""):
+    mailbox_list = _fetch_instaddr_mailboxes(sess, csrf, csrf_sub)
+    known = {m.lower() for m in mailbox_list}
+    aliases = email_match_aliases(user_email)
+    for alias in aliases:
+        if alias and alias not in known:
+            if _ensure_instaddr_mailbox(sess, alias, csrf, csrf_sub):
+                known.add(alias)
+    refreshed = _fetch_instaddr_mailboxes(sess, csrf, csrf_sub)
+    if refreshed:
+        mailbox_list = refreshed
+        known = {m.lower() for m in mailbox_list}
+    for alias in reversed(aliases):
+        if alias and alias not in known:
+            mailbox_list.insert(0, alias)
+            known.add(alias)
+    fallback_mailbox = str(INSTADDR_KUKU_INBOX_ADDRESS or "").strip().lower()
+    if fallback_mailbox and fallback_mailbox not in known:
+        mailbox_list.append(fallback_mailbox)
+    return mailbox_list
 
 
 def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub):
@@ -2543,6 +2679,7 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
             "q": q_addr,
             "nopost": "1",
             "csrf_token_check": csrf,
+            "_": str(int(time.time() * 1000)),
         }
         if csrf_sub:
             params["csrf_subtoken_check"] = csrf_sub
@@ -2609,26 +2746,13 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
 
 
 def _search_instaddr_kuku_by_cookies(user_email, platform):
-    if not _instaddr_cookie_mode_enabled():
-        return (None, None, None)
     try:
         sess = _new_instaddr_kuku_session()
+        direct_csrf, _direct_session = _bootstrap_instaddr_kuku_direct_session(sess)
         csrf, csrf_sub = _discover_instaddr_csrf(sess)
-        mailbox_list = []
-        try:
-            addr_resp = sess.get("https://m.kuku.lu/datagen.php?action=getAddrList", timeout=20)
-            if addr_resp.ok:
-                mailbox_list = _extract_instaddr_mailboxes(addr_resp.text or "")
-        except Exception:
-            pass
-        known = [m.lower() for m in mailbox_list]
-        for direct_mailbox in reversed(email_match_aliases(user_email)):
-            if direct_mailbox and "@" in direct_mailbox and direct_mailbox not in known:
-                mailbox_list.insert(0, direct_mailbox)
-                known.insert(0, direct_mailbox)
-        fallback_mailbox = str(INSTADDR_KUKU_INBOX_ADDRESS or "").strip()
-        if fallback_mailbox and fallback_mailbox.lower() not in [m.lower() for m in mailbox_list]:
-            mailbox_list.append(fallback_mailbox)
+        if not csrf:
+            csrf = direct_csrf
+        mailbox_list = _prepare_instaddr_mailboxes(sess, user_email, csrf, csrf_sub)
         return _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub)
     except Exception as e:
         print(f"[instaddr-kuku-cookie] erro na consulta por cookies: {e}")
@@ -2648,8 +2772,11 @@ def _search_instaddr_kuku_live(user_email, platform):
         return (None, None, None)
     try:
         sess = _new_instaddr_kuku_session()
+        direct_csrf, _direct_session = _bootstrap_instaddr_kuku_direct_session(sess)
         csrf, csrf_sub = _discover_instaddr_csrf(sess)
-        if not csrf or not csrf_sub:
+        if not csrf:
+            csrf = direct_csrf
+        if not csrf:
             return (None, None, None)
         login_resp = sess.post(
             "https://m.kuku.lu/index.php",
@@ -2667,18 +2794,7 @@ def _search_instaddr_kuku_live(user_email, platform):
         )
         if not (login_resp.text or "").startswith("OK:"):
             return (None, None, None)
-        mailbox_list = []
-        try:
-            addr_resp = sess.get("https://m.kuku.lu/datagen.php?action=getAddrList", timeout=20)
-            if addr_resp.ok:
-                mailbox_list = _extract_instaddr_mailboxes(addr_resp.text or "")
-        except Exception:
-            pass
-        known = [m.lower() for m in mailbox_list]
-        for direct_mailbox in reversed(email_match_aliases(user_email)):
-            if direct_mailbox and "@" in direct_mailbox and direct_mailbox not in known:
-                mailbox_list.insert(0, direct_mailbox)
-                known.insert(0, direct_mailbox)
+        mailbox_list = _prepare_instaddr_mailboxes(sess, user_email, csrf, csrf_sub)
         if fallback_mailbox and fallback_mailbox.lower() not in [m.lower() for m in mailbox_list]:
             mailbox_list.append(fallback_mailbox)
         return _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform, csrf, csrf_sub)
