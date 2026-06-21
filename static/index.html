@@ -2955,14 +2955,13 @@
       } catch (e) {}
     }
 
-    async function copyPix(code) {
-      const ok = await writeClipboardSafe(code);
-      if (ok) {
-        showToast('✓ Código Pix copiado!');
-      } else {
-        showToast('⚠️ Seu navegador bloqueou a cópia automática');
-      }
+    function copyPix(code) {
       manualCopyPrompt(code, 'Copie manualmente o código Pix');
+      writeClipboardSafe(code).then(ok => {
+        showToast(ok ? '✓ Código Pix copiado!' : '⚠️ Seu navegador bloqueou a cópia automática');
+      }).catch(() => {
+        showToast('⚠️ Seu navegador bloqueou a cópia automática');
+      });
     }
 
     let currentOrderId = null;
@@ -3065,14 +3064,13 @@
       area.innerHTML = html;
     }
 
-    async function copyVal(v) {
-      const ok = await writeClipboardSafe(v);
-      if (ok) {
-        showToast('✓ Copiado!');
-      } else {
-        showToast('⚠️ Seu navegador bloqueou a cópia automática');
-      }
+    function copyVal(v) {
       manualCopyPrompt(v, 'Copie manualmente');
+      writeClipboardSafe(v).then(ok => {
+        showToast(ok ? '✓ Copiado!' : '⚠️ Seu navegador bloqueou a cópia automática');
+      }).catch(() => {
+        showToast('⚠️ Seu navegador bloqueou a cópia automática');
+      });
     }
 
     // ─────────────────────────────────────────
