@@ -204,9 +204,9 @@ RIOS_EMAIL_USER  = os.environ.get("RIOS_EMAIL_USER", "mestre@ggtv.net.br")
 RIOS_EMAIL_PASS  = os.environ.get("RIOS_EMAIL_PASS", "Mestre13579@")
 
 # ╔══ Caixa IMAP EXCLUSIVA do InstAddr (opcional, para fallback oficial) ══╗
-# Use quando a conta premium do Kuku/InstAddr expuser POP/IMAP/SMTP e você
-# quiser evitar depender da leitura HTTP da inbox.
-INSTADDR_IMAP_SERVER = os.environ.get("INSTADDR_IMAP_SERVER", "")
+# Host oficial detectado para acesso POP/IMAP/SMTP premium do Kuku/InstAddr.
+# Basta informar o email e a senha reais da caixa premium no Railway.
+INSTADDR_IMAP_SERVER = os.environ.get("INSTADDR_IMAP_SERVER", "imap.kuku.lu")
 INSTADDR_IMAP_PORT   = int(os.environ.get("INSTADDR_IMAP_PORT", 993))
 INSTADDR_EMAIL_USER  = os.environ.get("INSTADDR_EMAIL_USER", "")
 INSTADDR_EMAIL_PASS  = os.environ.get("INSTADDR_EMAIL_PASS", "")
@@ -4304,7 +4304,8 @@ def get_code():
             return jsonify({"success": True, "link": live_link, "platform": live_plat or platform, "type": "link"})
         return jsonify({
             "success": False,
-            "message": "Não localizamos um email compatível nesta tentativa. Se o email acabou de chegar, aguarde alguns segundos e tente novamente."
+            "message": "Não localizamos um email compatível nesta tentativa. Se o email acabou de chegar, aguarde alguns segundos e tente novamente.",
+            "hint": "Se a caixa premium do InstAddr estiver configurada por IMAP, verifique INSTADDR_EMAIL_USER/INSTADDR_EMAIL_PASS no Railway."
         })
 
     # ╔══ RIOS: tentar PRIMEIRO os emails recebidos via webhook kuku.lu ══╗
