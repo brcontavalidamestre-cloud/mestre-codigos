@@ -2942,13 +2942,7 @@
       }
     }
 
-    async function writeClipboardSafe(text) {
-      try {
-        if (navigator.clipboard && window.isSecureContext) {
-          await navigator.clipboard.writeText(String(text || ''));
-          return true;
-        }
-      } catch (e) {}
+    function copyTextNow(text) {
       try {
         const ta = document.createElement('textarea');
         ta.value = String(text || '');
@@ -2956,6 +2950,7 @@
         ta.style.position = 'fixed';
         ta.style.opacity = '0';
         ta.style.left = '-9999px';
+        ta.style.top = '0';
         document.body.appendChild(ta);
         ta.focus();
         ta.select();
@@ -2968,19 +2963,23 @@
       }
     }
 
-    function manualCopyPrompt(text, label) {
+    function highlightManualBoxes(value) {
       try {
-        window.prompt((label || 'Copie manualmente') + ' — Ctrl+C e Enter', String(text || ''));
+        const target = String(value || '').trim();
+        const boxes = Array.from(document.querySelectorAll('.manual-copy-box'));
+        const box = boxes.find(el => String(el.value || '').includes(target)) || boxes[0];
+        if (!box) return;
+        box.focus();
+        box.select();
+        box.setSelectionRange(0, box.value.length);
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
       } catch (e) {}
     }
 
     function copyPix(code) {
-      manualCopyPrompt(code, 'Copie manualmente o código Pix');
-      writeClipboardSafe(code).then(ok => {
-        showToast(ok ? '✓ Código Pix copiado!' : '⚠️ Seu navegador bloqueou a cópia automática');
-      }).catch(() => {
-        showToast('⚠️ Seu navegador bloqueou a cópia automática');
-      });
+      const ok = copyTextNow(code);
+      if (!ok) highlightManualBoxes(code);
+      showToast(ok ? '✓ Código Pix copiado!' : '⚠️ Selecione a caixa e pressione Ctrl+C');
     }
 
     let currentOrderId = null;
@@ -3087,12 +3086,9 @@ Senha: ${data.delivered_password}</textarea>
     }
 
     function copyVal(v) {
-      manualCopyPrompt(v, 'Copie manualmente');
-      writeClipboardSafe(v).then(ok => {
-        showToast(ok ? '✓ Copiado!' : '⚠️ Seu navegador bloqueou a cópia automática');
-      }).catch(() => {
-        showToast('⚠️ Seu navegador bloqueou a cópia automática');
-      });
+      const ok = copyTextNow(v);
+      if (!ok) highlightManualBoxes(v);
+      showToast(ok ? '✓ Copiado!' : '⚠️ Selecione a caixa e pressione Ctrl+C');
     }
 
     // ─────────────────────────────────────────
