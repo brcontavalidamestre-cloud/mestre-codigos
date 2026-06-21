@@ -183,6 +183,10 @@
     }
     .hist-cred-row .lbl { font-size:0.7rem; color:var(--text-muted); letter-spacing:1px; }
     .hist-cred-row .val { font-family:monospace; color:var(--gold-light); font-size:0.9rem; flex:1; word-break:break-all; }
+    .hist-cred-row .selectable-value {
+      font-size: 0.9rem;
+      min-height: 36px;
+    }
     .hist-cred-row button {
       background: var(--gold);
       color: #1a0a2e;
@@ -449,6 +453,25 @@
     }
     .credential-row .label { font-size: 0.7rem; color: var(--text-muted); letter-spacing: 1px; }
     .credential-row .value { font-family: monospace; color: var(--gold-light); font-size: 0.95rem; word-break: break-all; flex: 1; text-align: left; }
+    .selectable-value {
+      width: 100%;
+      margin-top: 4px;
+      background: rgba(10, 0, 20, 0.45);
+      color: var(--gold-light);
+      border: 1px solid rgba(245,158,11,0.18);
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-family: monospace;
+      font-size: 0.95rem;
+      line-height: 1.35;
+      resize: none;
+      outline: none;
+      min-height: 38px;
+    }
+    .selectable-value:focus {
+      border-color: var(--gold);
+      box-shadow: 0 0 0 2px rgba(245,158,11,0.16);
+    }
     .credential-row button {
       background: var(--gold);
       color: #1a0a2e;
@@ -3055,20 +3078,20 @@
           <div class="credential-row">
             <div>
               <div class="label">EMAIL</div>
-              <div class="value">${data.delivered_email}</div>
+              <textarea class="selectable-value" readonly onclick="this.focus();this.select();" onfocus="this.select()">${data.delivered_email}</textarea>
             </div>
-            <button onclick='copyVal(${JSON.stringify(data.delivered_email)}, this)'>📋 Copiar</button>
+            <button onclick="selectRowValue(this)">✂️ Selecionar</button>
           </div>
           <div class="credential-row">
             <div>
               <div class="label">SENHA</div>
-              <div class="value">${data.delivered_password}</div>
+              <textarea class="selectable-value" readonly onclick="this.focus();this.select();" onfocus="this.select()">${data.delivered_password}</textarea>
             </div>
-            <button onclick='copyVal(${JSON.stringify(data.delivered_password)}, this)'>📋 Copiar</button>
+            <button onclick="selectRowValue(this)">✂️ Selecionar</button>
           </div>
           <button style="margin-top:14px;background:var(--purple-mid);color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.85rem"
-            onclick='copyVal(${JSON.stringify('Email: ' + data.delivered_email + '\nSenha: ' + data.delivered_password)}, this)'>
-            📋 Copiar tudo
+            onclick="selectCombinedBox(this)">
+            ✂️ Selecionar Email + Senha
           </button>
           <textarea class="manual-copy-box" readonly onclick="this.focus();this.select();" onfocus="this.select()">Email: ${data.delivered_email}
 Senha: ${data.delivered_password}</textarea>
@@ -3102,10 +3125,33 @@ Senha: ${data.delivered_password}</textarea>
       }
     }
 
-    function copyVal(v, triggerEl) {
-      const ok = copyFromVisibleBox(v, triggerEl);
-      if (!ok) highlightManualBoxes(v);
-      showToast(ok ? '✓ Copiado!' : '⚠️ Selecione a caixa e pressione Ctrl+C');
+    function selectTextBox(box) {
+      try {
+        if (!box) return false;
+        box.focus();
+        box.select();
+        if (typeof box.setSelectionRange === 'function') {
+          box.setSelectionRange(0, box.value.length);
+        }
+        box.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        return true;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    function selectRowValue(triggerEl) {
+      const row = triggerEl && triggerEl.closest ? triggerEl.closest('.credential-row, .hist-cred-row') : null;
+      const box = row ? row.querySelector('.selectable-value') : null;
+      const ok = selectTextBox(box);
+      showToast(ok ? '✓ Texto selecionado! Agora use Ctrl+C' : '⚠️ Não foi possível selecionar');
+    }
+
+    function selectCombinedBox(triggerEl) {
+      const scope = triggerEl && triggerEl.closest ? triggerEl.closest('.hist-credentials, .paid-box') : null;
+      const box = scope ? scope.querySelector('.manual-copy-box') : null;
+      const ok = selectTextBox(box);
+      showToast(ok ? '✓ Texto selecionado! Agora use Ctrl+C' : '⚠️ Não foi possível selecionar');
     }
 
     // ─────────────────────────────────────────
@@ -3179,21 +3225,21 @@ Senha: ${data.delivered_password}</textarea>
             <div class="hist-cred-row">
               <div style="flex:1">
                 <div class="lbl">EMAIL</div>
-                <div class="val">${escapeHtml(o.delivered_email)}</div>
+                <textarea class="selectable-value" readonly onclick="this.focus();this.select();" onfocus="this.select()">${escapeHtml(o.delivered_email)}</textarea>
               </div>
-              <button onclick="copyVal(${JSON.stringify(o.delivered_email)}, this)">📋 Copiar</button>
+              <button onclick="selectRowValue(this)">✂️ Selecionar</button>
             </div>
             <div class="hist-cred-row">
               <div style="flex:1">
                 <div class="lbl">SENHA</div>
-                <div class="val">${escapeHtml(o.delivered_password)}</div>
+                <textarea class="selectable-value" readonly onclick="this.focus();this.select();" onfocus="this.select()">${escapeHtml(o.delivered_password)}</textarea>
               </div>
-              <button onclick="copyVal(${JSON.stringify(o.delivered_password)}, this)">📋 Copiar</button>
+              <button onclick="selectRowValue(this)">✂️ Selecionar</button>
             </div>
             ${o.delivered_note ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px">📌 ${escapeHtml(o.delivered_note)}</div>` : ''}
-            <button onclick="copyVal(${JSON.stringify('Email: ' + o.delivered_email + '\nSenha: ' + o.delivered_password)}, this)"
+            <button onclick="selectCombinedBox(this)"
               style="width:100%;margin-top:10px;background:var(--purple-mid);color:#fff;border:none;padding:9px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.82rem;letter-spacing:1px">
-              📋 Copiar Email + Senha
+              ✂️ Selecionar Email + Senha
             </button>
             <textarea class="manual-copy-box" readonly onclick="this.focus();this.select();" onfocus="this.select()">Email: ${escapeHtml(o.delivered_email)}
 Senha: ${escapeHtml(o.delivered_password)}</textarea>
