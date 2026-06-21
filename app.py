@@ -4363,6 +4363,10 @@ def _do_meus_pedidos():
 
 @app.route("/api/loja/order-status/<order_id>", methods=["GET"])
 def api_loja_order_status(order_id):
+    # Vitrine Loja 2: consulta no servidor central da Loja 2
+    if _is_loja2_vitrine() and not _is_rios_request():
+        result, status = _proxy_loja2(f"/api/internal/loja2/order-status/{order_id}", method="GET")
+        return jsonify(result), status
     # Loja standalone: consulta no mestre
     if is_loja_host() and not is_master_host():
         result, status = _proxy_to_master(f"/api/internal/loja/order-status/{order_id}", method="GET")
@@ -4412,6 +4416,10 @@ def _do_order_status(order_id):
 
 @app.route("/api/loja/force-check/<order_id>", methods=["POST"])
 def api_loja_force_check(order_id):
+    # Vitrine Loja 2: consulta no servidor central da Loja 2
+    if _is_loja2_vitrine() and not _is_rios_request():
+        result, status = _proxy_loja2(f"/api/internal/loja2/force-check/{order_id}", method="POST")
+        return jsonify(result), status
     # Loja standalone: consulta no mestre
     if is_loja_host() and not is_master_host():
         result, status = _proxy_to_master(f"/api/internal/loja/force-check/{order_id}", method="POST")
@@ -6017,7 +6025,24 @@ def _do_meus_pedidos2():
     orders = load_orders2()
     my = [o for o in orders if isinstance(o, dict) and (o.get("customer_email", "") or "").lower() == email]
     my.sort(key=lambda o: o.get("created_at", 0) or 0, reverse=True)
-    return jsonify({"success": True, "orders": my[:20]})
+
+    result = []
+    for o in my[:20]:
+        result.append({
+            "order_id": o.get("id"),
+            "product_name": o.get("product_name"),
+            "price": o.get("price"),
+            "status": o.get("status"),
+            "created_at": o.get("created_at"),
+            "paid_at": o.get("paid_at"),
+            "delivered_email": o.get("delivered_email"),
+            "delivered_password": o.get("delivered_password"),
+            "delivered_note": o.get("delivered_note"),
+            "pix_copia_cola": o.get("pix_copia_cola") if o.get("status") == "pending" else None,
+            "pix_qrcode": o.get("pix_qrcode") if o.get("status") == "pending" else None,
+            "pix_expires_at": o.get("pix_expires_at"),
+        })
+    return jsonify({"success": True, "email": email, "total": len(my), "orders": result})
 
 
 @app.route("/api/loja2/meus-pedidos", methods=["POST"])
@@ -6035,6 +6060,83 @@ def api_internal_loja2_meus_pedidos():
     if token != LOJA2_PROXY_TOKEN:
         return jsonify({"success": False, "message": "Token invalido."}), 403
     return _do_meus_pedidos2()
+
+
+def _do_order_status2(order_id):
+    try:
+        orders = load_orders2()
+        order = next((o for o in orders if isinstance(o, dict) and o.get("id") == order_id), None)
+        if not order:
+            return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
+
+        debug_info = {}
+        if order.get("status") == "pending" and order.get("pix_txid"):
+            check = efi_check_pix_status(order["pix_txid"], loja2=True)
+            debug_info["efi_check"] = {
+                "status": check.get("status"),
+                "paid": check.get("paid"),
+                "reason": check.get("reason")
+            }
+            if check.get("paid"):
+                order = _mark_order2_paid_and_deliver(order_id)
+
+        return jsonify({
+            "success": True,
+            "order_id": order.get("id"),
+            "status": order.get("status"),
+            "product_name": order.get("product_name"),
+            "delivered_email": order.get("delivered_email"),
+            "delivered_password": order.get("delivered_password"),
+            "delivered_note": order.get("delivered_note"),
+            "debug": debug_info
+        })
+    except Exception as e:
+        import traceback
+        print(f"[order-status-loja2] erro: {e}\n{traceback.format_exc()}")
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
+
+
+@app.route("/api/internal/loja2/order-status/<order_id>", methods=["GET"])
+def api_internal_loja2_order_status(order_id):
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != LOJA2_PROXY_TOKEN:
+        return jsonify({"success": False, "message": "Token invalido."}), 403
+    return _do_order_status2(order_id)
+
+
+def _do_force_check2(order_id):
+    try:
+        orders = load_orders2()
+        order = next((o for o in orders if isinstance(o, dict) and o.get("id") == order_id), None)
+        if not order:
+            return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
+        if order.get("status") == "paid":
+            return jsonify({"success": True, "already_paid": True, "order": order})
+        if not order.get("pix_txid"):
+            return jsonify({"success": False, "message": "Pedido sem txid."})
+        check = efi_check_pix_status(order["pix_txid"], loja2=True)
+        if check.get("paid"):
+            order = _mark_order2_paid_and_deliver(order_id)
+            return jsonify({"success": True, "paid": True, "order": order})
+        return jsonify({
+            "success": True,
+            "paid": False,
+            "efi_status": check.get("status"),
+            "reason": check.get("reason"),
+            "raw": check.get("raw")
+        })
+    except Exception as e:
+        import traceback
+        print(f"[force-check-loja2] erro: {e}\n{traceback.format_exc()}")
+        return jsonify({"success": False, "message": f"Erro: {e}"}), 500
+
+
+@app.route("/api/internal/loja2/force-check/<order_id>", methods=["POST"])
+def api_internal_loja2_force_check(order_id):
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != LOJA2_PROXY_TOKEN:
+        return jsonify({"success": False, "message": "Token invalido."}), 403
+    return _do_force_check2(order_id)
 
 
 @app.route("/api/loja2/webhook/efi", methods=["POST", "GET"])

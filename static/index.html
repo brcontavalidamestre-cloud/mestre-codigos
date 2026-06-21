@@ -2923,9 +2923,35 @@
       }
     }
 
-    function copyPix(code) {
-      navigator.clipboard.writeText(code);
-      showToast('✓ Código Pix copiado!');
+    async function writeClipboardSafe(text) {
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(String(text || ''));
+          return true;
+        }
+      } catch (e) {}
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = String(text || '');
+        ta.setAttribute('readonly', '');
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        ta.setSelectionRange(0, ta.value.length);
+        const ok = document.execCommand('copy');
+        document.body.removeChild(ta);
+        return !!ok;
+      } catch (e) {
+        return false;
+      }
+    }
+
+    async function copyPix(code) {
+      const ok = await writeClipboardSafe(code);
+      showToast(ok ? '✓ Código Pix copiado!' : '❌ Não foi possível copiar');
     }
 
     let currentOrderId = null;
@@ -3028,9 +3054,9 @@
       area.innerHTML = html;
     }
 
-    function copyVal(v) {
-      navigator.clipboard.writeText(v);
-      showToast('✓ Copiado!');
+    async function copyVal(v) {
+      const ok = await writeClipboardSafe(v);
+      showToast(ok ? '✓ Copiado!' : '❌ Não foi possível copiar');
     }
 
     // ─────────────────────────────────────────
@@ -3078,7 +3104,8 @@
           info.textContent = 'Nenhuma compra encontrada para este email.';
           return;
         }
-        info.textContent = `✓ ${j.total} compra(s) encontrada(s)`;
+        const totalFound = Number.isFinite(Number(j.total)) ? Number(j.total) : ((j.orders || []).length);
+        info.textContent = `✓ ${totalFound} compra(s) encontrada(s)`;
         res.innerHTML = j.orders.map(o => renderHistOrder(o)).join('');
       } catch(e) {
         info.textContent = '❌ Erro de conexão.';
@@ -3135,7 +3162,7 @@
           body = `
             <div class="hist-pix-actions">
               ${o.pix_copia_cola ? `<button class="btn-pix-copy" onclick="copyVal(${JSON.stringify(o.pix_copia_cola)})">📋 Copiar Pix</button>` : ''}
-              <button class="btn-pix-recheck" onclick="recheckHist('${o.order_id}')">🔄 Já paguei</button>
+              <button class="btn-pix-recheck" onclick="recheckHist('${o.order_id || o.id || ""}')">🔄 Já paguei</button>
               ${o.pix_qrcode ? `<button class="btn-pix-show-qr" onclick="showQrModal(${JSON.stringify(o.pix_qrcode)})">📱 Ver QR Code</button>` : ''}
             </div>
           `;
@@ -3147,7 +3174,7 @@
           <div class="hist-header">
             <div style="flex:1">
               <div class="hist-title">${escapeHtml(o.product_name || '')} — R$ ${valor}</div>
-              <div class="hist-meta">Pedido: <code style="color:var(--gold-light)">${o.order_id}</code></div>
+              <div class="hist-meta">Pedido: <code style="color:var(--gold-light)">${escapeHtml(o.order_id || o.id || "—")}</code></div>
               <div class="hist-meta">Criado em: ${dt}${dtPaid ? ' • Pago em: ' + dtPaid : ''}</div>
             </div>
             <span class="hist-status ${cls}">${lbl}</span>
