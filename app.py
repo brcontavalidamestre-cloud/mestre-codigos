@@ -6774,6 +6774,99 @@ def _save_kuku_mails(mails):
     except Exception as e:
         print(f"[kuku-webhook] erro salvar: {e}")
 
+
+def _normalize_browser_sync_mail(item):
+    item = item if isinstance(item, dict) else {}
+    to_addr = str(item.get("to") or item.get("mailbox") or item.get("email") or "").strip().lower()
+    from_addr = str(item.get("from") or item.get("sender") or "").strip()
+    subject = str(item.get("subject") or "").strip()
+    body = str(item.get("body") or item.get("html") or item.get("content") or "").strip()
+    if not subject and not body:
+        return None
+    try:
+        received_at = int(item.get("received_at") or item.get("timestamp") or item.get("ts") or time.time())
+    except Exception:
+        received_at = int(time.time())
+    return {
+        "to": to_addr,
+        "from": from_addr,
+        "subject": subject,
+        "body": body,
+        "received_at": received_at,
+        "source": "browser-sync",
+    }
+
+
+def _merge_browser_sync_mails(new_mails, keep=500):
+    current = _load_kuku_mails()
+    current = current if isinstance(current, list) else []
+    merged = []
+    seen = set()
+    for raw in current + (new_mails or []):
+        mail = raw if isinstance(raw, dict) else None
+        if not mail:
+            continue
+        body_key = hashlib.sha1(str(mail.get("body") or "").encode("utf-8", errors="ignore")).hexdigest()[:16]
+        key = (
+            str(mail.get("to") or "").strip().lower(),
+            str(mail.get("from") or "").strip().lower(),
+            str(mail.get("subject") or "").strip(),
+            body_key,
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(mail)
+    merged = merged[-max(keep, 50):]
+    _save_kuku_mails(merged)
+    return merged
+
+
+@app.route("/api/instaddr/browser-sync-mails", methods=["POST", "OPTIONS"])
+def api_instaddr_browser_sync_mails():
+    payload = request.get_json(silent=True)
+    if not payload:
+        payload = request.form.to_dict(flat=True) if request.form else {}
+    if isinstance(payload, dict) and payload.get("payload"):
+        try:
+            payload = json.loads(payload.get("payload"))
+        except Exception:
+            payload = {}
+    payload = payload if isinstance(payload, dict) else {}
+
+    session_payload = {
+        "cookie_header": payload.get("cookie_header") or payload.get("cookie") or "",
+        "sessionhash": payload.get("sessionhash") or "",
+        "csrf_token": payload.get("csrf_token") or "",
+        "cf_clearance": payload.get("cf_clearance") or "",
+        "csrf_check": payload.get("csrf_check") or "",
+        "csrf_subtoken_check": payload.get("csrf_subtoken_check") or "",
+        "page_url": payload.get("page_url") or "",
+        "user_agent": payload.get("user_agent") or request.headers.get("User-Agent", ""),
+    }
+    if any([session_payload.get("cookie_header"), session_payload.get("sessionhash"), session_payload.get("csrf_token"), session_payload.get("cf_clearance")]):
+        try:
+            _save_instaddr_browser_session(session_payload)
+        except Exception as e:
+            print(f"[instaddr-sync] erro ao salvar sessão: {e}")
+
+    raw_mails = payload.get("mails") or []
+    if not isinstance(raw_mails, list):
+        raw_mails = []
+    normalized = []
+    for item in raw_mails:
+        mail = _normalize_browser_sync_mail(item)
+        if mail:
+            normalized.append(mail)
+    merged = _merge_browser_sync_mails(normalized)
+    return jsonify({
+        "success": True,
+        "imported_count": len(normalized),
+        "stored_count": len(merged),
+        "configured_session": bool(session_payload.get("cookie_header") or session_payload.get("sessionhash") or session_payload.get("cf_clearance")),
+    })
+
+
 @app.route("/api/instaddr/browser-session", methods=["POST", "GET"])
 def api_instaddr_browser_session():
     if request.method == "GET":
