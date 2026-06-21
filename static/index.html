@@ -2985,9 +2985,6 @@
         <div class="error-title">Código não localizado</div>
         <div class="error-msg">${safeMsg}</div>
       `;
-      if (isInstaddrSite() && /caixa instaddr|sessionhash|cf_clearance|kuku/i.test(rawMsg.toLowerCase())) {
-        appendInstaddrSyncCta(box);
-      }
       box.style.display = 'block';
     }
 
@@ -3678,11 +3675,6 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
       try { if (typeof loadProducts === 'function') loadProducts(); } catch(e){}
     }
     configureLojaStandalone();
-    if (isInstaddrSite()) {
-      const syncActions = document.getElementById('instaddr-sync-actions');
-      if (syncActions) syncActions.style.display = 'flex';
-      refreshInstaddrSyncStatus();
-    }
   </script>
 </body>
 </html>

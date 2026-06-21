@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>InstAddr Admin Sync</title>
+  <style>
+    body { background:#0b1020; color:#eef2ff; font-family:Arial,sans-serif; margin:0; }
+    .wrap { max-width:980px; margin:0 auto; padding:28px 18px 60px; }
+    h1 { margin:0 0 8px; color:#fbbf24; }
+    .sub { color:#cbd5e1; line-height:1.6; margin-bottom:20px; }
+    .card { background:#111827; border:1px solid #334155; border-radius:16px; padding:18px; margin:16px 0; box-shadow:0 10px 30px rgba(0,0,0,.25); }
+    .row { display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+    .btn { display:inline-block; padding:12px 16px; border-radius:12px; text-decoration:none; border:none; cursor:pointer; background:linear-gradient(135deg,#7c3aed,#2563eb); color:#fff; font-weight:700; }
+    .btn.alt { background:linear-gradient(135deg,#0f766e,#2563eb); }
+    .btn.warn { background:linear-gradient(135deg,#b45309,#ea580c); }
+    textarea { width:100%; min-height:96px; margin-top:10px; background:#020617; color:#f8fafc; border:1px solid #475569; border-radius:10px; padding:10px; font-family:monospace; }
+    .pill { display:inline-block; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+    .ok { background:#14532d; color:#bbf7d0; }
+    .warn-pill { background:#78350f; color:#fde68a; }
+    table { width:100%; border-collapse:collapse; margin-top:12px; font-size:14px; }
+    th, td { border-bottom:1px solid #334155; padding:10px 8px; text-align:left; vertical-align:top; }
+    th { color:#fbbf24; }
+    .muted { color:#94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>InstAddr — painel privado de sincronização</h1>
+    <div class="sub">Este painel é para uso administrativo. Ele serve para alimentar o servidor do InstAddr sem expor a inbox do Kuku aos clientes na página pública.</div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div>
+          <div style="font-size:20px;font-weight:700">Status do servidor</div>
+          <div id="status-line" class="muted">Carregando…</div>
+        </div>
+        <div id="status-pill" class="pill warn-pill">aguardando</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="font-size:20px;font-weight:700;margin-bottom:10px">Opção recomendada — webhook permanente</div>
+      <div class="sub">Configure uma vez no Kuku para que cada email novo seja entregue automaticamente ao servidor. Depois disso, os clientes só usam o campo de consulta normal.</div>
+      <div><b>Webhook URL</b></div>
+      <textarea id="webhook-url" readonly onclick="this.focus();this.select();" onfocus="this.select()"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn alt" onclick="selectBox('webhook-url')">Selecionar webhook</button>
+        <a class="btn" href="https://m.kuku.lu/" target="_blank" rel="noopener noreferrer">Abrir m.kuku.lu</a>
+      </div>
+      <ol>
+        <li>Entre na conta do Kuku usada pelo InstAddr.</li>
+        <li>Abra as configurações de encaminhamento/webhook.</li>
+        <li>Cole a URL acima.</li>
+        <li>Envie um email de teste e depois atualize o status desta página.</li>
+      </ol>
+    </div>
+
+    <div class="card">
+      <div style="font-size:20px;font-weight:700;margin-bottom:10px">Plano B — sincronização privada do navegador</div>
+      <div class="sub">Use apenas você, no seu navegador/admin. Isso não aparece mais para o cliente na home do InstAddr.</div>
+      <ol>
+        <li>Arraste o botão <b>Favorito de sincronização</b> para a barra de favoritos.</li>
+        <li>Abra a inbox no <b>m.kuku.lu</b>.</li>
+        <li>Clique no favorito para enviar sessão + emails recentes ao servidor.</li>
+        <li>Volte ao InstAddr público e teste a consulta.</li>
+      </ol>
+      <div class="row">
+        <a id="bookmarklet-link" class="btn warn" href="#">⭐ Favorito de sincronização</a>
+        <button class="btn alt" onclick="selectBox('bookmarklet-code')">Selecionar script</button>
+      </div>
+      <textarea id="bookmarklet-code" readonly onclick="this.focus();this.select();" onfocus="this.select()"></textarea>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div style="font-size:20px;font-weight:700">Últimos emails capturados</div>
+        <button class="btn alt" onclick="loadStatus()">Atualizar status</button>
+      </div>
+      <div id="recent-wrap" class="muted" style="margin-top:10px">Nenhum dado carregado ainda.</div>
+    </div>
+  </div>
+
+<script>
+function selectBox(id){ const el=document.getElementById(id); if(!el) return; el.focus(); el.select(); }
+
+async function runKukuBrowserSync(apiBase) {
+  function extractMailboxes(raw) {
+    const out = [];
+    String(raw || '').split(/\r?\n/).slice(1).forEach(line => {
+      const data = line.replace(/"/g, '').split(',');
+      const addr = String((data[3] || data[0] || '')).trim().toLowerCase();
+      if (addr && addr.includes('@') && !out.includes(addr)) out.push(addr);
+    });
+    return out;
+  }
+  function pickText(doc, selectors) {
+    for (const sel of selectors) {
+      const el = doc.querySelector(sel);
+      const txt = el ? String(el.textContent || '').trim() : '';
+      if (txt) return txt;
+    }
+    return '';
+  }
+  try {
+    if (!/kuku\.lu$/i.test(location.hostname || '')) {
+      alert('Abra a caixa no m.kuku.lu antes de sincronizar.');
+      return;
+    }
+    const html = document.documentElement ? document.documentElement.innerHTML : '';
+    const csrf = (html.match(/csrf_token_check=([A-Za-z0-9_-]+)/) || [])[1] || '';
+    const csrfSub = (html.match(/csrf_subtoken_check=([A-Za-z0-9_-]+)/) || [])[1] || '';
+    if (!csrf) {
+      alert('Não consegui localizar o token do Kuku. Recarregue a inbox e tente novamente.');
+      return;
+    }
+    const addrResp = await fetch('/datagen.php?action=getAddrList', { credentials: 'include' });
+    const addrText = await addrResp.text();
+    let mailboxes = extractMailboxes(addrText);
+    const visibleEmails = (document.body && document.body.innerText ? document.body.innerText.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/ig) : []) || [];
+    visibleEmails.map(v => String(v || '').trim().toLowerCase()).forEach(v => {
+      if (v && !mailboxes.includes(v)) mailboxes.push(v);
+    });
+    mailboxes = mailboxes.slice(0, 12);
+    if (!mailboxes.length) {
+      alert('Nenhuma caixa foi localizada nessa sessão do Kuku.');
+      return;
+    }
+    const mails = [];
+    for (const mailbox of mailboxes) {
+      const qs = new URLSearchParams({ q: mailbox, nopost: '1', csrf_token_check: csrf });
+      if (csrfSub) qs.set('csrf_subtoken_check', csrfSub);
+      const listResp = await fetch('/recv._ajax.php?' + qs.toString(), { credentials: 'include' });
+      const listHtml = await listResp.text();
+      const entries = [...listHtml.matchAll(/openMailData\(['"]?(\d+)['"]?,\s*['"]?([a-f0-9]+)['"]?/ig)].slice(-20);
+      for (const entry of entries) {
+        const num = entry[1];
+        const key = entry[2];
+        const viewResp = await fetch('/smphone.app.recv.view.php', {
+          method:'POST',
+          credentials:'include',
+          headers:{ 'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8' },
+          body:new URLSearchParams({ num, key, noscroll:'1' }).toString(),
+        });
+        const viewHtml = await viewResp.text();
+        const doc = new DOMParser().parseFromString(viewHtml, 'text/html');
+        const subject = pickText(doc, ['.full', 'title', 'h1', 'h2']) || 'Sem assunto';
+        const fromText = pickText(doc, ['.from', '.mailfrom', '[class*="from"]', '.sender', '.frm']);
+        const bodyHtml = (doc.body && doc.body.innerHTML) ? doc.body.innerHTML : viewHtml;
+        mails.push({ to: mailbox, from: fromText, subject: subject, body: bodyHtml, received_at: Math.floor(Date.now()/1000), source: 'browser-sync' });
+      }
+    }
+    const payload = { cookie_header: document.cookie || '', page_url: location.href, user_agent: navigator.userAgent || '', csrf_check: csrf, csrf_subtoken_check: csrfSub, mails };
+    const resp = await fetch(String(apiBase || '').replace(/\/$/, '') + '/api/instaddr/browser-sync-mails', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8' },
+      body:new URLSearchParams({ payload: JSON.stringify(payload) }).toString()
+    });
+    const text = await resp.text();
+    let data = {};
+    try { data = JSON.parse(text); } catch(e) {}
+    alert(data && data.success ? 'Sincronização concluída com sucesso.' : 'A sincronização foi enviada.');
+  } catch (err) {
+    alert('Falha ao sincronizar: ' + (err && err.message ? err.message : err));
+  }
+}
+function buildBookmarklet(){ const apiBase = String(window.location.origin || '').replace(/\/$/, ''); return 'javascript:(' + runKukuBrowserSync.toString() + ')(' + JSON.stringify(apiBase) + ');void(0);'; }
+async function loadStatus(){
+  const r = await fetch('/api/instaddr/admin-sync-info');
+  const j = await r.json();
+  document.getElementById('webhook-url').value = j.webhook_url || '';
+  const statusLine = [];
+  statusLine.push(j.session_configured ? 'Sessão privada salva no servidor.' : 'Sem sessão privada salva no servidor.');
+  statusLine.push('Emails armazenados: ' + (j.recent_total || 0));
+  document.getElementById('status-line').textContent = statusLine.join(' ');
+  const pill = document.getElementById('status-pill');
+  pill.textContent = j.session_configured ? 'sincronizado' : 'pendente';
+  pill.className = 'pill ' + (j.session_configured ? 'ok' : 'warn-pill');
+  const recent = Array.isArray(j.recent) ? j.recent : [];
+  if (!recent.length) {
+    document.getElementById('recent-wrap').innerHTML = '<div class="muted">Nenhum email capturado ainda.</div>';
+  } else {
+    const rows = recent.map(m => `<tr><td>${m.to || ''}</td><td>${m.from || ''}</td><td>${m.subject || ''}</td><td>${m.source || ''}</td></tr>`).join('');
+    document.getElementById('recent-wrap').innerHTML = `<table><thead><tr><th>Para</th><th>De</th><th>Assunto</th><th>Origem</th></tr></thead><tbody>${rows}</tbody></table>`;
+  }
+}
+document.getElementById('bookmarklet-code').value = buildBookmarklet();
+document.getElementById('bookmarklet-link').href = buildBookmarklet();
+loadStatus();
+</script>
+</body>
+</html>

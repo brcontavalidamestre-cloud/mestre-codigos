@@ -2546,25 +2546,30 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
             content = text_match.group(1) if text_match else body
             combined = f"{subject}\n{content}"
             clow = combined.lower()
+            cnorm = normalize(combined)
             mailbox_low = str(mailbox or '').strip().lower()
             exact_mailbox = bool(ulow and mailbox_low == ulow)
-            if ulow and not exact_mailbox and ulow not in clow:
+            if ulow and not exact_mailbox and ulow not in clow and normalize(ulow) not in cnorm:
                 continue
             for plat in plats:
                 pcfg = PLATFORM_CONFIG.get(plat, {})
                 if not pcfg:
                     continue
-                from_kw = (pcfg.get("from_keyword") or "").lower()
+                from_kw_raw = (pcfg.get("from_keyword") or "")
+                from_kw = from_kw_raw.lower()
+                from_kw_norm = normalize(from_kw_raw) if from_kw_raw else ""
                 subj_kws = [k.lower() for k in pcfg.get("subject_keywords", [])]
+                subj_kws_norm = [normalize(k) for k in pcfg.get("subject_keywords", [])]
                 neg_kws  = [k.lower() for k in pcfg.get("negative_keywords", [])]
-                subject_hit = (not subj_kws) or any(sk in clow for sk in subj_kws)
-                from_hit = (not from_kw) or (from_kw in clow)
+                neg_kws_norm = [normalize(k) for k in pcfg.get("negative_keywords", [])]
+                subject_hit = (not subj_kws) or any(sk in clow for sk in subj_kws) or any(sk in cnorm for sk in subj_kws_norm)
+                from_hit = (not from_kw) or (from_kw in clow) or (from_kw_norm and from_kw_norm in cnorm)
                 if from_kw and not from_hit:
                     # No modo cookie/caixa exata, o HTML do InstAddr às vezes não expõe
                     # claramente o remetente. Se o assunto bater fortemente, aceita.
                     if not (exact_mailbox and subject_hit):
                         continue
-                if any(nk in clow for nk in neg_kws):
+                if any(nk in clow for nk in neg_kws) or any(nk in cnorm for nk in neg_kws_norm):
                     continue
                 if subj_kws and not subject_hit:
                     continue
@@ -2693,22 +2698,27 @@ def _search_kuku_webhook(user_email, platform):
         frm     = (mail.get("from") or "")
         combined = f"{subject}\n{frm}\n{body}"
         clow = combined.lower()
+        cnorm = normalize(combined)
 
         for plat in plats:
             pcfg = PLATFORM_CONFIG.get(plat, {})
             if not pcfg:
                 continue
-            from_kw = (pcfg.get("from_keyword") or "").lower()
+            from_kw_raw = (pcfg.get("from_keyword") or "")
+            from_kw = from_kw_raw.lower()
+            from_kw_norm = normalize(from_kw_raw) if from_kw_raw else ""
             subj_kws = [k.lower() for k in pcfg.get("subject_keywords", [])]
+            subj_kws_norm = [normalize(k) for k in pcfg.get("subject_keywords", [])]
             neg_kws  = [k.lower() for k in pcfg.get("negative_keywords", [])]
+            neg_kws_norm = [normalize(k) for k in pcfg.get("negative_keywords", [])]
             # 1) remetente
-            if from_kw and from_kw not in clow:
+            if from_kw and from_kw not in clow and (not from_kw_norm or from_kw_norm not in cnorm):
                 continue
             # 2) negative
-            if any(nk in clow for nk in neg_kws):
+            if any(nk in clow for nk in neg_kws) or any(nk in cnorm for nk in neg_kws_norm):
                 continue
             # 3) subject keyword (pelo menos 1, se configurado)
-            if subj_kws and not any(sk in clow for sk in subj_kws):
+            if subj_kws and not any(sk in clow for sk in subj_kws) and not any(sk in cnorm for sk in subj_kws_norm):
                 continue
             # match! extrai código ou link
             if pcfg.get("type") == "link" or plat in ("netflix-temp", "netflix-residence", "password-reset", "disney-residence"):
@@ -3451,6 +3461,36 @@ def api_license_status():
         "customer_name": (lic or {}).get("customer_name")
     })
 
+@app.route("/api/instaddr/admin-sync-info", methods=["GET"])
+def api_instaddr_admin_sync_info():
+    if not _is_instaddr_request():
+        return jsonify({"success": False, "message": "indisponivel"}), 404
+    mails = _load_kuku_mails()
+    mails = mails if isinstance(mails, list) else []
+    recent = mails[-10:][::-1]
+    saved = _load_instaddr_browser_session()
+    base = request.host_url.rstrip('/')
+    return jsonify({
+        "success": True,
+        "session_configured": bool(saved.get("cookie_header") or saved.get("sessionhash") or saved.get("cf_clearance")),
+        "session_updated_at": saved.get("updated_at", 0),
+        "webhook_url": f"{base}/api/kuku-webhook?token={KUKU_WEBHOOK_TOKEN}",
+        "recent_total": len(mails),
+        "recent": [{
+            "to": m.get("to", ""),
+            "from": m.get("from", ""),
+            "subject": str(m.get("subject", ""))[:120],
+            "received_at": m.get("received_at", 0),
+            "source": m.get("source", "")
+        } for m in recent]
+    })
+
+@app.route("/instaddr-admin-sync")
+def instaddr_admin_sync_page():
+    if not _is_instaddr_request():
+        return redirect("/")
+    return send_from_directory("static", "instaddr_admin_sync.html")
+
 @app.route("/")
 def index():
     # LOJA SEPARADA e InstAddr público: acesso direto
@@ -3987,7 +4027,7 @@ def get_code():
             return jsonify({"success": True, "link": live_link, "platform": live_plat or platform, "type": "link"})
         return jsonify({
             "success": False,
-            "message": "Caixa InstAddr sem emails localizáveis. Configure os cookies da sessão Kuku (sessionhash/csrf/cf_clearance), ou verifique o AccountID/senha da conta Kuku; se preferir, defina também INSTADDR_KUKU_INBOX_ADDRESS com um endereço fixo da caixa."
+            "message": "Não localizamos um email compatível nesta tentativa. Se o email acabou de chegar, aguarde alguns segundos e tente novamente."
         })
 
     # ╔══ RIOS: tentar PRIMEIRO os emails recebidos via webhook kuku.lu ══╗
