@@ -2960,9 +2960,9 @@
       if (ok) {
         showToast('✓ Código Pix copiado!');
       } else {
-        manualCopyPrompt(code, 'Copie manualmente o código Pix');
         showToast('⚠️ Seu navegador bloqueou a cópia automática');
       }
+      manualCopyPrompt(code, 'Copie manualmente o código Pix');
     }
 
     let currentOrderId = null;
@@ -3070,9 +3070,9 @@
       if (ok) {
         showToast('✓ Copiado!');
       } else {
-        manualCopyPrompt(v, 'Copie manualmente');
         showToast('⚠️ Seu navegador bloqueou a cópia automática');
       }
+      manualCopyPrompt(v, 'Copie manualmente');
     }
 
     // ─────────────────────────────────────────
