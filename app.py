@@ -203,6 +203,14 @@ RIOS_IMAP_PORT   = int(os.environ.get("RIOS_IMAP_PORT", 993))
 RIOS_EMAIL_USER  = os.environ.get("RIOS_EMAIL_USER", "mestre@ggtv.net.br")
 RIOS_EMAIL_PASS  = os.environ.get("RIOS_EMAIL_PASS", "Mestre13579@")
 
+# ╔══ Caixa IMAP EXCLUSIVA do InstAddr (opcional, para fallback oficial) ══╗
+# Use quando a conta premium do Kuku/InstAddr expuser POP/IMAP/SMTP e você
+# quiser evitar depender da leitura HTTP da inbox.
+INSTADDR_IMAP_SERVER = os.environ.get("INSTADDR_IMAP_SERVER", "")
+INSTADDR_IMAP_PORT   = int(os.environ.get("INSTADDR_IMAP_PORT", 993))
+INSTADDR_EMAIL_USER  = os.environ.get("INSTADDR_EMAIL_USER", "")
+INSTADDR_EMAIL_PASS  = os.environ.get("INSTADDR_EMAIL_PASS", "")
+
 # ─── Caixas IMAP EXCLUSIVAS do ceara.up.railway.app ────────────────────────────
 # Estas variaveis sao definidas APENAS no serviço 'ceara' no Railway.
 # Em qualquer outro link (rios, mestre, lojario, jmp...) elas ficam vazias e
@@ -323,7 +331,16 @@ def get_imap_accounts():
 
     # ╔══ InstAddr: não reutiliza caixas IMAP dos outros links ══╗
     # A consulta pública deste host usa SOMENTE a caixa dedicada do InstAddr/Kuku.
+    # Se houver IMAP oficial configurado (conta premium), usa-o antes do fallback HTTP.
     if _is_instaddr_request():
+        if INSTADDR_IMAP_SERVER and INSTADDR_EMAIL_USER and INSTADDR_EMAIL_PASS:
+            return [{
+                "name": "caixa-instaddr-imap",
+                "server": INSTADDR_IMAP_SERVER,
+                "port": INSTADDR_IMAP_PORT,
+                "user": INSTADDR_EMAIL_USER,
+                "password": INSTADDR_EMAIL_PASS,
+            }]
         return []
 
     # ╔══ JMP: usa SOMENTE as caixas exclusivas do próprio JMP ══╗
@@ -2470,10 +2487,11 @@ def _new_instaddr_kuku_session():
         cval = str(cval or "").strip()
         if not cval:
             continue
-        try:
-            sess.cookies.set(cname, cval, domain="m.kuku.lu", path="/")
-        except Exception:
-            pass
+        for cdom in ("m.kuku.lu", ".m.kuku.lu"):
+            try:
+                sess.cookies.set(cname, cval, domain=cdom, path="/")
+            except Exception:
+                pass
     return sess
 
 
@@ -2498,10 +2516,81 @@ def _extract_instaddr_mailboxes_from_addrlist_html(html):
     return list(dict.fromkeys(out))
 
 
+def _agree_instaddr_kuku_eula(sess, csrf):
+    csrf = str(csrf or "").strip()
+    if not csrf:
+        return
+    try:
+        sess.get(
+            "https://m.kuku.lu/index.php",
+            params={
+                "action": "agreeEULA",
+                "nopost": "1",
+                "by_system": "1",
+                "csrf_token_check": csrf,
+                "_": str(int(time.time() * 1000)),
+            },
+            timeout=20,
+        )
+    except Exception:
+        pass
+
+
+def _warm_instaddr_kuku_session(sess, csrf=""):
+    csrf = str(csrf or "").strip()
+    csrf_sub = ""
+    pages = [
+        "https://m.kuku.lu/ja.php",
+        "https://m.kuku.lu/en.php",
+        "https://m.kuku.lu/index.php",
+        "https://m.kuku.lu/",
+    ]
+    for page in pages:
+        try:
+            resp = sess.get(page, timeout=20)
+            html = resp.text or ""
+            if not csrf:
+                m_csrf = re.search(r"csrf_token_check=([A-Za-z0-9_-]+)", html)
+                if m_csrf:
+                    csrf = m_csrf.group(1)
+            if not csrf_sub:
+                m_sub = re.search(r"csrf_subtoken_check=([A-Za-z0-9_-]+)", html)
+                if m_sub:
+                    csrf_sub = m_sub.group(1)
+            if csrf and csrf_sub:
+                break
+        except Exception:
+            continue
+    if csrf:
+        _agree_instaddr_kuku_eula(sess, csrf)
+    return csrf, (csrf_sub or csrf)
+
+
 def _bootstrap_instaddr_kuku_direct_session(sess):
-    """Inicializa sessão via endpoints diretos que já devolvem cookies válidos."""
-    csrf = ""
-    sessionhash = ""
+    """Inicializa ou reaproveita uma sessão Kuku usando endpoints diretos e warming leve."""
+    try:
+        cookie_map = sess.cookies.get_dict()
+    except Exception:
+        cookie_map = {}
+    csrf = str(cookie_map.get("cookie_csrf_token") or cookie_map.get("csrf_token") or "").strip()
+    sessionhash = str(cookie_map.get("cookie_sessionhash") or cookie_map.get("sessionhash") or "").strip()
+
+    if csrf and sessionhash:
+        warm_csrf, warm_sub = _warm_instaddr_kuku_session(sess, csrf)
+        try:
+            _save_instaddr_browser_session({
+                "csrf_token": warm_csrf or csrf,
+                "sessionhash": sessionhash,
+                "csrf_check": warm_csrf or csrf,
+                "csrf_subtoken_check": warm_sub or warm_csrf or csrf,
+                "page_url": "https://m.kuku.lu/",
+                "user_agent": sess.headers.get("User-Agent") or "",
+                "cookie_header": "; ".join([f"{k}={v}" for k, v in (sess.cookies.get_dict() or {}).items()]),
+            })
+        except Exception:
+            pass
+        return (warm_csrf or csrf), sessionhash
+
     direct_urls = [
         "https://m.kuku.lu/index.php?action=addMailAddrByAuto&nopost=1&by_system=1",
         "https://m.kuku.lu/datagen.php?action=getAddrList",
@@ -2523,30 +2612,40 @@ def _bootstrap_instaddr_kuku_direct_session(sess):
             cval = str(cval or "").strip()
             if not cval:
                 continue
-            try:
-                sess.cookies.set(cname, cval, domain="m.kuku.lu", path="/")
-            except Exception:
-                pass
+            for cdom in ("m.kuku.lu", ".m.kuku.lu"):
+                try:
+                    sess.cookies.set(cname, cval, domain=cdom, path="/")
+                except Exception:
+                    pass
         if resp is not None and csrf and sessionhash:
             break
-    if csrf or sessionhash:
+
+    warm_csrf, warm_sub = _warm_instaddr_kuku_session(sess, csrf)
+    final_csrf = warm_csrf or csrf
+    if final_csrf or sessionhash:
         try:
             _save_instaddr_browser_session({
-                "csrf_token": csrf,
+                "csrf_token": final_csrf,
                 "sessionhash": sessionhash,
+                "csrf_check": final_csrf,
+                "csrf_subtoken_check": warm_sub or final_csrf,
                 "page_url": "https://m.kuku.lu/",
                 "user_agent": sess.headers.get("User-Agent") or "",
                 "cookie_header": "; ".join([f"{k}={v}" for k, v in (sess.cookies.get_dict() or {}).items()]),
             })
         except Exception:
             pass
-    return csrf, sessionhash
+    return final_csrf, sessionhash
 
 
 def _discover_instaddr_csrf(sess):
     stored = _load_instaddr_browser_session()
     csrf = str(INSTADDR_KUKU_CSRF_CHECK or stored.get("csrf_check") or stored.get("csrf_token") or "").strip()
     csrf_sub = str(INSTADDR_KUKU_CSRF_SUBTOKEN_CHECK or stored.get("csrf_subtoken_check") or "").strip()
+    if csrf:
+        warm_csrf, warm_sub = _warm_instaddr_kuku_session(sess, csrf)
+        csrf = warm_csrf or csrf
+        csrf_sub = warm_sub or csrf_sub or csrf
     if not csrf:
         direct_csrf, _direct_session = _bootstrap_instaddr_kuku_direct_session(sess)
         if direct_csrf:
@@ -2606,27 +2705,39 @@ def _ensure_instaddr_mailbox(sess, mailbox, csrf="", csrf_sub=""):
     local, domain = mailbox.split("@", 1)
     csrf = str(csrf or "").strip()
     csrf_sub = str(csrf_sub or csrf or "").strip()
-    params = {
-        "action": "addMailAddrByManual",
-        "nopost": "1",
-        "by_system": "1",
-        "t": str(int(time.time())),
-        "newdomain": mailbox,
-        "newuser": local,
-        "recaptcha_token": "",
-        "_": str(int(time.time() * 1000)),
-    }
-    if csrf:
-        params["csrf_token_check"] = csrf
-    if csrf_sub:
-        params["csrf_subtoken_check"] = csrf_sub
-    try:
-        resp = sess.get("https://m.kuku.lu/index.php", params=params, timeout=20)
-        text = (resp.text or "").strip().lower()
-        if resp.ok and (not text or mailbox in text or text.startswith("ok:") or "already" in text or "exists" in text):
-            return True
-    except Exception:
-        return False
+    variants = [
+        {
+            "action": "addMailAddrByManual",
+            "nopost": "1",
+            "by_system": "1",
+            "t": str(int(time.time())),
+            "newdomain": mailbox,
+            "recaptcha_token": "",
+            "_": str(int(time.time() * 1000)),
+        },
+        {
+            "action": "addMailAddrByManual",
+            "nopost": "1",
+            "by_system": "1",
+            "t": str(int(time.time())),
+            "newdomain": domain,
+            "newuser": local,
+            "recaptcha_token": "",
+            "_": str(int(time.time() * 1000)),
+        },
+    ]
+    for params in variants:
+        if csrf:
+            params["csrf_token_check"] = csrf
+        if csrf_sub:
+            params["csrf_subtoken_check"] = csrf_sub
+        try:
+            resp = sess.get("https://m.kuku.lu/index.php", params=params, timeout=20)
+            text = (resp.text or "").strip().lower()
+            if resp.ok and "attention required" not in text and (not text or mailbox in text or text.startswith("ok:") or "already" in text or "exists" in text):
+                return True
+        except Exception:
+            continue
     return False
 
 
@@ -2675,6 +2786,7 @@ def _search_instaddr_kuku_in_mailboxes(sess, mailbox_list, user_email, platform,
 
     for mailbox in mailbox_list:
         params = {
+            "page": "0",
             "q": mailbox,
             "nopost": "1",
             "csrf_token_check": csrf,
@@ -4152,6 +4264,33 @@ def get_code():
                                 "type": "pin_required", "pin_required": True,
                                 "message": "PIN necessario para liberar o link de redefinicao."})
             return jsonify({"success": True, "link": wh_link, "platform": wh_plat or platform, "type": "link"})
+
+        # Fallback oficial via IMAP premium do InstAddr/Kuku, se configurado no Railway.
+        instaddr_imap_accounts = get_imap_accounts()
+        if instaddr_imap_accounts:
+            if platform in UNIFIED_MAP:
+                subs, _err_msg = UNIFIED_MAP[platform]
+                imap_code, imap_link, imap_plat, _imap_error = search_code_unified(user_email, subs)
+                if imap_code:
+                    return jsonify({"success": True, "code": imap_code, "platform": imap_plat or platform, "type": "code"})
+                if imap_link:
+                    if imap_plat == "password-reset":
+                        _set_pending_reset_link(pending_owner, imap_link)
+                        return jsonify({"success": True, "platform": "password-reset",
+                                        "type": "pin_required", "pin_required": True,
+                                        "message": "PIN necessario para liberar o link de redefinicao."})
+                    return jsonify({"success": True, "link": imap_link, "platform": imap_plat or platform, "type": "link"})
+            else:
+                imap_code, imap_link, imap_error = search_code(user_email, platform)
+                if imap_code:
+                    return jsonify({"success": True, "code": imap_code, "platform": platform, "type": "code"})
+                if imap_link:
+                    if platform == "password-reset":
+                        _set_pending_reset_link(pending_owner, imap_link)
+                        return jsonify({"success": True, "platform": "password-reset",
+                                        "type": "pin_required", "pin_required": True,
+                                        "message": "PIN necessario para liberar o link de redefinicao."})
+                    return jsonify({"success": True, "link": imap_link, "platform": platform, "type": "link"})
 
         live_code, live_link, live_plat = _search_instaddr_kuku_live(user_email, platform)
         if live_code:
