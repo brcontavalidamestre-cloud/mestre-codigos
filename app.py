@@ -1116,6 +1116,15 @@ PLATFORM_CONFIG = {
             "change your netflix password", "restablecimiento de contrasena",
             "restablecer contraseña netflix", "cambiar contraseña netflix"
         ],
+        "body_keywords": [
+            "este código vence en 15 minutos",
+            "este codigo vence en 15 minutos",
+            "código vence en 15 minutos",
+            "codigo vence en 15 minutos",
+            "this code expires in 15 minutes",
+            "este código vence em 15 minutos",
+            "este codigo vence em 15 minutos"
+        ],
         "name": "Netflix",
         "type": "code"
     },
@@ -1170,6 +1179,15 @@ PLATFORM_CONFIG = {
             "reset password", "password reset", "complete your password reset",
             "change your netflix password", "restablecimiento de contrasena",
             "restablecer contraseña netflix", "cambiar contraseña netflix"
+        ],
+        "body_keywords": [
+            "este código vence en 15 minutos",
+            "este codigo vence en 15 minutos",
+            "código vence en 15 minutos",
+            "codigo vence en 15 minutos",
+            "this code expires in 15 minutes",
+            "este código vence em 15 minutos",
+            "este codigo vence em 15 minutos"
         ],
         "name": "Netflix Login",
         "type": "code"
@@ -2278,6 +2296,61 @@ def _fetch_and_extract(mail, mailbox, eid, plat_key, user_email):
         return None, None
 
 
+def _targeted_body_extract(mail, mailbox, from_kw, plat_key, user_email,
+                           since_date=None, max_emails=60):
+    """Fallback: busca por marcadores no corpo do email quando o assunto não ajuda.
+    Útil para casos como Netflix ES com texto 'Este código vence en 15 minutos'.
+    """
+    try:
+        cfg = PLATFORM_CONFIG.get(plat_key) or {}
+        body_keywords = cfg.get("body_keywords") or []
+        if not body_keywords:
+            return None, None
+        sel_status, _ = mail.select(mailbox, readonly=True)
+        if sel_status != "OK":
+            return None, None
+
+        criteria = ["FROM", from_kw]
+        if since_date:
+            criteria += ["SINCE", since_date]
+        st, msgs = mail.search(None, *criteria)
+        if st != "OK" or not msgs[0]:
+            return None, None
+
+        recent_ids = msgs[0].split()[-max(10, int(max_emails or 60)):]
+        neg_kws_norm = [normalize(k) for k in cfg.get("negative_keywords", [])]
+        body_kws_norm = [normalize(k) for k in body_keywords]
+
+        for eid in reversed(recent_ids):
+            try:
+                status, data = mail.fetch(eid, "(RFC822)")
+                if status != "OK" or not data or not isinstance(data[0], tuple):
+                    continue
+                msg = email.message_from_bytes(data[0][1])
+                html_body = get_html_body(msg)
+                if not email_matches_user(msg, html_body, user_email):
+                    continue
+                subject = decode_str(msg.get("Subject", ""))
+                combined = f"{subject}\n{html_body}"
+                combined_norm = normalize(re.sub(r"<[^>]+>", " ", combined))
+                if any(nk and nk in combined_norm for nk in neg_kws_norm):
+                    continue
+                if not any(bk and bk in combined_norm for bk in body_kws_norm):
+                    continue
+                if cfg.get("type") == "link":
+                    link = extract_link(html_body, plat_key)
+                    if link:
+                        return None, link
+                code = extract_code_from_html(html_body)
+                if code:
+                    return code, None
+            except Exception:
+                continue
+    except Exception:
+        return None, None
+    return None, None
+
+
 def _targeted_subject_search(mail, mailbox, from_kw, plat_key, seen_ids,
                              subject_terms, since_date=None):
     """
@@ -3100,6 +3173,23 @@ def search_code_unified(user_email, platform_list):
                             if code or link:
                                 _safe_logout(mail)
                                 return code, link, plat_key, None
+
+                # Fallback por corpo do email: cobre casos em que o assunto não
+                # traz o marcador, mas o corpo contém frases importantes como
+                # 'Este código vence en 15 minutos'.
+                fallback_boxes = mailboxes_primary if mailboxes_primary else ["INBOX"]
+                for plat_key, plat_cfg in plat_configs.items():
+                    if not (plat_cfg.get("body_keywords") or []):
+                        continue
+                    for mailbox in fallback_boxes:
+                        code, link = _targeted_body_extract(
+                            mail, mailbox, sender, plat_key, user_email,
+                            since_date=primary_since,
+                            max_emails=max(global_max_emails, 80)
+                        )
+                        if code or link:
+                            _safe_logout(mail)
+                            return code, link, plat_key, None
 
             _safe_logout(mail)
         except imaplib.IMAP4.error as e:
