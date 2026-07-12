@@ -467,6 +467,7 @@
                   <th>Senha</th>
                   <th>Observação</th>
                   <th>Usuário</th>
+                  <th id="stk-purchase-date-head" style="display:none;">Data da compra</th>
                   <th>Status</th>
                   <th>Ações</th>
                 </tr>
@@ -1332,8 +1333,16 @@
       try {
         const { j } = await fetchJsonNoCache('/api/admin/loja/estoque/'+pid);
         const tb = document.getElementById('stk-tbody');
+        const showPurchaseDate = ((window.location.hostname || '').toLowerCase() === 'mestre-codigos-production.up.railway.app');
+        const purchaseHead = document.getElementById('stk-purchase-date-head');
+        if (purchaseHead) purchaseHead.style.display = showPurchaseDate ? '' : 'none';
+        const formatPurchaseDate = (ts) => {
+          const n = Number(ts || 0);
+          if (!n) return '—';
+          try { return new Date(n * 1000).toLocaleString('pt-BR'); } catch(_) { return '—'; }
+        };
         if (!j.success || !j.items.length) {
-          tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--tm);padding:14px">Sem acessos cadastrados.</td></tr>';
+          tb.innerHTML = `<tr><td colspan="${showPurchaseDate ? 7 : 6}" style="text-align:center;color:var(--tm);padding:14px">Sem acessos cadastrados.</td></tr>`;
           return;
         }
         tb.innerHTML = j.items.map(it => {
@@ -1342,11 +1351,15 @@
           const vinc = it.assigned_user
             ? `<span style="color:#fcd34d">🧑 ${escapeHtml(it.assigned_user_name || it.assigned_user)}</span>`
             : '<span style="color:#888;">—</span>';
+          const purchaseCell = showPurchaseDate
+            ? `<td style="font-size:0.78rem;color:${it.used_at ? '#fde68a' : 'var(--tm)'};white-space:nowrap;">${formatPurchaseDate(it.used_at)}</td>`
+            : '';
           return `<tr>
             <td>${escapeHtml(it.email || '')}</td>
             <td><code style="color:var(--gold-light)">${escapeHtml(it.password || '')}</code></td>
             <td>${escapeHtml(it.note || '—')}</td>
             <td>${vinc}</td>
+            ${purchaseCell}
             <td>${status}${delTo}</td>
             <td>
               ${it.used ? `<button class="bsm" onclick="resetStock('${pid}','${it.id}')" style="background:#0f766e;color:#fff;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;font-size:0.75rem">♻️ Reset</button>` : ''}
