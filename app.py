@@ -492,6 +492,189 @@ def _append_email_to_daily_block(block_text, email_addr):
     return "\n".join(lines)
 
 
+def _admin_live_inbox_allowed_file():
+    try:
+        host = _normalize_domain(request.host or "")
+    except Exception:
+        host = "default"
+    if "mestre-codigos-production" in host:
+        suffix = "mestre"
+    elif "jmp" in host:
+        suffix = "jmp"
+    else:
+        suffix = re.sub(r"[^a-z0-9]+", "_", host or "default").strip("_") or "default"
+    return os.path.join(_data_dir, f"admin_live_inbox_allowed_{suffix}.json")
+
+
+def load_admin_live_inbox_allowed():
+    data = _read_json_file(_admin_live_inbox_allowed_file(), [])
+    if not isinstance(data, list):
+        data = []
+    out = []
+    seen = set()
+    for item in data:
+        email_addr = str(item or "").strip().lower()
+        if email_addr and email_addr not in seen:
+            seen.add(email_addr)
+            out.append(email_addr)
+    return out
+
+
+def save_admin_live_inbox_allowed(emails_list):
+    out = []
+    seen = set()
+    for item in (emails_list or []):
+        email_addr = str(item or "").strip().lower()
+        if email_addr and email_addr not in seen:
+            seen.add(email_addr)
+            out.append(email_addr)
+    return _write_json_file(_admin_live_inbox_allowed_file(), out)
+
+
+def _parse_email_list_text(raw_text):
+    found = re.findall(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", str(raw_text or ""), flags=re.I)
+    out = []
+    seen = set()
+    for item in found:
+        email_addr = str(item or "").strip().lower()
+        if email_addr and email_addr not in seen:
+            seen.add(email_addr)
+            out.append(email_addr)
+    return out
+
+
+def _admin_inbox_extract_recipients(msg):
+    values = []
+    for header_name in ["To", "Cc", "Delivered-To", "X-Original-To", "Envelope-To", "Apparently-To", "Resent-To"]:
+        values.extend(msg.get_all(header_name, []))
+    emails_found = set()
+    try:
+        for _name, addr in email.utils.getaddresses(values):
+            addr = str(addr or "").strip().lower()
+            if addr and "@" in addr:
+                emails_found.add(addr)
+    except Exception:
+        pass
+    for raw in values:
+        for addr in re.findall(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", str(raw or ""), flags=re.I):
+            emails_found.add(str(addr).strip().lower())
+    return sorted(emails_found)
+
+
+def _admin_inbox_strip_html(text):
+    text = str(text or "")
+    text = re.sub(r"(?is)<(script|style).*?>.*?</\\1>", " ", text)
+    text = re.sub(r"(?s)<[^>]+>", " ", text)
+    text = text.replace("&nbsp;", " ").replace("&#160;", " ")
+    text = re.sub(r"\s+", " ", text).strip()
+    return text
+
+
+def _admin_inbox_date_ts(msg):
+    try:
+        from email.utils import parsedate_to_datetime
+        dt = parsedate_to_datetime(msg.get("Date", "") or "")
+        if dt is not None:
+            return int(dt.timestamp())
+    except Exception:
+        pass
+    return 0
+
+
+def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
+    allowed = load_admin_live_inbox_allowed()
+    if not allowed:
+        return [], []
+
+    alias_to_original = {}
+    for original in allowed:
+        for alias in email_match_aliases(original):
+            alias_to_original[alias] = original
+
+    items = []
+    errors = []
+    seen = set()
+    accounts = get_imap_accounts()
+
+    for account_cfg in accounts:
+        mail = None
+        try:
+            mail = connect_imap(account_cfg)
+            spam_boxes = _get_spam_boxes(mail, account_cfg)
+            boxes = ["INBOX"] + [b for b in spam_boxes if b and b.upper() != "INBOX"]
+            for mailbox in boxes:
+                try:
+                    st_sel, _ = mail.select(mailbox, readonly=True)
+                    if st_sel != "OK":
+                        continue
+                    st_search, msgs = mail.search(None, "ALL")
+                    if st_search != "OK" or not msgs or not msgs[0]:
+                        continue
+                    recent_ids = msgs[0].split()[-max_per_box:]
+                    for eid in reversed(recent_ids):
+                        unique_key = (account_cfg.get("name"), mailbox, bytes(eid))
+                        if unique_key in seen:
+                            continue
+                        seen.add(unique_key)
+                        st_fetch, data = mail.fetch(eid, "(RFC822)")
+                        if st_fetch != "OK" or not data:
+                            continue
+                        raw_msg = None
+                        for part in data:
+                            if isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], (bytes, bytearray)):
+                                raw_msg = part[1]
+                                break
+                        if not raw_msg:
+                            continue
+                        msg = email.message_from_bytes(raw_msg)
+                        recipients = _admin_inbox_extract_recipients(msg)
+                        matched_original = None
+                        for rcpt in recipients:
+                            if rcpt in alias_to_original:
+                                matched_original = alias_to_original[rcpt]
+                                break
+                        if not matched_original:
+                            continue
+                        from_value = decode_str(msg.get("From", ""))
+                        subject = decode_str(msg.get("Subject", ""))
+                        body = get_html_body(msg) or ""
+                        snippet = _admin_inbox_strip_html(body)[:280]
+                        code = None
+                        try:
+                            code = extract_code_from_html(body) if body else None
+                        except Exception:
+                            code = None
+                        items.append({
+                            "id": f"{account_cfg.get('name')}|{mailbox}|{bytes(eid).decode(errors='ignore')}",
+                            "allowed_email": matched_original,
+                            "recipients": recipients,
+                            "from": from_value,
+                            "subject": subject or "(sem assunto)",
+                            "date": msg.get("Date", "") or "",
+                            "date_ts": _admin_inbox_date_ts(msg),
+                            "snippet": snippet,
+                            "code": code,
+                            "mailbox": mailbox,
+                            "account_name": account_cfg.get("name") or "caixa",
+                            "account_user": account_cfg.get("user") or "",
+                        })
+                        if len(items) >= max_items:
+                            break
+                    if len(items) >= max_items:
+                        break
+                except Exception as box_err:
+                    errors.append(f"[{account_cfg.get('name')}/{mailbox}] {box_err}")
+                    continue
+            _safe_logout(mail)
+        except Exception as e:
+            errors.append(f"[{account_cfg.get('name')}] {e}")
+            _force_logout(mail)
+            continue
+
+    items.sort(key=lambda it: (int(it.get("date_ts") or 0), it.get("id") or ""), reverse=True)
+    return items[:max_items], errors[:10]
+
+
 def _sync_store_orders_to_daily_blocks(blocks=None, save=False):
     """Sincroniza emails entregues dos pedidos pagos da loja para o bloco do dia da compra."""
     import datetime as _dtmod
@@ -4173,6 +4356,45 @@ def api_check_reset_pin():
         "custom_pin": _user_has_custom_reset_pin(user),
         "pending": bool(_peek_pending_reset_link(username))
     })
+
+@app.route("/api/admin/live-inbox/allowed", methods=["GET", "POST"])
+@admin_required
+def api_admin_live_inbox_allowed():
+    if request.method == "GET":
+        emails = load_admin_live_inbox_allowed()
+        return jsonify({"success": True, "emails": emails, "count": len(emails)})
+
+    data = request.get_json(silent=True) or {}
+    emails = []
+    if isinstance(data.get("emails"), list):
+        emails = _parse_email_list_text("\n".join(str(x or "") for x in data.get("emails", [])))
+    else:
+        emails = _parse_email_list_text(data.get("emails_text", ""))
+    save_admin_live_inbox_allowed(emails)
+    return jsonify({"success": True, "emails": emails, "count": len(emails)})
+
+
+@app.route("/api/admin/live-inbox/allowed/<path:email_addr>", methods=["DELETE"])
+@admin_required
+def api_admin_live_inbox_delete_allowed(email_addr):
+    target = str(email_addr or "").strip().lower()
+    emails = [e for e in load_admin_live_inbox_allowed() if e != target]
+    save_admin_live_inbox_allowed(emails)
+    return jsonify({"success": True, "emails": emails, "count": len(emails)})
+
+
+@app.route("/api/admin/live-inbox/messages", methods=["GET"])
+@admin_required
+def api_admin_live_inbox_messages():
+    items, errors = _fetch_admin_live_inbox_items()
+    return jsonify({
+        "success": True,
+        "items": items,
+        "errors": errors,
+        "allowed": load_admin_live_inbox_allowed(),
+        "count": len(items)
+    })
+
 
 @app.route("/api/admin/get-code", methods=["POST"])
 @admin_required
