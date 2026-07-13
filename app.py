@@ -231,17 +231,17 @@ JMP_IMAP_PORT   = int(os.environ.get("JMP_IMAP_PORT", 993))
 JMP_EMAIL_USER  = os.environ.get("JMP_EMAIL_USER", "Primeiro0101@jmpfornecedor.store")
 JMP_EMAIL_PASS  = os.environ.get("JMP_EMAIL_PASS", "Bubu150603*")
 
-JMP_IMAP_SERVER_2 = os.environ.get("JMP_IMAP_SERVER_2", "mail.mundial.log.br")
+JMP_IMAP_SERVER_2 = os.environ.get("JMP_IMAP_SERVER_2", "gtxm1300.siteground.biz")
 JMP_IMAP_PORT_2   = int(os.environ.get("JMP_IMAP_PORT_2", 993))
-JMP_EMAIL_USER_2  = os.environ.get("JMP_EMAIL_USER_2", "jmp@mundial.log.br")
-JMP_EMAIL_PASS_2  = os.environ.get("JMP_EMAIL_PASS_2", "Mestre13579@")
+JMP_EMAIL_USER_2  = os.environ.get("JMP_EMAIL_USER_2", "codigo@mundial.log.br")
+JMP_EMAIL_PASS_2  = os.environ.get("JMP_EMAIL_PASS_2", "Mestre13579@#")
 
 # ╔══ Caixa EXTRA EXCLUSIVA do MESTRE ══╗
 # Só é incluída quando o host é mestre-codigos-production.up.railway.app
-MASTER_EXTRA_IMAP_SERVER = os.environ.get("MASTER_EXTRA_IMAP_SERVER", "imap.hostinger.com")
+MASTER_EXTRA_IMAP_SERVER = os.environ.get("MASTER_EXTRA_IMAP_SERVER", "gtxm1300.siteground.biz")
 MASTER_EXTRA_IMAP_PORT   = int(os.environ.get("MASTER_EXTRA_IMAP_PORT", 993))
-MASTER_EXTRA_EMAIL_USER  = os.environ.get("MASTER_EXTRA_EMAIL_USER", "margos@outlok.space")
-MASTER_EXTRA_EMAIL_PASS  = os.environ.get("MASTER_EXTRA_EMAIL_PASS", "Fisica10a@")
+MASTER_EXTRA_EMAIL_USER  = os.environ.get("MASTER_EXTRA_EMAIL_USER", "codigo@mundial.log.br")
+MASTER_EXTRA_EMAIL_PASS  = os.environ.get("MASTER_EXTRA_EMAIL_PASS", "Mestre13579@#")
 
 # ╔══ Consulta LIVRE do InstAddr (somente instaddr.up.railway.app) ══╗
 # Esta vitrine pública NÃO usa login e NÃO reutiliza caixas dos outros links.
@@ -397,11 +397,17 @@ def get_imap_accounts():
             })
     # Caixa extra exclusiva do MESTRE — não é usada em outros links
     if is_master_host() and MASTER_EXTRA_EMAIL_USER and MASTER_EXTRA_EMAIL_PASS:
-        already = any(
-            a["user"].lower() == MASTER_EXTRA_EMAIL_USER.lower() and a["server"] == MASTER_EXTRA_IMAP_SERVER
-            for a in accounts
-        )
-        if not already:
+        replaced_master_email = False
+        for a in accounts:
+            if a["user"].lower() == MASTER_EXTRA_EMAIL_USER.lower():
+                a["name"] = "caixa-master-extra"
+                a["server"] = MASTER_EXTRA_IMAP_SERVER
+                a["port"] = MASTER_EXTRA_IMAP_PORT
+                a["user"] = MASTER_EXTRA_EMAIL_USER
+                a["password"] = MASTER_EXTRA_EMAIL_PASS
+                replaced_master_email = True
+                break
+        if not replaced_master_email:
             accounts.append({
                 "name": "caixa-master-extra",
                 "server": MASTER_EXTRA_IMAP_SERVER,
