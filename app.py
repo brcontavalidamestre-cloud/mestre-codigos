@@ -343,28 +343,27 @@ def get_imap_accounts():
             }]
         return []
 
-    # ╔══ JMP: usa SOMENTE as caixas exclusivas do próprio JMP ══╗
+    # ╔══ JMP: usa as 2 caixas exclusivas do próprio JMP ══╗
     if _is_jmp_request():
-        # O JMP deve consultar somente a caixa exclusiva dele.
-        # Isso evita timeouts longos e elimina a tentativa em caixas antigas
-        # que não fazem parte do fluxo atual de entrega do JMP.
+        jmp_accs = []
+        # Prioriza a caixa mundial nova, mas consulta também a hostinger.
         if JMP_EMAIL_USER_2 and JMP_EMAIL_PASS_2:
-            return [{
+            jmp_accs.append({
                 "name": "caixa-jmp-mundial",
                 "server": JMP_IMAP_SERVER_2,
                 "port": JMP_IMAP_PORT_2,
                 "user": JMP_EMAIL_USER_2,
                 "password": JMP_EMAIL_PASS_2,
-            }]
+            })
         if JMP_EMAIL_USER and JMP_EMAIL_PASS:
-            return [{
+            jmp_accs.append({
                 "name": "caixa-jmp-hostinger",
                 "server": JMP_IMAP_SERVER,
                 "port": JMP_IMAP_PORT,
                 "user": JMP_EMAIL_USER,
                 "password": JMP_EMAIL_PASS,
-            }]
-        return []
+            })
+        return jmp_accs
 
     accounts = [
         {
