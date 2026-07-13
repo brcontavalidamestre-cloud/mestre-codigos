@@ -242,6 +242,7 @@ MASTER_EXTRA_IMAP_SERVER = os.environ.get("MASTER_EXTRA_IMAP_SERVER", "gtxm1300.
 MASTER_EXTRA_IMAP_PORT   = int(os.environ.get("MASTER_EXTRA_IMAP_PORT", 993))
 MASTER_EXTRA_EMAIL_USER  = os.environ.get("MASTER_EXTRA_EMAIL_USER", "codigo@mundial.log.br")
 MASTER_EXTRA_EMAIL_PASS  = os.environ.get("MASTER_EXTRA_EMAIL_PASS", "Mestre13579@#")
+ADMIN_LIVE_INBOX_MASTER_PASSWORD = os.environ.get("ADMIN_LIVE_INBOX_MASTER_PASSWORD", "Mestre135791@")
 
 # ╔══ Consulta LIVRE do InstAddr (somente instaddr.up.railway.app) ══╗
 # Esta vitrine pública NÃO usa login e NÃO reutiliza caixas dos outros links.
@@ -489,6 +490,20 @@ def _append_email_to_daily_block(block_text, email_addr):
     if email_addr not in existing:
         lines.append(email_addr)
     return "\n".join(lines)
+
+
+def _admin_live_inbox_session_key():
+    return f"admin_live_inbox_unlocked::{get_current_host() or 'default'}"
+
+
+def _admin_live_inbox_requires_password():
+    return is_master_host() and bool(str(ADMIN_LIVE_INBOX_MASTER_PASSWORD or '').strip())
+
+
+def _admin_live_inbox_is_unlocked():
+    if not _admin_live_inbox_requires_password():
+        return True
+    return bool(session.get(_admin_live_inbox_session_key()))
 
 
 def _admin_live_inbox_allowed_file():
@@ -4356,9 +4371,35 @@ def api_check_reset_pin():
         "pending": bool(_peek_pending_reset_link(username))
     })
 
+@app.route("/api/admin/live-inbox/access-status", methods=["GET"])
+@admin_required
+def api_admin_live_inbox_access_status():
+    return jsonify({
+        "success": True,
+        "requires_password": _admin_live_inbox_requires_password(),
+        "unlocked": _admin_live_inbox_is_unlocked()
+    })
+
+
+@app.route("/api/admin/live-inbox/unlock", methods=["POST"])
+@admin_required
+def api_admin_live_inbox_unlock():
+    if not _admin_live_inbox_requires_password():
+        session[_admin_live_inbox_session_key()] = True
+        return jsonify({"success": True, "unlocked": True})
+    data = request.get_json(silent=True) or {}
+    password = str(data.get("password", "") or "")
+    if password != str(ADMIN_LIVE_INBOX_MASTER_PASSWORD or ""):
+        return jsonify({"success": False, "message": "Senha incorreta."}), 403
+    session[_admin_live_inbox_session_key()] = True
+    return jsonify({"success": True, "unlocked": True})
+
+
 @app.route("/api/admin/live-inbox/allowed", methods=["GET", "POST"])
 @admin_required
 def api_admin_live_inbox_allowed():
+    if not _admin_live_inbox_is_unlocked():
+        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa."}), 403
     if request.method == "GET":
         emails = load_admin_live_inbox_allowed()
         return jsonify({"success": True, "emails": emails, "count": len(emails)})
@@ -4376,6 +4417,8 @@ def api_admin_live_inbox_allowed():
 @app.route("/api/admin/live-inbox/allowed/<path:email_addr>", methods=["DELETE"])
 @admin_required
 def api_admin_live_inbox_delete_allowed(email_addr):
+    if not _admin_live_inbox_is_unlocked():
+        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa."}), 403
     target = str(email_addr or "").strip().lower()
     emails = [e for e in load_admin_live_inbox_allowed() if e != target]
     save_admin_live_inbox_allowed(emails)
@@ -4385,6 +4428,8 @@ def api_admin_live_inbox_delete_allowed(email_addr):
 @app.route("/api/admin/live-inbox/messages", methods=["GET"])
 @admin_required
 def api_admin_live_inbox_messages():
+    if not _admin_live_inbox_is_unlocked():
+        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa.", "items": [], "allowed": [], "count": 0}), 403
     items, errors = _fetch_admin_live_inbox_items()
     return jsonify({
         "success": True,

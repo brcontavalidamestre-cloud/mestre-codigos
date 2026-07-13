@@ -1802,7 +1802,33 @@
       if (btn) btn.style.display = hostSupportsAdminLiveInbox() ? 'flex' : 'none';
     }
 
+    async function ensureAdminLiveInboxUnlocked() {
+      try {
+        const { j } = await fetchJsonNoCache('/api/admin/live-inbox/access-status');
+        if (!j.requires_password || j.unlocked) return true;
+        const pwd = window.prompt('Digite a senha da Caixa de Entrada Admin:');
+        if (pwd === null) return false;
+        const r = await fetch('/api/admin/live-inbox/unlock', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ password: String(pwd || '') })
+        });
+        const jj = await r.json();
+        if (jj.success) {
+          showToast('✓ Caixa liberada');
+          return true;
+        }
+        showToast('✗ ' + (jj.message || 'Senha incorreta'));
+        return false;
+      } catch(e) {
+        showToast('Erro de conexão');
+        return false;
+      }
+    }
+
     async function abrirAdminLiveInbox() {
+      const ok = await ensureAdminLiveInboxUnlocked();
+      if (!ok) return;
       const m = document.getElementById('admin-live-inbox-modal');
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
       await loadAdminLiveInboxAllowed();
@@ -1898,7 +1924,14 @@
       const tb = document.getElementById('admin-live-inbox-tbody');
       try {
         if (st) st.textContent = 'Atualizando emails...';
-        const { j } = await fetchJsonNoCache('/api/admin/live-inbox/messages');
+        const { r, j } = await fetchJsonNoCache('/api/admin/live-inbox/messages');
+        if (r && r.status === 403) {
+          if (st) st.textContent = j.message || 'Senha necessária para acessar esta caixa.';
+          if (tb) tb.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#f87171;padding:14px">Senha necessária para acessar a Caixa de Entrada Admin.</td></tr>';
+          stopAdminLiveInboxAutoRefresh();
+          _adminLiveInboxLoading = false;
+          return;
+        }
         const items = Array.isArray(j.items) ? j.items : [];
         const allowed = Array.isArray(j.allowed) ? j.allowed : [];
         if (!allowed.length) {
