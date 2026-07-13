@@ -595,6 +595,45 @@ def _admin_inbox_date_ts(msg):
     return 0
 
 
+def _admin_live_inbox_match_platform(from_value, subject, body):
+    from_norm = normalize(str(from_value or ""))
+    subject_raw = str(subject or "")
+    body_raw = str(body or "")
+    body_norm = normalize(body_raw)
+
+    for plat_key, cfg in PLATFORM_CONFIG.items():
+        from_kw = normalize(str(cfg.get("from_keyword") or "").strip())
+        if from_kw and from_kw not in from_norm:
+            continue
+
+        matched = False
+        subject_keywords = cfg.get("subject_keywords") or []
+        negative_keywords = cfg.get("negative_keywords") or []
+        body_keywords = cfg.get("body_keywords") or []
+
+        if subject_keywords and subject_matches(subject_raw, subject_keywords, negative_keywords):
+            matched = True
+
+        if (not matched) and body_keywords:
+            blocked = False
+            for nkw in negative_keywords:
+                nkw_norm = normalize(str(nkw or ""))
+                if nkw_norm and nkw_norm in body_norm:
+                    blocked = True
+                    break
+            if not blocked:
+                for bkw in body_keywords:
+                    bkw_norm = normalize(str(bkw or ""))
+                    if bkw_norm and bkw_norm in body_norm:
+                        matched = True
+                        break
+
+        if matched:
+            return plat_key
+
+    return None
+
+
 def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
     allowed = load_admin_live_inbox_allowed()
     if not allowed:
@@ -654,6 +693,9 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
                         subject = decode_str(msg.get("Subject", ""))
                         body = get_html_body(msg) or ""
                         snippet = _admin_inbox_strip_html(body)[:280]
+                        matched_platform = _admin_live_inbox_match_platform(from_value, subject, body)
+                        if not matched_platform:
+                            continue
                         code = None
                         try:
                             code = extract_code_from_html(body) if body else None
@@ -665,6 +707,7 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
                             "recipients": recipients,
                             "from": from_value,
                             "subject": subject or "(sem assunto)",
+                            "matched_platform": matched_platform,
                             "date": msg.get("Date", "") or "",
                             "date_ts": _admin_inbox_date_ts(msg),
                             "snippet": snippet,
