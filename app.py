@@ -600,10 +600,10 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
     if not allowed:
         return [], []
 
-    alias_to_original = {}
-    for original in allowed:
-        for alias in email_match_aliases(original):
-            alias_to_original[alias] = original
+    # Exibe somente emails que estejam EXATAMENTE na lista configurada no filtro.
+    # Não expande aliases automaticamente aqui para evitar mostrar mensagens de
+    # endereços parecidos que não foram adicionados manualmente pelo admin.
+    allowed_set = {str(x or '').strip().lower() for x in allowed if str(x or '').strip()}
 
     items = []
     errors = []
@@ -644,8 +644,9 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
                         recipients = _admin_inbox_extract_recipients(msg)
                         matched_original = None
                         for rcpt in recipients:
-                            if rcpt in alias_to_original:
-                                matched_original = alias_to_original[rcpt]
+                            rcpt_norm = str(rcpt or '').strip().lower()
+                            if rcpt_norm in allowed_set:
+                                matched_original = rcpt_norm
                                 break
                         if not matched_original:
                             continue
