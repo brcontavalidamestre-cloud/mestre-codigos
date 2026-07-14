@@ -236,12 +236,18 @@ JMP_IMAP_PORT_2   = int(os.environ.get("JMP_IMAP_PORT_2", 993))
 JMP_EMAIL_USER_2  = os.environ.get("JMP_EMAIL_USER_2", "codigo@mundial.log.br")
 JMP_EMAIL_PASS_2  = os.environ.get("JMP_EMAIL_PASS_2", "Mestre13579@#")
 
-# ╔══ Caixa EXTRA EXCLUSIVA do MESTRE ══╗
-# Só é incluída quando o host é mestre-codigos-production.up.railway.app
-MASTER_EXTRA_IMAP_SERVER = os.environ.get("MASTER_EXTRA_IMAP_SERVER", "gtxm1300.siteground.biz")
+# ╔══ Caixas EXTRAS EXCLUSIVAS do MESTRE ══╗
+# Só são incluídas quando o host é mestre-codigos-production.up.railway.app
+# 1) Caixa dedicada aos endereços @outlok.space (restaurada para consultas Netflix)
+MASTER_EXTRA_IMAP_SERVER = os.environ.get("MASTER_EXTRA_IMAP_SERVER", "imap.hostinger.com")
 MASTER_EXTRA_IMAP_PORT   = int(os.environ.get("MASTER_EXTRA_IMAP_PORT", 993))
-MASTER_EXTRA_EMAIL_USER  = os.environ.get("MASTER_EXTRA_EMAIL_USER", "codigo@mundial.log.br")
-MASTER_EXTRA_EMAIL_PASS  = os.environ.get("MASTER_EXTRA_EMAIL_PASS", "Mestre13579@#")
+MASTER_EXTRA_EMAIL_USER  = os.environ.get("MASTER_EXTRA_EMAIL_USER", "margos@outlok.space")
+MASTER_EXTRA_EMAIL_PASS  = os.environ.get("MASTER_EXTRA_EMAIL_PASS", "Fisica10a@")
+# 2) Caixa codigo@mundial.log.br mantida também no mestre com a senha nova
+MASTER_EXTRA2_IMAP_SERVER = os.environ.get("MASTER_EXTRA2_IMAP_SERVER", "gtxm1300.siteground.biz")
+MASTER_EXTRA2_IMAP_PORT   = int(os.environ.get("MASTER_EXTRA2_IMAP_PORT", 993))
+MASTER_EXTRA2_EMAIL_USER  = os.environ.get("MASTER_EXTRA2_EMAIL_USER", "codigo@mundial.log.br")
+MASTER_EXTRA2_EMAIL_PASS  = os.environ.get("MASTER_EXTRA2_EMAIL_PASS", "Mestre13579@#")
 ADMIN_LIVE_INBOX_MASTER_PASSWORD = os.environ.get("ADMIN_LIVE_INBOX_MASTER_PASSWORD", "Mestre135791@")
 
 # ╔══ Consulta LIVRE do InstAddr (somente instaddr.up.railway.app) ══╗
@@ -395,26 +401,44 @@ def get_imap_accounts():
                 "user": THIRD_EMAIL_USER,
                 "password": THIRD_EMAIL_PASS,
             })
-    # Caixa extra exclusiva do MESTRE — não é usada em outros links
-    if is_master_host() and MASTER_EXTRA_EMAIL_USER and MASTER_EXTRA_EMAIL_PASS:
-        replaced_master_email = False
-        for a in accounts:
-            if a["user"].lower() == MASTER_EXTRA_EMAIL_USER.lower():
-                a["name"] = "caixa-master-extra"
-                a["server"] = MASTER_EXTRA_IMAP_SERVER
-                a["port"] = MASTER_EXTRA_IMAP_PORT
-                a["user"] = MASTER_EXTRA_EMAIL_USER
-                a["password"] = MASTER_EXTRA_EMAIL_PASS
-                replaced_master_email = True
-                break
-        if not replaced_master_email:
-            accounts.append({
-                "name": "caixa-master-extra",
-                "server": MASTER_EXTRA_IMAP_SERVER,
-                "port": MASTER_EXTRA_IMAP_PORT,
-                "user": MASTER_EXTRA_EMAIL_USER,
-                "password": MASTER_EXTRA_EMAIL_PASS,
-            })
+    # Caixas extras exclusivas do MESTRE — não são usadas em outros links
+    if is_master_host():
+        if MASTER_EXTRA2_EMAIL_USER and MASTER_EXTRA2_EMAIL_PASS:
+            replaced_master_email2 = False
+            for a in accounts:
+                if a["user"].lower() == MASTER_EXTRA2_EMAIL_USER.lower():
+                    a["name"] = "caixa-master-mundial"
+                    a["server"] = MASTER_EXTRA2_IMAP_SERVER
+                    a["port"] = MASTER_EXTRA2_IMAP_PORT
+                    a["user"] = MASTER_EXTRA2_EMAIL_USER
+                    a["password"] = MASTER_EXTRA2_EMAIL_PASS
+                    replaced_master_email2 = True
+                    break
+            if not replaced_master_email2:
+                accounts.append({
+                    "name": "caixa-master-mundial",
+                    "server": MASTER_EXTRA2_IMAP_SERVER,
+                    "port": MASTER_EXTRA2_IMAP_PORT,
+                    "user": MASTER_EXTRA2_EMAIL_USER,
+                    "password": MASTER_EXTRA2_EMAIL_PASS,
+                })
+        if MASTER_EXTRA_EMAIL_USER and MASTER_EXTRA_EMAIL_PASS:
+            replaced_master_email = False
+            for a in accounts:
+                if a["user"].lower() == MASTER_EXTRA_EMAIL_USER.lower() and a["server"] == MASTER_EXTRA_IMAP_SERVER:
+                    a["name"] = "caixa-master-extra"
+                    a["port"] = MASTER_EXTRA_IMAP_PORT
+                    a["password"] = MASTER_EXTRA_EMAIL_PASS
+                    replaced_master_email = True
+                    break
+            if not replaced_master_email:
+                accounts.append({
+                    "name": "caixa-master-extra",
+                    "server": MASTER_EXTRA_IMAP_SERVER,
+                    "port": MASTER_EXTRA_IMAP_PORT,
+                    "user": MASTER_EXTRA_EMAIL_USER,
+                    "password": MASTER_EXTRA_EMAIL_PASS,
+                })
     # Caixas extras genéricas (IMAP_SERVER_4, IMAP_SERVER_5, etc) — para expansão futura
     for i in range(4, 11):
         srv = os.environ.get(f"IMAP_SERVER_{i}")
