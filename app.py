@@ -3359,6 +3359,16 @@ def search_code_unified(user_email, platform_list):
                 primary_since = since_2d
                 secondary_since = since_7d
                 spam_boxes = _get_spam_boxes(mail, account_cfg)
+            elif _is_jmp_request():
+                # No JMP, muitos códigos chegam perto da virada do dia UTC.
+                # Usar apenas TODAY perde emails de poucos minutos atrás enviados
+                # no dia anterior. Mantemos o filtro fino por minutos, mas abrimos
+                # a busca por data para 2 dias.
+                global_window_min = int(os.environ.get("JMP_TIME_WINDOW_MIN", "15"))
+                global_max_emails = int(os.environ.get("JMP_MAX_EMAILS", "80"))
+                primary_since = since_2d
+                secondary_since = since_7d
+                spam_boxes = _get_spam_boxes(mail, account_cfg)
             elif is_hotmail_family:
                 global_window_min = int(os.environ.get("HOTMAIL_TIME_WINDOW_MIN", "15"))
                 global_max_emails = int(os.environ.get("HOTMAIL_MAX_EMAILS", "60"))
