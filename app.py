@@ -5939,25 +5939,29 @@ def api_admin_list_vinculos_emails():
     if assigned_user and not _admin_can_see_assignment(assigned_user):
         return jsonify({"success": False, "message": "Sem permissão para ver este usuário."}), 403
 
-    orders = load_orders()
+    # No mestre, o histórico de pedidos pode ficar muito grande e travar o carregamento
+    # da tela de vínculos. Como a tela precisa priorizar abertura rápida, a data/meta
+    # de compra vira enriquecimento opcional e é ignorada no host mestre.
     purchase_idx = {}
-    for o in orders:
-        if not isinstance(o, dict):
-            continue
-        if str(o.get("status", "")).strip().lower() != "paid":
-            continue
-        delivered_email = str(o.get("delivered_email", "")).strip().lower()
-        if not delivered_email:
-            continue
-        created_at = int(o.get("created_at") or 0)
-        prev = purchase_idx.get(delivered_email)
-        if (not prev) or created_at > int(prev.get("purchase_created_at") or 0):
-            purchase_idx[delivered_email] = {
-                "purchase_created_at": created_at,
-                "purchase_customer_name": str(o.get("customer_name") or "").strip(),
-                "purchase_customer_email": str(o.get("customer_email") or "").strip().lower(),
-                "purchase_product_name": str(o.get("product_name") or "").strip(),
-            }
+    if not is_master_host():
+        orders = load_orders()
+        for o in orders:
+            if not isinstance(o, dict):
+                continue
+            if str(o.get("status", "")).strip().lower() != "paid":
+                continue
+            delivered_email = str(o.get("delivered_email", "")).strip().lower()
+            if not delivered_email:
+                continue
+            created_at = int(o.get("created_at") or 0)
+            prev = purchase_idx.get(delivered_email)
+            if (not prev) or created_at > int(prev.get("purchase_created_at") or 0):
+                purchase_idx[delivered_email] = {
+                    "purchase_created_at": created_at,
+                    "purchase_customer_name": str(o.get("customer_name") or "").strip(),
+                    "purchase_customer_email": str(o.get("customer_email") or "").strip().lower(),
+                    "purchase_product_name": str(o.get("product_name") or "").strip(),
+                }
 
     subs = load_subscriptions()
     now = int(time.time())
