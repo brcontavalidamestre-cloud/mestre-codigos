@@ -2107,6 +2107,20 @@
       await loadComprasPorData();
     }
 
+    function syncVinculosTextareaFromCache(assignedUser='') {
+      if (String(_meUser?.username || '').trim().toLowerCase() !== 'admingabriel') return;
+      const ta = document.getElementById('ve-bulk-list');
+      if (!ta) return;
+      const au = String(assignedUser || '').trim().toLowerCase();
+      if (!au) return;
+      const emails = (_vinculosCache || [])
+        .filter(it => String(it.assigned_user || '').trim().toLowerCase() === au)
+        .map(it => String(it.email || '').trim().toLowerCase())
+        .filter(Boolean)
+        .sort((a,b) => a.localeCompare(b, 'pt-BR'));
+      ta.value = emails.join('\n');
+    }
+
     async function loadVinculosEmails() {
       const tb = document.getElementById('ve-tbody');
       if (!tb) return;
@@ -2119,6 +2133,7 @@
         const { j } = await fetchJsonNoCache(url);
         _vinculosCache = Array.isArray(j.items) ? j.items.slice() : [];
         if (!j.success || !_vinculosCache.length) {
+          if (assignedUser) syncVinculosTextareaFromCache(assignedUser);
           tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">Nenhum email vinculado encontrado.</td></tr>';
           updateVinculosSelectionInfo();
           clearVinculosSearch();
@@ -2187,6 +2202,7 @@
           }).join('');
 
         tb.innerHTML = rows;
+        if (assignedUser) syncVinculosTextareaFromCache(assignedUser);
         updateVinculosSelectionInfo();
         const q = String(document.getElementById('ve-search-input')?.value || '').trim();
         if (q) searchVinculosEmails();
@@ -2224,7 +2240,6 @@
         showToast('✗ ' + (j.message || 'Erro ao vincular emails'));
         return;
       }
-      document.getElementById('ve-bulk-list').value = '';
       showToast(`✓ ${j.created || 0} criado(s), ${j.updated || 0} atualizado(s), ${j.invalid || 0} inválido(s)`);
       await loadVinculosEmails();
       await loadComprasPorData();
