@@ -4326,6 +4326,25 @@ def api_delete_user(username):
     # Apenas o admin que criou pode remover
     if users[username].get("created_by") != current_admin:
         return jsonify({"success": False, "message": "Sem permissao para remover este usuario."}), 403
+
+    # Ao excluir um usuário, limpa vínculos órfãos para não continuar bloqueando
+    # a consulta de códigos com o nome do usuário removido.
+    subs = load_subscriptions()
+    subs_changed = False
+    for i, sub in enumerate(subs):
+        if not isinstance(sub, dict):
+            continue
+        assigned_user = str(sub.get("assigned_user", "")).strip().lower()
+        if assigned_user != username:
+            continue
+        sub = dict(sub)
+        sub["assigned_user"] = ""
+        sub["assigned_user_name"] = ""
+        subs[i] = sub
+        subs_changed = True
+    if subs_changed:
+        save_subscriptions(subs)
+
     del users[username]
     save_users(users)
     return jsonify({"success": True, "message": "Usuario removido."})
@@ -4662,6 +4681,17 @@ def get_code():
             }), 403
 
         assigned_user = str(sub.get("assigned_user", "")).strip().lower()
+        if assigned_user:
+            users = load_users()
+            if assigned_user not in users:
+                # Auto-corrige vínculo órfão quando o usuário antigo já foi excluído.
+                sub["assigned_user"] = ""
+                sub["assigned_user_name"] = ""
+                subs = load_subscriptions()
+                if _idx >= 0:
+                    subs[_idx] = sub
+                    save_subscriptions(subs)
+                assigned_user = ""
         if not assigned_user:
             return jsonify({
                 "success": False,
@@ -6107,7 +6137,9 @@ def api_admin_import_vinculos_emails():
         if idx >= 0:
             sub = existing or {}
             old_assigned = str(sub.get("assigned_user", "")).strip().lower()
-            if old_assigned and not _admin_can_see_assignment(old_assigned):
+            old_user_exists = old_assigned in users if old_assigned else False
+            # Se o vínculo antigo aponta para um usuário já removido, permite reassociar.
+            if old_assigned and old_user_exists and not _admin_can_see_assignment(old_assigned):
                 skipped += 1
                 continue
             sub["assigned_user"] = assigned_user
