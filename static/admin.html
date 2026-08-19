@@ -2107,58 +2107,6 @@
       await loadComprasPorData();
     }
 
-    function syncVinculosTextareaFromCache(assignedUser='') {
-      if (String(_meUser?.username || '').trim().toLowerCase() !== 'admingabriel') return;
-      const ta = document.getElementById('ve-bulk-list');
-      if (!ta) return;
-      const au = String(assignedUser || '').trim().toLowerCase();
-      if (!au) return;
-      const emails = (_vinculosCache || [])
-        .filter(it => String(it.assigned_user || '').trim().toLowerCase() === au)
-        .map(it => String(it.email || '').trim().toLowerCase())
-        .filter(Boolean)
-        .sort((a,b) => a.localeCompare(b, 'pt-BR'));
-      if (!emails.length) return;
-      ta.value = emails.join('\n');
-    }
-
-    function renderAdmingabrielVinculosFallback(assignedUser='') {
-      if (String(_meUser?.username || '').trim().toLowerCase() !== 'admingabriel') return false;
-      const tb = document.getElementById('ve-tbody');
-      const ta = document.getElementById('ve-bulk-list');
-      const sel = document.getElementById('ve-user');
-      if (!tb || !ta) return false;
-      const au = String(assignedUser || '').trim().toLowerCase();
-      const emails = String(ta.value || '').split(/\r?\n/).map(s => s.trim().toLowerCase()).filter(Boolean);
-      const uniq = Array.from(new Set(emails));
-      if (!au || !uniq.length) return false;
-      const label = sel && sel.selectedOptions && sel.selectedOptions[0]
-        ? String(sel.selectedOptions[0].textContent || au)
-        : au;
-      const chips = uniq.sort((a,b)=>a.localeCompare(b,'pt-BR')).map(email => {
-        const safeEmail = String(email || '').replace(/'/g, "\\'");
-        return `<div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid rgba(125,211,252,.18);border-radius:12px;background:rgba(15,23,42,.35);">
-          <input type="checkbox" class="ve-select-email" data-email="${x(email)}" onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>
-          <div style="min-width:0;">
-            <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(email)}</div>
-            <div style="font-size:.78rem;color:#fcd34d;">↻ aguardando atualização da lista</div>
-          </div>
-          <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
-        </div>`;
-      }).join('');
-      tb.innerHTML = `<tr>
-        <td>
-          <div style="font-weight:800;color:#fff;">${x(label)}</div>
-          <div style="font-size:.82rem;color:#93c5fd;">@${x(au)}</div>
-        </td>
-        <td><div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;">${chips}</div></td>
-        <td><span style="color:#fcd34d;">↻ lista local</span></td>
-        <td><button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(au)}'; loadVinculosEmails();">🔄 Atualizar</button></td>
-      </tr>`;
-      updateVinculosSelectionInfo();
-      return true;
-    }
-
     async function loadVinculosEmails() {
       const tb = document.getElementById('ve-tbody');
       if (!tb) return;
@@ -2171,11 +2119,6 @@
         const { j } = await fetchJsonNoCache(url);
         _vinculosCache = Array.isArray(j.items) ? j.items.slice() : [];
         if (!j.success || !_vinculosCache.length) {
-          if (assignedUser) syncVinculosTextareaFromCache(assignedUser);
-          if (renderAdmingabrielVinculosFallback(assignedUser)) {
-            clearVinculosSearch();
-            return;
-          }
           tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">Nenhum email vinculado encontrado.</td></tr>';
           updateVinculosSelectionInfo();
           clearVinculosSearch();
@@ -2244,7 +2187,6 @@
           }).join('');
 
         tb.innerHTML = rows;
-        if (assignedUser) syncVinculosTextareaFromCache(assignedUser);
         updateVinculosSelectionInfo();
         const q = String(document.getElementById('ve-search-input')?.value || '').trim();
         if (q) searchVinculosEmails();
@@ -2259,7 +2201,6 @@
       if (ev) ev.preventDefault();
       const assignedUser = (document.getElementById('ve-user')?.value || '').trim();
       const txt = (document.getElementById('ve-bulk-list')?.value || '').trim();
-      const btn = document.querySelector('#vinculos-form button[type="submit"]');
       if (!assignedUser) {
         showToast('✗ Selecione o usuário para vincular');
         return;
@@ -2273,30 +2214,21 @@
         showToast('✗ Nenhum email válido na lista');
         return;
       }
-      const oldHtml = btn ? btn.innerHTML : '';
-      if (btn) { btn.disabled = true; btn.innerHTML = '⏳ Vinculando...'; }
-      try {
-        const r = await fetch('/api/admin/vinculos-emails/import', {
-          method:'POST',
-          headers:{'Content-Type':'application/json','Cache-Control':'no-store'},
-          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas })
-        });
-        const j = await r.json();
-        if (!j.success) {
-          showToast('✗ ' + (j.message || 'Erro ao vincular emails'));
-          return;
-        }
-        renderAdmingabrielVinculosFallback(assignedUser);
-        showToast(`✓ ${j.created || 0} criado(s), ${j.updated || 0} atualizado(s), ${j.invalid || 0} inválido(s)`);
-        await loadVinculosEmails();
-        await loadComprasPorData();
-        scrollToText('ve-tbody', linhas[0] || assignedUser);
-      } catch(e) {
-        renderAdmingabrielVinculosFallback(assignedUser);
-        showToast('✗ Erro de conexão ao vincular emails');
-      } finally {
-        if (btn) { btn.disabled = false; btn.innerHTML = oldHtml || '✅ Vincular Emails'; }
+      const r = await fetch('/api/admin/vinculos-emails/import', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ assigned_user: assignedUser, emails: linhas })
+      });
+      const j = await r.json();
+      if (!j.success) {
+        showToast('✗ ' + (j.message || 'Erro ao vincular emails'));
+        return;
       }
+      document.getElementById('ve-bulk-list').value = '';
+      showToast(`✓ ${j.created || 0} criado(s), ${j.updated || 0} atualizado(s), ${j.invalid || 0} inválido(s)`);
+      await loadVinculosEmails();
+      await loadComprasPorData();
+      scrollToText('ve-tbody', linhas[0] || assignedUser);
     }
 
     async function deleteVinculoEmail(email) {

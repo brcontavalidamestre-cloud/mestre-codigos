@@ -5993,11 +5993,9 @@ def api_admin_list_vinculos_emails():
                     "purchase_product_name": str(o.get("product_name") or "").strip(),
                 }
 
-    users = load_users()
     subs = load_subscriptions()
     now = int(time.time())
     items = []
-    seen_emails = set()
     for s in subs:
         if not isinstance(s, dict):
             continue
@@ -6010,14 +6008,11 @@ def api_admin_list_vinculos_emails():
             continue
         exp = int(s.get("expires_at") or 0)
         email = str(s.get("email", "")).strip().lower()
-        if not email:
-            continue
-        seen_emails.add(email)
         purchase = purchase_idx.get(email) or {}
         items.append({
             "email": email,
             "assigned_user": au,
-            "assigned_user_name": s.get("assigned_user_name") or (users.get(au, {}) or {}).get("name") or au,
+            "assigned_user_name": s.get("assigned_user_name") or au,
             "plataforma": s.get("plataforma") or "Conta vinculada",
             "cliente": s.get("cliente") or "",
             "created_at": int(s.get("created_at") or 0),
@@ -6028,37 +6023,6 @@ def api_admin_list_vinculos_emails():
             "expires_at": exp,
             "active": (now < exp) if exp else False,
         })
-
-    # Fallback para vínculos salvos no cadastro do usuário.
-    candidate_users = [assigned_user] if assigned_user else [u for u in users.keys() if _admin_can_see_assignment(u)]
-    for au in candidate_users:
-        u = users.get(au) or {}
-        linked = u.get("linked_emails") or []
-        if isinstance(linked, str):
-            linked = linked.splitlines()
-        if not isinstance(linked, list):
-            continue
-        for raw in linked:
-            email = str(raw or "").strip().lower()
-            if not email or email in seen_emails:
-                continue
-            if "@" not in email:
-                continue
-            seen_emails.add(email)
-            items.append({
-                "email": email,
-                "assigned_user": au,
-                "assigned_user_name": u.get("name") or au,
-                "plataforma": "Conta vinculada",
-                "cliente": "",
-                "created_at": int(u.get("linked_emails_updated_at") or 0),
-                "purchase_created_at": 0,
-                "purchase_customer_name": "",
-                "purchase_customer_email": "",
-                "purchase_product_name": "Conta vinculada",
-                "expires_at": now + 86400,
-                "active": True,
-            })
     items.sort(key=lambda x: (x.get("assigned_user") or "", x.get("email") or ""))
     return jsonify({"success": True, "items": items})
 
@@ -6112,20 +6076,8 @@ def api_admin_import_vinculos_emails():
         return jsonify({"success": False, "message": "Nenhum email válido encontrado para importar."}), 400
 
     assigned_user_name = user_target.get("name", assigned_user)
-    now = int(time.time())
-
-    existing_linked = user_target.get("linked_emails") or []
-    if isinstance(existing_linked, str):
-        existing_linked = existing_linked.splitlines()
-    if not isinstance(existing_linked, list):
-        existing_linked = []
-    merged_linked = sorted({str(x or "").strip().lower() for x in existing_linked + emails if str(x or "").strip()}, key=lambda s: s)
-    user_target["linked_emails"] = merged_linked
-    user_target["linked_emails_updated_at"] = now
-    users[assigned_user] = user_target
-    save_users(users)
-
     subs = load_subscriptions()
+    now = int(time.time())
     long_days = 3650
     long_exp = now + long_days * 86400
     created = 0
@@ -6198,40 +6150,15 @@ def api_admin_import_vinculos_emails():
 @admin_required
 def api_admin_delete_vinculo_email(email):
     email = str(email or "").strip().lower()
-    removed = False
-
     sub, idx = _find_subscription(email)
-    if idx >= 0:
-        assigned_user = str((sub or {}).get("assigned_user", "")).strip().lower()
-        if assigned_user and not _admin_can_see_assignment(assigned_user):
-            return jsonify({"success": False, "message": "Sem permissão para remover este vínculo."}), 403
-        subs = load_subscriptions()
-        subs.pop(idx)
-        save_subscriptions(subs)
-        removed = True
-
-    users = load_users()
-    users_changed = False
-    for uname, udata in users.items():
-        if not _admin_can_see_assignment(uname):
-            continue
-        linked = udata.get("linked_emails") or []
-        if isinstance(linked, str):
-            linked = linked.splitlines()
-        if not isinstance(linked, list):
-            continue
-        new_linked = [str(x or "").strip().lower() for x in linked if str(x or "").strip().lower() != email]
-        if len(new_linked) != len(linked):
-            udata["linked_emails"] = new_linked
-            udata["linked_emails_updated_at"] = int(time.time())
-            users[uname] = udata
-            users_changed = True
-            removed = True
-    if users_changed:
-        save_users(users)
-
-    if not removed:
+    if idx < 0:
         return jsonify({"success": False, "message": "Email não encontrado."}), 404
+    assigned_user = str((sub or {}).get("assigned_user", "")).strip().lower()
+    if assigned_user and not _admin_can_see_assignment(assigned_user):
+        return jsonify({"success": False, "message": "Sem permissão para remover este vínculo."}), 403
+    subs = load_subscriptions()
+    subs.pop(idx)
+    save_subscriptions(subs)
     return jsonify({"success": True, "message": "Email removido com sucesso."})
 
 
