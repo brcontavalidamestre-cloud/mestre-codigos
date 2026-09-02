@@ -4265,6 +4265,20 @@ def api_me():
 def api_list_users():
     current_admin = str(session.get("username") or "").strip().lower()
     users = load_users()
+
+    linked_by_user = {}
+    try:
+        for s in load_subscriptions():
+            if not isinstance(s, dict):
+                continue
+            au = str(s.get("assigned_user") or "").strip().lower()
+            email = str(s.get("email") or "").strip().lower()
+            if not au or not email:
+                continue
+            linked_by_user.setdefault(au, set()).add(email)
+    except Exception:
+        linked_by_user = {}
+
     result = []
     for uname, udata in users.items():
         uname_norm = str(uname or "").strip().lower()
@@ -4274,12 +4288,15 @@ def api_list_users():
             created_by = str(udata.get("created_by") or "").strip().lower()
             if created_by != current_admin:
                 continue
+        linked_emails = sorted(list(linked_by_user.get(uname_norm, set())))
         result.append({
             "username":         uname,
             "name":             udata.get("name", uname),
             "role":             udata.get("role", "client"),
             "reset_pin_set":    _is_reset_pin_protected(udata),
-            "reset_pin_custom": _user_has_custom_reset_pin(udata)
+            "reset_pin_custom": _user_has_custom_reset_pin(udata),
+            "linked_emails":    linked_emails,
+            "linked_emails_count": len(linked_emails)
         })
     return jsonify({"success": True, "users": result})
 
