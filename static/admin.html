@@ -1874,7 +1874,10 @@
             <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(it.email || '')}</div>
             <div style="font-size:.78rem;color:#a5b4fc;">${status}</div>
           </div>
-          <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(it.assigned_user || '')}'; showVinculosTab('lista'); loadVinculosEmails();">🎯 Abrir vínculo</button>
+          <div style="display:flex;flex-direction:column;gap:8px;align-items:flex-end;">
+            <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(it.assigned_user || '')}'; showVinculosTab('lista'); loadVinculosEmails();">🎯 Abrir vínculo</button>
+            <button class="btn-ref" style="border-color:#ff6b6b;color:#ff8a80;" onclick="deleteVinculoEmail('${String(it.email || '').replace(/'/g, "\\'")}')">🗑️ Remover vínculo</button>
+          </div>
         </div>`;
       }).join('');
     }
