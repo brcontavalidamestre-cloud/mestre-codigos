@@ -627,15 +627,21 @@
 
         <div class="panel" style="margin-bottom:18px;border:2px solid #60a5fa;">
           <div class="phdr">
-            <div class="ptit">📌 Emails vinculados ao seu admin</div>
+            <div class="ptit">📌 Emails vinculados na central de usuários</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
               <button class="btn-ref" type="button" onclick="loadAdminLiveInboxAllowed()">🔄 Atualizar lista</button>
             </div>
           </div>
-          <div class="sinfo" style="margin-bottom:10px;">Esta lista é automática. Aqui aparecem somente os emails vinculados aos seus clientes/usuários dentro do seu admin.</div>
-          <textarea class="fi" id="admin-live-inbox-allowed-text" rows="6" readonly placeholder="Os emails vinculados ao seu admin aparecerão aqui automaticamente." style="width:100%;resize:vertical;opacity:.92;"></textarea>
+          <div class="sinfo" style="margin-bottom:10px;">Aqui aparecem todos os usuários com emails vinculados na central. Escolha um usuário para ver somente os emails dele em tempo real, ou deixe em todos para ver geral.</div>
+          <div class="fgrid" style="margin-bottom:10px;">
+            <div class="fgrp">
+              <label class="flbl">🧑 Usuário para visualizar</label>
+              <select class="fi" id="admin-live-inbox-user-filter" onchange="changeAdminLiveInboxUser()"><option value="">Todos os usuários</option></select>
+            </div>
+          </div>
+          <textarea class="fi" id="admin-live-inbox-allowed-text" rows="6" readonly placeholder="Os emails vinculados aparecerão aqui automaticamente conforme o usuário selecionado." style="width:100%;resize:vertical;opacity:.92;"></textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
-            <div id="admin-live-inbox-allowed-status" class="sinfo" style="margin:0;">Carregando emails vinculados...</div>
+            <div id="admin-live-inbox-allowed-status" class="sinfo" style="margin:0;">Carregando usuários e emails vinculados...</div>
           </div>
           <div id="admin-live-inbox-allowed-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;"></div>
         </div>
@@ -1698,22 +1704,54 @@
       _adminLiveInboxTimer = null;
     }
 
+    function getAdminLiveInboxSelectedUser() {
+      return String(document.getElementById('admin-live-inbox-user-filter')?.value || '').trim().toLowerCase();
+    }
+
+    function renderAdminLiveInboxUserOptions(users, selectedUser='') {
+      const sel = document.getElementById('admin-live-inbox-user-filter');
+      if (!sel) return;
+      const current = String(selectedUser || sel.value || '').trim().toLowerCase();
+      const list = Array.isArray(users) ? users.slice() : [];
+      sel.innerHTML = `<option value="">Todos os usuários</option>` + list.map(u => {
+        const uname = String(u.username || '').trim().toLowerCase();
+        const nm = String(u.name || u.username || '').trim();
+        const label = nm && nm.toLowerCase() !== uname ? `${nm} (@${uname})` : `@${uname}`;
+        const count = Number(u.linked_emails_count || (Array.isArray(u.linked_emails) ? u.linked_emails.length : 0) || 0);
+        const selected = uname === current ? ' selected' : '';
+        return `<option value="${escapeHtml(uname)}"${selected}>${escapeHtml(label)}${count ? ' — ' + count + ' email(s)' : ''}</option>`;
+      }).join('');
+      if (current && !list.some(u => String(u.username || '').trim().toLowerCase() === current)) sel.value = '';
+    }
+
+    async function changeAdminLiveInboxUser() {
+      await loadAdminLiveInboxAllowed();
+      await loadAdminLiveInboxMessages();
+    }
+
     async function loadAdminLiveInboxAllowed() {
       const st = document.getElementById('admin-live-inbox-allowed-status');
       const list = document.getElementById('admin-live-inbox-allowed-list');
       try {
-        const { j } = await fetchJsonNoCache('/api/admin/live-inbox/allowed');
+        const selectedUser = getAdminLiveInboxSelectedUser();
+        const qs = selectedUser ? ('?user=' + encodeURIComponent(selectedUser)) : '';
+        const { j } = await fetchJsonNoCache('/api/admin/live-inbox/allowed' + qs);
         const emails = Array.isArray(j.emails) ? j.emails : [];
+        const users = Array.isArray(j.users) ? j.users : [];
+        const activeUser = String(j.selected_user || selectedUser || '').trim().toLowerCase();
+        renderAdminLiveInboxUserOptions(users, activeUser);
         const ta = document.getElementById('admin-live-inbox-allowed-text');
         if (ta) ta.value = emails.join('\n');
-        if (st) st.textContent = emails.length ? `${emails.length} email(s) vinculado(s) ao seu admin.` : 'Nenhum email vinculado ao seu admin.';
+        if (st) st.textContent = activeUser
+          ? (emails.length ? `${emails.length} email(s) vinculado(s) ao usuário selecionado.` : 'O usuário selecionado não possui emails vinculados.')
+          : (emails.length ? `${emails.length} email(s) vinculado(s) encontrados na central de usuários.` : 'Nenhum email vinculado encontrado na central de usuários.');
         if (list) {
           list.innerHTML = emails.length
             ? emails.map(e => `<span style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.35);color:#dbeafe;">${escapeHtml(e)}</span>`).join('')
-            : '<div style="color:var(--tm);">Quando houver emails vinculados aos seus clientes/usuários, eles aparecerão aqui automaticamente.</div>';
+            : '<div style="color:var(--tm);">Quando houver emails vinculados na central de usuários, eles aparecerão aqui automaticamente.</div>';
         }
       } catch(e) {
-        if (st) st.textContent = 'Erro ao carregar emails vinculados.';
+        if (st) st.textContent = 'Erro ao carregar usuários e emails vinculados.';
       }
     }
 
@@ -1766,7 +1804,9 @@
       const tb = document.getElementById('admin-live-inbox-tbody');
       try {
         if (st) st.textContent = 'Atualizando emails...';
-        const { r, j } = await fetchJsonNoCache('/api/admin/live-inbox/messages');
+        const selectedUser = getAdminLiveInboxSelectedUser();
+        const qs = selectedUser ? ('?user=' + encodeURIComponent(selectedUser)) : '';
+        const { r, j } = await fetchJsonNoCache('/api/admin/live-inbox/messages' + qs);
         if (r && r.status === 403) {
           if (st) st.textContent = j.message || 'PIN necessário para acessar esta caixa.';
           if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f87171;padding:14px">PIN necessário para acessar a Caixa de Entrada Admin.</td></tr>';
@@ -1777,9 +1817,12 @@
         const items = Array.isArray(j.items) ? j.items : [];
         const allowed = Array.isArray(j.allowed) ? j.allowed : [];
         const filters = Array.isArray(j.filters) ? j.filters : [];
+        const users = Array.isArray(j.users) ? j.users : [];
+        const activeUser = String(j.selected_user || selectedUser || '').trim().toLowerCase();
+        renderAdminLiveInboxUserOptions(users, activeUser);
         if (!allowed.length) {
-          tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Nenhum email vinculado ao seu admin para monitorar.</td></tr>';
-          if (st) st.textContent = 'Nenhum email vinculado ao seu admin.';
+          tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Nenhum email vinculado encontrado para o usuário selecionado.</td></tr>';
+          if (st) st.textContent = activeUser ? 'O usuário selecionado não possui emails vinculados.' : 'Nenhum email vinculado encontrado na central de usuários.';
           _adminLiveInboxLoading = false;
           return;
         }
@@ -1791,7 +1834,9 @@
         }
         if (!items.length) {
           tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Nenhuma mensagem encontrada para os emails vinculados com os filtros ativados.</td></tr>';
-          if (st) st.textContent = `Monitorando ${allowed.length} email(s) com ${filters.length} filtro(s) ativo(s).`;
+          if (st) st.textContent = activeUser
+            ? `Monitorando ${allowed.length} email(s) do usuário selecionado com ${filters.length} filtro(s) ativo(s).`
+            : `Monitorando ${allowed.length} email(s) de todos os usuários com ${filters.length} filtro(s) ativo(s).`;
           _adminLiveInboxLoading = false;
           return;
         }
@@ -1806,8 +1851,9 @@
           const snippet = it.snippet ? `<div style="font-size:.73rem;color:var(--tm);margin-top:4px;max-width:420px;">${escapeHtml(it.snippet)}</div>` : '';
           const cx = `<div style="font-size:.78rem;color:#bfdbfe;">${escapeHtml(it.account_name || '')}</div><div style="font-size:.72rem;color:var(--tm);">${escapeHtml(it.mailbox || '')}</div>`;
           const platform = `<div style="font-weight:700;color:#dbeafe;">${escapeHtml(it.matched_platform_name || it.matched_platform || '—')}</div><div style="font-size:.72rem;color:var(--tm);">${escapeHtml(it.matched_platform || '')}</div>`;
+          const owner = it.assigned_users_label ? `<div style="font-size:.72rem;color:#93c5fd;margin-top:4px;">${escapeHtml(it.assigned_users_label)}</div>` : '';
           return `<tr>
-            <td><div style="font-weight:700;word-break:break-word;">${escapeHtml(it.allowed_email || '—')}</div></td>
+            <td><div style="font-weight:700;word-break:break-word;">${escapeHtml(it.allowed_email || '—')}</div>${owner}</td>
             <td>${platform}</td>
             <td><div style="max-width:240px;word-break:break-word;">${escapeHtml(it.from || '—')}</div></td>
             <td><div style="font-weight:700;max-width:360px;word-break:break-word;">${escapeHtml(it.subject || '—')}</div>${snippet}</td>
@@ -1819,7 +1865,9 @@
         const errs = Array.isArray(j.errors) ? j.errors : [];
         if (st) st.textContent = errs.length
           ? `Atualizado com avisos em algumas caixas. ${items.length} item(ns) listado(s) para ${allowed.length} email(s) e ${filters.length} filtro(s) ativo(s).`
-          : `${items.length} item(ns) listado(s) em tempo real para ${allowed.length} email(s) e ${filters.length} filtro(s) ativo(s).`;
+          : (activeUser
+              ? `${items.length} item(ns) em tempo real para ${allowed.length} email(s) do usuário selecionado e ${filters.length} filtro(s) ativo(s).`
+              : `${items.length} item(ns) em tempo real para ${allowed.length} email(s) de todos os usuários e ${filters.length} filtro(s) ativo(s).`);
       } catch(e) {
         if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f87171;padding:14px">Erro de conexão ao carregar emails.</td></tr>';
         if (st) st.textContent = 'Erro de conexão ao atualizar emails.';

@@ -648,8 +648,10 @@ def _expand_admin_live_inbox_filters(filters_list):
     return out
 
 
-def _admin_live_inbox_visible_emails():
-    emails = []
+def _admin_live_inbox_visible_user_entries(selected_user=None):
+    selected_user = str(selected_user or "").strip().lower()
+    users = load_users()
+    entries = []
     seen = set()
     try:
         for sub in load_subscriptions():
@@ -659,13 +661,58 @@ def _admin_live_inbox_visible_emails():
             assigned_user = str(sub.get("assigned_user") or "").strip().lower()
             if not email_addr or not assigned_user:
                 continue
+            if selected_user and assigned_user != selected_user:
+                continue
             if not _admin_can_see_assignment(assigned_user):
                 continue
-            if email_addr not in seen:
-                seen.add(email_addr)
-                emails.append(email_addr)
+            key = (assigned_user, email_addr)
+            if key in seen:
+                continue
+            seen.add(key)
+            udata = users.get(assigned_user) or {}
+            entries.append({
+                "username": assigned_user,
+                "name": udata.get("name", assigned_user) or assigned_user,
+                "role": udata.get("role", "client") or "client",
+                "email": email_addr,
+            })
     except Exception:
         return []
+    return sorted(entries, key=lambda it: (str(it.get("name") or it.get("username") or "").lower(), str(it.get("email") or "").lower()))
+
+
+def _admin_live_inbox_visible_users():
+    grouped = {}
+    for item in _admin_live_inbox_visible_user_entries():
+        uname = str(item.get("username") or "").strip().lower()
+        if not uname:
+            continue
+        row = grouped.setdefault(uname, {
+            "username": uname,
+            "name": item.get("name") or uname,
+            "role": item.get("role") or "client",
+            "linked_emails": [],
+            "linked_emails_count": 0,
+        })
+        email_addr = str(item.get("email") or "").strip().lower()
+        if email_addr and email_addr not in row["linked_emails"]:
+            row["linked_emails"].append(email_addr)
+    out = []
+    for row in grouped.values():
+        row["linked_emails"] = sorted(row["linked_emails"])
+        row["linked_emails_count"] = len(row["linked_emails"])
+        out.append(row)
+    return sorted(out, key=lambda it: (str(it.get("name") or it.get("username") or "").lower(), str(it.get("username") or "").lower()))
+
+
+def _admin_live_inbox_visible_emails(selected_user=None):
+    emails = []
+    seen = set()
+    for item in _admin_live_inbox_visible_user_entries(selected_user=selected_user):
+        email_addr = str(item.get("email") or "").strip().lower()
+        if email_addr and email_addr not in seen:
+            seen.add(email_addr)
+            emails.append(email_addr)
     return sorted(emails)
 
 
@@ -769,8 +816,9 @@ def _admin_live_inbox_match_platform(from_value, subject, body, selected_platfor
     return None
 
 
-def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
-    allowed = _admin_live_inbox_visible_emails()
+def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120, selected_user=None):
+    visible_entries = _admin_live_inbox_visible_user_entries(selected_user=selected_user)
+    allowed = sorted({str(item.get('email') or '').strip().lower() for item in visible_entries if str(item.get('email') or '').strip()})
     if not allowed:
         return [], []
 
@@ -780,6 +828,16 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
         return [], []
 
     allowed_set = {str(x or '').strip().lower() for x in allowed if str(x or '').strip()}
+    owners_by_email = {}
+    for item in visible_entries:
+        email_addr = str(item.get('email') or '').strip().lower()
+        if not email_addr:
+            continue
+        owners_by_email.setdefault(email_addr, []).append({
+            "username": str(item.get("username") or "").strip().lower(),
+            "name": str(item.get("name") or item.get("username") or "").strip(),
+            "role": str(item.get("role") or "client").strip().lower() or "client",
+        })
 
     items = []
     errors = []
@@ -845,10 +903,25 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
                             link = None
                         if not code and not link:
                             continue
+                        owners = owners_by_email.get(matched_original) or []
+                        owner = owners[0] if owners else {}
+                        owner_labels = []
+                        for row in owners:
+                            row_name = str(row.get("name") or row.get("username") or "").strip()
+                            row_user = str(row.get("username") or "").strip().lower()
+                            if row_name and row_user and row_name.lower() != row_user:
+                                owner_labels.append(f"{row_name} (@{row_user})")
+                            elif row_user:
+                                owner_labels.append(f"@{row_user}")
+                            elif row_name:
+                                owner_labels.append(row_name)
                         items.append({
                             "id": f"{account_cfg.get('name')}|{mailbox}|{bytes(eid).decode(errors='ignore')}",
                             "allowed_email": matched_original,
                             "recipients": recipients,
+                            "assigned_user": str(owner.get("username") or "").strip().lower(),
+                            "assigned_user_name": str(owner.get("name") or owner.get("username") or "").strip(),
+                            "assigned_users_label": ", ".join(owner_labels),
                             "from": from_value,
                             "subject": subject or "(sem assunto)",
                             "matched_platform": matched_platform,
@@ -4637,11 +4710,25 @@ def api_admin_live_inbox_allowed():
     if not _admin_live_inbox_is_unlocked():
         return jsonify({"success": False, "message": "PIN necessario para acessar esta caixa."}), 403
     if request.method == "GET":
-        emails = _admin_live_inbox_visible_emails()
-        return jsonify({"success": True, "emails": emails, "count": len(emails), "mode": "linked"})
+        selected_user = str(request.args.get("user") or "").strip().lower()
+        visible_users = _admin_live_inbox_visible_users()
+        valid_users = {str(item.get("username") or "").strip().lower() for item in visible_users}
+        if selected_user and selected_user not in valid_users:
+            selected_user = ""
+        entries = _admin_live_inbox_visible_user_entries(selected_user=selected_user)
+        emails = _admin_live_inbox_visible_emails(selected_user=selected_user)
+        return jsonify({
+            "success": True,
+            "emails": emails,
+            "entries": entries,
+            "users": visible_users,
+            "selected_user": selected_user,
+            "count": len(emails),
+            "mode": "linked"
+        })
     return jsonify({
         "success": False,
-        "message": "A lista agora é automática e mostra apenas os emails vinculados ao seu admin."
+        "message": "A lista agora é automática e mostra os emails vinculados na central de usuários."
     }), 400
 
 
@@ -4685,12 +4772,19 @@ def api_admin_live_inbox_delete_allowed(email_addr):
 def api_admin_live_inbox_messages():
     if not _admin_live_inbox_is_unlocked():
         return jsonify({"success": False, "message": "PIN necessario para acessar esta caixa.", "items": [], "allowed": [], "filters": [], "count": 0}), 403
-    items, errors = _fetch_admin_live_inbox_items()
+    selected_user = str(request.args.get("user") or "").strip().lower()
+    visible_users = _admin_live_inbox_visible_users()
+    valid_users = {str(item.get("username") or "").strip().lower() for item in visible_users}
+    if selected_user and selected_user not in valid_users:
+        selected_user = ""
+    items, errors = _fetch_admin_live_inbox_items(selected_user=selected_user)
     return jsonify({
         "success": True,
         "items": items,
         "errors": errors,
-        "allowed": _admin_live_inbox_visible_emails(),
+        "allowed": _admin_live_inbox_visible_emails(selected_user=selected_user),
+        "users": visible_users,
+        "selected_user": selected_user,
         "filters": load_admin_live_inbox_filters(),
         "filter_options": _admin_live_inbox_filter_options_payload(),
         "count": len(items)
