@@ -632,18 +632,17 @@
               <button class="btn-ref" type="button" onclick="loadAdminLiveInboxAllowed()">🔄 Atualizar lista</button>
             </div>
           </div>
-          <div class="sinfo" style="margin-bottom:10px;">Aqui aparecem todos os usuários com emails vinculados na central. Escolha um usuário para ver somente os emails dele em tempo real, ou deixe em todos para ver geral.</div>
+          <div class="sinfo" style="margin-bottom:10px;">Escolha um usuário para ver somente os emails vinculados dele. A lista abaixo fica compacta e cada email pode ser removido se quiser.</div>
           <div class="fgrid" style="margin-bottom:10px;">
             <div class="fgrp">
               <label class="flbl">🧑 Usuário para visualizar</label>
               <select class="fi" id="admin-live-inbox-user-filter" onchange="changeAdminLiveInboxUser()"><option value="">Todos os usuários</option></select>
             </div>
           </div>
-          <textarea class="fi" id="admin-live-inbox-allowed-text" rows="6" readonly placeholder="Os emails vinculados aparecerão aqui automaticamente conforme o usuário selecionado." style="width:100%;resize:vertical;opacity:.92;"></textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px;">
             <div id="admin-live-inbox-allowed-status" class="sinfo" style="margin:0;">Carregando usuários e emails vinculados...</div>
           </div>
-          <div id="admin-live-inbox-allowed-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;"></div>
+          <div id="admin-live-inbox-allowed-list" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;max-height:190px;overflow:auto;padding-right:4px;"></div>
         </div>
 
         <div class="panel" style="margin-bottom:18px;border:2px solid #60a5fa;">
@@ -653,7 +652,7 @@
               <button class="btn-ref" type="button" onclick="loadAdminLiveInboxFilters()">🔄 Atualizar filtros</button>
             </div>
           </div>
-          <div class="sinfo" style="margin-bottom:10px;">Somente os tipos marcados abaixo aparecerão na caixa em tempo real.</div>
+          <div class="sinfo" style="margin-bottom:10px;">Somente os tipos marcados abaixo aparecerão na caixa em tempo real dos últimos 15 minutos.</div>
           <div id="admin-live-inbox-filters" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;"></div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:12px;">
             <button type="button" class="btn-p" onclick="saveAdminLiveInboxFilters()">💾 Salvar filtros</button>
@@ -668,7 +667,7 @@
               <button class="btn-ref" type="button" onclick="loadAdminLiveInboxMessages()">🔄 Atualizar agora</button>
             </div>
           </div>
-          <div id="admin-live-inbox-status" class="sinfo" style="margin-bottom:10px;">Aguardando lista de emails.</div>
+          <div id="admin-live-inbox-status" class="sinfo" style="margin-bottom:10px;">Aguardando lista de emails dos últimos 15 minutos.</div>
           <div class="twrap">
             <table>
               <thead>
@@ -1740,14 +1739,18 @@
         const users = Array.isArray(j.users) ? j.users : [];
         const activeUser = String(j.selected_user || selectedUser || '').trim().toLowerCase();
         renderAdminLiveInboxUserOptions(users, activeUser);
-        const ta = document.getElementById('admin-live-inbox-allowed-text');
-        if (ta) ta.value = emails.join('\n');
         if (st) st.textContent = activeUser
           ? (emails.length ? `${emails.length} email(s) vinculado(s) ao usuário selecionado.` : 'O usuário selecionado não possui emails vinculados.')
           : (emails.length ? `${emails.length} email(s) vinculado(s) encontrados na central de usuários.` : 'Nenhum email vinculado encontrado na central de usuários.');
         if (list) {
           list.innerHTML = emails.length
-            ? emails.map(e => `<span style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.35);color:#dbeafe;">${escapeHtml(e)}</span>`).join('')
+            ? emails.map(e => {
+                const safeEmail = String(e || '').replace(/'/g, "\\'");
+                return `<span style="display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;background:rgba(96,165,250,.12);border:1px solid rgba(96,165,250,.35);color:#dbeafe;max-width:100%;">
+                  <span style="word-break:break-all;">${escapeHtml(e)}</span>
+                  <button type="button" class="btn-ref" style="padding:3px 8px;border-color:#ff6b6b;color:#ff8a80;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
+                </span>`;
+              }).join('')
             : '<div style="color:var(--tm);">Quando houver emails vinculados na central de usuários, eles aparecerão aqui automaticamente.</div>';
         }
       } catch(e) {
@@ -1803,7 +1806,7 @@
       const st = document.getElementById('admin-live-inbox-status');
       const tb = document.getElementById('admin-live-inbox-tbody');
       try {
-        if (st) st.textContent = 'Atualizando emails...';
+        if (st) st.textContent = 'Atualizando emails dos últimos 15 minutos...';
         const selectedUser = getAdminLiveInboxSelectedUser();
         const qs = selectedUser ? ('?user=' + encodeURIComponent(selectedUser)) : '';
         const { r, j } = await fetchJsonNoCache('/api/admin/live-inbox/messages' + qs);
@@ -1828,15 +1831,15 @@
         }
         if (!filters.length) {
           tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Ative pelo menos um filtro para começar a receber códigos e links aqui.</td></tr>';
-          if (st) st.textContent = `Monitorando ${allowed.length} email(s), mas nenhum filtro está ativado.`;
+          if (st) st.textContent = `Monitorando ${allowed.length} email(s) dos últimos 15 minutos, mas nenhum filtro está ativado.`;
           _adminLiveInboxLoading = false;
           return;
         }
         if (!items.length) {
-          tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Nenhuma mensagem encontrada para os emails vinculados com os filtros ativados.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:var(--tm);padding:14px">Nenhuma mensagem encontrada nos últimos 15 minutos para os emails vinculados com os filtros ativados.</td></tr>';
           if (st) st.textContent = activeUser
-            ? `Monitorando ${allowed.length} email(s) do usuário selecionado com ${filters.length} filtro(s) ativo(s).`
-            : `Monitorando ${allowed.length} email(s) de todos os usuários com ${filters.length} filtro(s) ativo(s).`;
+            ? `Monitorando os últimos 15 minutos de ${allowed.length} email(s) do usuário selecionado com ${filters.length} filtro(s) ativo(s).`
+            : `Monitorando os últimos 15 minutos de ${allowed.length} email(s) de todos os usuários com ${filters.length} filtro(s) ativo(s).`;
           _adminLiveInboxLoading = false;
           return;
         }
@@ -1864,10 +1867,10 @@
         }).join('');
         const errs = Array.isArray(j.errors) ? j.errors : [];
         if (st) st.textContent = errs.length
-          ? `Atualizado com avisos em algumas caixas. ${items.length} item(ns) listado(s) para ${allowed.length} email(s) e ${filters.length} filtro(s) ativo(s).`
+          ? `Atualizado com avisos em algumas caixas. ${items.length} item(ns) listado(s) nos últimos 15 minutos para ${allowed.length} email(s) e ${filters.length} filtro(s) ativo(s).`
           : (activeUser
-              ? `${items.length} item(ns) em tempo real para ${allowed.length} email(s) do usuário selecionado e ${filters.length} filtro(s) ativo(s).`
-              : `${items.length} item(ns) em tempo real para ${allowed.length} email(s) de todos os usuários e ${filters.length} filtro(s) ativo(s).`);
+              ? `${items.length} item(ns) em tempo real nos últimos 15 minutos para ${allowed.length} email(s) do usuário selecionado e ${filters.length} filtro(s) ativo(s).`
+              : `${items.length} item(ns) em tempo real nos últimos 15 minutos para ${allowed.length} email(s) de todos os usuários e ${filters.length} filtro(s) ativo(s).`);
       } catch(e) {
         if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f87171;padding:14px">Erro de conexão ao carregar emails.</td></tr>';
         if (st) st.textContent = 'Erro de conexão ao atualizar emails.';
@@ -2152,6 +2155,11 @@
           showToast('✓ Email removido');
           await loadVinculosEmails();
           await loadComprasPorData();
+          const liveModal = document.getElementById('admin-live-inbox-modal');
+          if (liveModal && liveModal.style.display !== 'none') {
+            await loadAdminLiveInboxAllowed();
+            await loadAdminLiveInboxMessages();
+          }
         } else {
           showToast('✗ ' + (j.message || 'Erro ao remover email'));
         }

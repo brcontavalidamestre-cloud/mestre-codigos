@@ -822,6 +822,9 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120, selected_user=N
     if not allowed:
         return [], []
 
+    lookback_seconds = 15 * 60
+    cutoff_ts = int(time.time()) - lookback_seconds
+
     selected_filters = load_admin_live_inbox_filters()
     expanded_filters = _expand_admin_live_inbox_filters(selected_filters)
     if not expanded_filters:
@@ -887,6 +890,9 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120, selected_user=N
                         from_value = decode_str(msg.get("From", ""))
                         subject = decode_str(msg.get("Subject", ""))
                         body = get_html_body(msg) or ""
+                        msg_ts = _admin_inbox_date_ts(msg)
+                        if not msg_ts or msg_ts < cutoff_ts:
+                            continue
                         snippet = _admin_inbox_strip_html(body)[:280]
                         matched_platform = _admin_live_inbox_match_platform(from_value, subject, body, expanded_filters)
                         if not matched_platform:
@@ -927,7 +933,7 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120, selected_user=N
                             "matched_platform": matched_platform,
                             "matched_platform_name": str((PLATFORM_CONFIG.get(matched_platform) or {}).get("name") or matched_platform),
                             "date": msg.get("Date", "") or "",
-                            "date_ts": _admin_inbox_date_ts(msg),
+                            "date_ts": msg_ts,
                             "snippet": snippet,
                             "code": code,
                             "link": link,
@@ -4787,7 +4793,8 @@ def api_admin_live_inbox_messages():
         "selected_user": selected_user,
         "filters": load_admin_live_inbox_filters(),
         "filter_options": _admin_live_inbox_filter_options_payload(),
-        "count": len(items)
+        "count": len(items),
+        "lookback_minutes": 15
     })
 
 
