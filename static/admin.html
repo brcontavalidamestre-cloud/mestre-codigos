@@ -1648,7 +1648,7 @@
       try {
         const { j } = await fetchJsonNoCache('/api/admin/live-inbox/access-status');
         if (!j.requires_password || j.unlocked) return true;
-        const pwd = window.prompt('Digite a senha da Caixa de Entrada Admin:');
+        const pwd = window.prompt('Digite o PIN da Caixa de Entrada Admin:');
         if (pwd === null) return false;
         const r = await fetch('/api/admin/live-inbox/unlock', {
           method:'POST',
@@ -1660,7 +1660,7 @@
           showToast('✓ Caixa liberada');
           return true;
         }
-        showToast('✗ ' + (jj.message || 'Senha incorreta'));
+        showToast('✗ ' + (jj.message || 'PIN incorreto'));
         return false;
       } catch(e) {
         showToast('Erro de conexão');
@@ -1768,8 +1768,8 @@
         if (st) st.textContent = 'Atualizando emails...';
         const { r, j } = await fetchJsonNoCache('/api/admin/live-inbox/messages');
         if (r && r.status === 403) {
-          if (st) st.textContent = j.message || 'Senha necessária para acessar esta caixa.';
-          if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f87171;padding:14px">Senha necessária para acessar a Caixa de Entrada Admin.</td></tr>';
+          if (st) st.textContent = j.message || 'PIN necessário para acessar esta caixa.';
+          if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#f87171;padding:14px">PIN necessário para acessar a Caixa de Entrada Admin.</td></tr>';
           stopAdminLiveInboxAutoRefresh();
           _adminLiveInboxLoading = false;
           return;

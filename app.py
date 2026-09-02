@@ -248,7 +248,7 @@ MASTER_EXTRA2_IMAP_SERVER = os.environ.get("MASTER_EXTRA2_IMAP_SERVER", "gtxm130
 MASTER_EXTRA2_IMAP_PORT   = int(os.environ.get("MASTER_EXTRA2_IMAP_PORT", 993))
 MASTER_EXTRA2_EMAIL_USER  = os.environ.get("MASTER_EXTRA2_EMAIL_USER", "codigo@mundial.log.br")
 MASTER_EXTRA2_EMAIL_PASS  = os.environ.get("MASTER_EXTRA2_EMAIL_PASS", "Mestre13579@#")
-ADMIN_LIVE_INBOX_MASTER_PASSWORD = os.environ.get("ADMIN_LIVE_INBOX_MASTER_PASSWORD", "Mestre135791@")
+ADMIN_LIVE_INBOX_MASTER_PASSWORD = "2022"
 
 # ╔══ Consulta LIVRE do InstAddr (somente instaddr.up.railway.app) ══╗
 # Esta vitrine pública NÃO usa login e NÃO reutiliza caixas dos outros links.
@@ -4626,7 +4626,7 @@ def api_admin_live_inbox_unlock():
     data = request.get_json(silent=True) or {}
     password = str(data.get("password", "") or "")
     if password != str(ADMIN_LIVE_INBOX_MASTER_PASSWORD or ""):
-        return jsonify({"success": False, "message": "Senha incorreta."}), 403
+        return jsonify({"success": False, "message": "PIN incorreto."}), 403
     session[_admin_live_inbox_session_key()] = True
     return jsonify({"success": True, "unlocked": True})
 
@@ -4635,7 +4635,7 @@ def api_admin_live_inbox_unlock():
 @admin_required
 def api_admin_live_inbox_allowed():
     if not _admin_live_inbox_is_unlocked():
-        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa."}), 403
+        return jsonify({"success": False, "message": "PIN necessario para acessar esta caixa."}), 403
     if request.method == "GET":
         emails = _admin_live_inbox_visible_emails()
         return jsonify({"success": True, "emails": emails, "count": len(emails), "mode": "linked"})
@@ -4649,7 +4649,7 @@ def api_admin_live_inbox_allowed():
 @admin_required
 def api_admin_live_inbox_filters():
     if not _admin_live_inbox_is_unlocked():
-        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa."}), 403
+        return jsonify({"success": False, "message": "PIN necessario para acessar esta caixa."}), 403
     if request.method == "GET":
         filters = load_admin_live_inbox_filters()
         return jsonify({
@@ -4673,7 +4673,7 @@ def api_admin_live_inbox_filters():
 @admin_required
 def api_admin_live_inbox_delete_allowed(email_addr):
     if not _admin_live_inbox_is_unlocked():
-        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa."}), 403
+        return jsonify({"success": False, "message": "PIN necessario para acessar esta caixa."}), 403
     return jsonify({
         "success": False,
         "message": "Os emails desta caixa agora são automáticos e seguem apenas os vínculos do seu admin."
@@ -4684,7 +4684,7 @@ def api_admin_live_inbox_delete_allowed(email_addr):
 @admin_required
 def api_admin_live_inbox_messages():
     if not _admin_live_inbox_is_unlocked():
-        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa.", "items": [], "allowed": [], "filters": [], "count": 0}), 403
+        return jsonify({"success": False, "message": "PIN necessario para acessar esta caixa.", "items": [], "allowed": [], "filters": [], "count": 0}), 403
     items, errors = _fetch_admin_live_inbox_items()
     return jsonify({
         "success": True,
