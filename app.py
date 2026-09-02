@@ -569,6 +569,106 @@ def save_admin_live_inbox_allowed(emails_list):
     return _write_json_file(_admin_live_inbox_allowed_file(), out)
 
 
+ADMIN_LIVE_INBOX_FILTER_OPTIONS = [
+    {"key": "netflix-all", "name": "Netflix"},
+    {"key": "netflix-residence", "name": "Residência Netflix"},
+    {"key": "password-reset", "name": "Redefinição Netflix"},
+    {"key": "disney-all", "name": "Disney+"},
+    {"key": "disney-residence", "name": "Residência Disney+"},
+    {"key": "streaming-all", "name": "Max / Prime Video"},
+    {"key": "globo-all", "name": "Globo"},
+    {"key": "apple-tv", "name": "Apple TV"},
+]
+
+ADMIN_LIVE_INBOX_FILTER_GROUPS = {
+    "netflix-all": ["netflix", "netflix-login", "netflix-temp", "netflix-residence", "password-reset"],
+    "disney-all": ["disney", "disney-residence"],
+    "streaming-all": ["max", "prime-video"],
+    "globo-all": ["bug-globo", "codigo-globo", "senha-globo"],
+}
+
+
+def _admin_live_inbox_filters_file():
+    try:
+        host = _normalize_domain(request.host or "")
+    except Exception:
+        host = "default"
+    current_admin = str(session.get("username") or "").strip().lower() or "default"
+    if "mestre-codigos-production" in host:
+        suffix = "mestre"
+    elif "jmp" in host:
+        suffix = "jmp"
+    else:
+        suffix = re.sub(r"[^a-z0-9]+", "_", host or "default").strip("_") or "default"
+    return os.path.join(_data_dir, f"admin_live_inbox_filters_{suffix}_{current_admin}.json")
+
+
+def _admin_live_inbox_filter_options_payload():
+    return [dict(item) for item in ADMIN_LIVE_INBOX_FILTER_OPTIONS]
+
+
+def _normalize_admin_live_inbox_filters(filters_list):
+    valid = {item["key"] for item in ADMIN_LIVE_INBOX_FILTER_OPTIONS}
+    out = []
+    seen = set()
+    for item in (filters_list or []):
+        key = str(item or "").strip().lower()
+        if key and key in valid and key not in seen:
+            seen.add(key)
+            out.append(key)
+    return out
+
+
+def load_admin_live_inbox_filters():
+    path = _admin_live_inbox_filters_file()
+    if not os.path.exists(path):
+        return [item["key"] for item in ADMIN_LIVE_INBOX_FILTER_OPTIONS]
+    data = _read_json_file(path, [])
+    if not isinstance(data, list):
+        data = []
+    return _normalize_admin_live_inbox_filters(data)
+
+
+def save_admin_live_inbox_filters(filters_list):
+    out = _normalize_admin_live_inbox_filters(filters_list)
+    _write_json_file(_admin_live_inbox_filters_file(), out)
+    return out
+
+
+def _expand_admin_live_inbox_filters(filters_list):
+    out = []
+    seen = set()
+    for key in _normalize_admin_live_inbox_filters(filters_list):
+        targets = ADMIN_LIVE_INBOX_FILTER_GROUPS.get(key) or [key]
+        for target in targets:
+            target = str(target or "").strip().lower()
+            if target and target not in seen:
+                seen.add(target)
+                out.append(target)
+    return out
+
+
+def _admin_live_inbox_visible_emails():
+    emails = []
+    seen = set()
+    try:
+        for sub in load_subscriptions():
+            if not isinstance(sub, dict):
+                continue
+            email_addr = str(sub.get("email") or "").strip().lower()
+            assigned_user = str(sub.get("assigned_user") or "").strip().lower()
+            if not email_addr or not assigned_user:
+                continue
+            if not _admin_can_see_assignment(assigned_user):
+                continue
+            if email_addr not in seen:
+                seen.add(email_addr)
+                emails.append(email_addr)
+    except Exception:
+        return []
+    return sorted(emails)
+
+
 def _parse_email_list_text(raw_text):
     found = re.findall(r"[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,}", str(raw_text or ""), flags=re.I)
     out = []
@@ -619,15 +719,26 @@ def _admin_inbox_date_ts(msg):
     return 0
 
 
-def _admin_live_inbox_match_platform(from_value, subject, body):
+def _admin_live_inbox_match_platform(from_value, subject, body, selected_platforms=None):
     from_norm = normalize(str(from_value or ""))
     subject_raw = str(subject or "")
     body_raw = str(body or "")
     body_norm = normalize(body_raw)
+    selected_set = {str(x or '').strip().lower() for x in (selected_platforms or []) if str(x or '').strip()}
 
     for plat_key, cfg in PLATFORM_CONFIG.items():
-        from_kw = normalize(str(cfg.get("from_keyword") or "").strip())
-        if from_kw and from_kw not in from_norm:
+        if plat_key in ADMIN_LIVE_INBOX_FILTER_GROUPS:
+            continue
+        if selected_set and plat_key not in selected_set:
+            continue
+
+        from_candidates = []
+        base_from = str(cfg.get("from_keyword") or "").strip()
+        if base_from:
+            from_candidates.append(base_from)
+        from_candidates.extend(cfg.get("from_keywords") or [])
+        from_candidates_norm = [normalize(str(v or "").strip()) for v in from_candidates if str(v or "").strip()]
+        if from_candidates_norm and not any(k and k in from_norm for k in from_candidates_norm):
             continue
 
         matched = False
@@ -659,13 +770,15 @@ def _admin_live_inbox_match_platform(from_value, subject, body):
 
 
 def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
-    allowed = load_admin_live_inbox_allowed()
+    allowed = _admin_live_inbox_visible_emails()
     if not allowed:
         return [], []
 
-    # Exibe somente emails que estejam EXATAMENTE na lista configurada no filtro.
-    # Não expande aliases automaticamente aqui para evitar mostrar mensagens de
-    # endereços parecidos que não foram adicionados manualmente pelo admin.
+    selected_filters = load_admin_live_inbox_filters()
+    expanded_filters = _expand_admin_live_inbox_filters(selected_filters)
+    if not expanded_filters:
+        return [], []
+
     allowed_set = {str(x or '').strip().lower() for x in allowed if str(x or '').strip()}
 
     items = []
@@ -717,14 +830,21 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
                         subject = decode_str(msg.get("Subject", ""))
                         body = get_html_body(msg) or ""
                         snippet = _admin_inbox_strip_html(body)[:280]
-                        matched_platform = _admin_live_inbox_match_platform(from_value, subject, body)
+                        matched_platform = _admin_live_inbox_match_platform(from_value, subject, body, expanded_filters)
                         if not matched_platform:
                             continue
                         code = None
+                        link = None
                         try:
                             code = extract_code_from_html(body) if body else None
                         except Exception:
                             code = None
+                        try:
+                            link = extract_link(body, matched_platform) if body else None
+                        except Exception:
+                            link = None
+                        if not code and not link:
+                            continue
                         items.append({
                             "id": f"{account_cfg.get('name')}|{mailbox}|{bytes(eid).decode(errors='ignore')}",
                             "allowed_email": matched_original,
@@ -732,10 +852,12 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120):
                             "from": from_value,
                             "subject": subject or "(sem assunto)",
                             "matched_platform": matched_platform,
+                            "matched_platform_name": str((PLATFORM_CONFIG.get(matched_platform) or {}).get("name") or matched_platform),
                             "date": msg.get("Date", "") or "",
                             "date_ts": _admin_inbox_date_ts(msg),
                             "snippet": snippet,
                             "code": code,
+                            "link": link,
                             "mailbox": mailbox,
                             "account_name": account_cfg.get("name") or "caixa",
                             "account_user": account_cfg.get("user") or "",
@@ -4515,17 +4637,36 @@ def api_admin_live_inbox_allowed():
     if not _admin_live_inbox_is_unlocked():
         return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa."}), 403
     if request.method == "GET":
-        emails = load_admin_live_inbox_allowed()
-        return jsonify({"success": True, "emails": emails, "count": len(emails)})
+        emails = _admin_live_inbox_visible_emails()
+        return jsonify({"success": True, "emails": emails, "count": len(emails), "mode": "linked"})
+    return jsonify({
+        "success": False,
+        "message": "A lista agora é automática e mostra apenas os emails vinculados ao seu admin."
+    }), 400
+
+
+@app.route("/api/admin/live-inbox/filters", methods=["GET", "POST"])
+@admin_required
+def api_admin_live_inbox_filters():
+    if not _admin_live_inbox_is_unlocked():
+        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa."}), 403
+    if request.method == "GET":
+        filters = load_admin_live_inbox_filters()
+        return jsonify({
+            "success": True,
+            "filters": filters,
+            "options": _admin_live_inbox_filter_options_payload(),
+            "count": len(filters)
+        })
 
     data = request.get_json(silent=True) or {}
-    emails = []
-    if isinstance(data.get("emails"), list):
-        emails = _parse_email_list_text("\n".join(str(x or "") for x in data.get("emails", [])))
-    else:
-        emails = _parse_email_list_text(data.get("emails_text", ""))
-    save_admin_live_inbox_allowed(emails)
-    return jsonify({"success": True, "emails": emails, "count": len(emails)})
+    filters = save_admin_live_inbox_filters(data.get("filters", []))
+    return jsonify({
+        "success": True,
+        "filters": filters,
+        "options": _admin_live_inbox_filter_options_payload(),
+        "count": len(filters)
+    })
 
 
 @app.route("/api/admin/live-inbox/allowed/<path:email_addr>", methods=["DELETE"])
@@ -4533,23 +4674,25 @@ def api_admin_live_inbox_allowed():
 def api_admin_live_inbox_delete_allowed(email_addr):
     if not _admin_live_inbox_is_unlocked():
         return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa."}), 403
-    target = str(email_addr or "").strip().lower()
-    emails = [e for e in load_admin_live_inbox_allowed() if e != target]
-    save_admin_live_inbox_allowed(emails)
-    return jsonify({"success": True, "emails": emails, "count": len(emails)})
+    return jsonify({
+        "success": False,
+        "message": "Os emails desta caixa agora são automáticos e seguem apenas os vínculos do seu admin."
+    }), 400
 
 
 @app.route("/api/admin/live-inbox/messages", methods=["GET"])
 @admin_required
 def api_admin_live_inbox_messages():
     if not _admin_live_inbox_is_unlocked():
-        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa.", "items": [], "allowed": [], "count": 0}), 403
+        return jsonify({"success": False, "message": "Senha necessaria para acessar esta caixa.", "items": [], "allowed": [], "filters": [], "count": 0}), 403
     items, errors = _fetch_admin_live_inbox_items()
     return jsonify({
         "success": True,
         "items": items,
         "errors": errors,
-        "allowed": load_admin_live_inbox_allowed(),
+        "allowed": _admin_live_inbox_visible_emails(),
+        "filters": load_admin_live_inbox_filters(),
+        "filter_options": _admin_live_inbox_filter_options_payload(),
         "count": len(items)
     })
 
