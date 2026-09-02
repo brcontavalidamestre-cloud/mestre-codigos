@@ -578,15 +578,6 @@
       <div style="font-size:1.6rem;color:#f9a8d4;">→</div>
     </div>
 
-    <div id="vinculos-launch" onclick="abrirVinculosEmails()" style="display:flex;cursor:pointer;align-items:center;gap:14px;margin-top:20px;padding:20px 24px;border-radius:16px;background:linear-gradient(135deg,#061827,#0b2b3d);border:2px solid #38bdf8;box-shadow:0 6px 24px rgba(56,189,248,0.18);transition:transform .15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
-      <div style="font-size:2.4rem;">📩</div>
-      <div style="flex:1;">
-        <div style="font-weight:800;font-size:1.15rem;color:#7dd3fc;">Vincular Emails por Usuário</div>
-        <div style="font-size:.9rem;color:#bae6fd;opacity:.9;">Selecione apenas o usuário, cole os emails e libere o recebimento de códigos — clique para abrir</div>
-      </div>
-      <div style="font-size:1.6rem;color:#7dd3fc;">→</div>
-    </div>
-
     <div id="admin-live-inbox-launch" onclick="abrirAdminLiveInbox()" style="display:none;cursor:pointer;align-items:center;gap:14px;margin-top:20px;padding:20px 24px;border-radius:16px;background:linear-gradient(135deg,#0e1726,#16304d);border:2px solid #60a5fa;box-shadow:0 6px 24px rgba(96,165,250,0.18);transition:transform .15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
       <div style="font-size:2.4rem;">📥</div>
       <div style="flex:1;">
@@ -594,103 +585,6 @@
         <div style="font-size:.9rem;color:#dbeafe;opacity:.92;">Mostra em tempo real apenas emails dos endereços que você colar manualmente — clique para abrir</div>
       </div>
       <div style="font-size:1.6rem;color:#93c5fd;">→</div>
-    </div>
-
-    <div id="cobranca-launch" onclick="abrirCobranca()" style="display:none;cursor:pointer;align-items:center;gap:14px;margin-top:30px;padding:20px 24px;border-radius:16px;background:linear-gradient(135deg,#1a1407,#2a2008);border:2px solid #fcd34d;box-shadow:0 6px 24px rgba(252,211,77,0.18);transition:transform .15s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='none'">
-      <div style="font-size:2.4rem;">💳</div>
-      <div style="flex:1;">
-        <div style="font-weight:800;font-size:1.15rem;color:#fcd34d;">Painel de Cobrança</div>
-        <div style="font-size:.9rem;color:#cbb765;">Contas pagas, logins, renovações e compras por data — clique para abrir</div>
-      </div>
-      <div style="font-size:1.6rem;color:#fcd34d;">→</div>
-    </div>
-
-    <!-- ============ MODAL EM TELA CHEIA DO PAINEL DE COBRANÇA ============ -->
-    <div id="cobranca-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(5,5,10,0.92);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 14px;flex-direction:column;align-items:center;">
-      <div style="width:100%;max-width:1100px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;position:sticky;top:0;background:rgba(5,5,10,0.95);padding:8px 0;z-index:2;">
-          <div style="font-weight:800;font-size:1.4rem;color:#fcd34d;">💳 Painel de Cobrança</div>
-          <button onclick="fecharCobranca()" style="background:#ff5252;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:1rem;">✕ Fechar</button>
-        </div>
-
-        <!-- Assinaturas (somente PAGAS/ATIVAS) -->
-        <div class="panel" id="cobranca-panel" style="margin-bottom:24px;border:2px solid #fcd34d;">
-          <div class="phdr">
-            <div class="ptit">📋 Contas Pagas / Vencidas</div>
-            <button class="btn-ref" onclick="loadAssinaturas()">🔄 Atualizar</button>
-          </div>
-          <div class="sinfo" style="margin-bottom:10px;">Todas as contas aparecem aqui. Quando vencer, ela continua visível em <b style="color:#ff5252;">vermelho como VENCIDA</b> até renovar ou excluir.</div>
-          <form id="assin-form" onsubmit="addAssinatura(event)" style="margin-bottom:16px;background:rgba(252,211,77,0.06);padding:14px;border-radius:10px;">
-            <div class="fgrid">
-              <div class="fgrp"><label class="flbl">✉ Email da conta (login) — opcional no modo massa</label><input class="fi" id="as-email" placeholder="conta@cliente.com"/></div>
-              <div class="fgrp"><label class="flbl">🔒 Senha do login (opcional)</label><input class="fi" id="as-senha" placeholder="senha da conta"/></div>
-              <div class="fgrp"><label class="flbl">🎬 Plataforma</label><input class="fi" id="as-plat" placeholder="Netflix" value="Netflix"/></div>
-              <div class="fgrp"><label class="flbl">👤 Cliente</label><input class="fi" id="as-cliente" placeholder="Nome do cliente"/></div>
-              <div class="fgrp"><label class="flbl">🧑 Usuário vinculado</label><select class="fi" id="as-user"><option value="">Sem vínculo específico</option></select></div>
-              <div class="fgrp"><label class="flbl">📱 Telefone (opcional)</label><input class="fi" id="as-tel" placeholder="WhatsApp"/></div>
-              <div class="fgrp"><label class="flbl">💰 Valor renovação (R$) — opcional</label><input class="fi" id="as-valor" placeholder="35.00"/></div>
-              <div class="fgrp"><label class="flbl">📅 Dias de validade</label><input class="fi" id="as-dias" placeholder="30" value="30"/></div>
-              <div class="fgrp"><label class="flbl">📆 Vencimento exato</label><input class="fi" id="as-vencdate" type="date"/></div>
-              <div class="fgrp" style="grid-column:1/-1;">
-                <label class="flbl">📥 Lista de emails em massa</label>
-                <div class="sinfo" style="margin:6px 0 10px 0;">Cole somente os emails, um por linha. O cliente e o vencimento preenchidos acima serão aplicados aos emails importados em massa.</div>
-                <textarea class="fi" id="as-bulk-list" rows="6" placeholder="conta1@gmail.com&#10;conta2@gmail.com&#10;conta3@gmail.com" style="width:100%;resize:vertical;"></textarea>
-              </div>
-            </div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
-              <button type="submit" class="btn-p">➕ Cadastrar / Atualizar Conta Paga</button>
-              <button type="button" class="btn-p" onclick="importAssinaturasEmMassa()">📥 Importar emails em massa</button>
-              <button type="button" class="btn-ref" onclick="document.getElementById('as-bulk-list').value=''">🧹 Limpar lista</button>
-            </div>
-          </form>
-          <div class="twrap">
-            <table>
-              <thead><tr><th>Login (Email + Senha)</th><th>Plataforma</th><th>Cliente / Usuário</th><th>Vencimento</th><th>Status</th><th>Ações</th></tr></thead>
-              <tbody id="assin-tbody"></tbody>
-            </table>
-          </div>
-        </div>
-
-        <!-- COMPRAS POR DATA / PESQUISA DE EMAILS VENDIDOS -->
-        <div class="panel" id="compras-data-panel" style="border:1px solid #fcd34d;">
-          <div class="phdr">
-            <div class="ptit">📅 Compras / 🔎 Pesquisa de Emails Vendidos</div>
-            <button class="btn-ref" onclick="loadComprasPorData()">🔄 Atualizar</button>
-          </div>
-          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
-            <button id="compras-tab-data" class="btn-ref" style="background:rgba(124,58,237,.22);border-color:#a78bfa;color:#fff;" onclick="showComprasTab('data')">📅 Compras por Data</button>
-            <button id="compras-tab-search" class="btn-ref" onclick="showComprasTab('search')">🔎 Pesquisar Emails Vendidos</button>
-            <button id="compras-tab-blocks" class="btn-ref" onclick="showComprasTab('blocks')" style="display:none;">🧱 Blocos 1 a 31</button>
-          </div>
-
-          <div id="compras-data-view">
-            <div class="sinfo" style="margin-bottom:10px;">Todas as compras agrupadas por dia. Cada bloco mostra o total do dia.</div>
-            <div id="compras-data-list" style="display:flex;flex-direction:column;gap:16px;"></div>
-          </div>
-
-          <div id="compras-search-view" style="display:none;">
-            <div class="sinfo" style="margin-bottom:10px;">Pesquise pelo email vendido, email do cliente, nome do cliente ou produto. Ex.: login entregue, Gmail do cliente ou nome do comprador.</div>
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px;">
-              <input class="fi" id="compras-search-input" placeholder="Ex: mestrenay2+ddf@gmail.com ou cliente@gmail.com" style="flex:1;min-width:280px;" onkeydown="if(event.key==='Enter'){event.preventDefault();searchComprasVendidas();}"/>
-              <button class="btn-ref" onclick="searchComprasVendidas()">🔎 Pesquisar</button>
-              <button class="btn-ref" onclick="clearComprasSearch()">🧹 Limpar</button>
-            </div>
-            <div id="compras-search-summary" class="sinfo" style="margin-bottom:10px;"></div>
-            <div id="compras-search-results"></div>
-          </div>
-
-          <div id="compras-blocks-view" style="display:none;">
-            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:12px;">
-              <div class="sinfo" style="margin:0;">31 blocos numerados para você colar os emails vendidos de cada dia do mês. Esta área fica somente no mestre.</div>
-              <div style="display:flex;gap:8px;flex-wrap:wrap;">
-                <button class="btn-ref" onclick="loadBlocosEmailsVendidos()">🔄 Atualizar blocos</button>
-                <button class="btn-p" type="button" onclick="saveTodosBlocosEmailsVendidos()">💾 Salvar todos os blocos</button>
-              </div>
-            </div>
-            <div id="compras-blocks-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;"></div>
-          </div>
-        </div>
-      </div>
     </div>
 
 
@@ -965,58 +859,6 @@
       </div>
     </div>
 
-    <!-- ============ BACKUP / RESTORE ============ -->
-    <div class="panel" style="margin-top:20px;">
-      <div class="phdr">
-        <div class="ptit">💾 Backup &amp; Restaurar</div>
-        <button class="btn-ref" onclick="loadBackupSummary()">🔄 Atualizar</button>
-      </div>
-      <div class="sinfo" style="margin-bottom:14px;">
-        Use para <b>duplicar este projeto</b> para outro domínio com todos os dados (usuários, estoque, pedidos, licenças).<br>
-        <b>1)</b> Aqui no projeto original: clique em “⬇️ Baixar Backup”.<br>
-        <b>2)</b> Crie um novo serviço Railway com o mesmo código.<br>
-        <b>3)</b> No novo projeto: acesse o admin e clique em “⬆️ Restaurar Backup”.
-      </div>
-
-      <div id="bkp-summary" style="display:flex;flex-wrap:wrap;gap:14px;margin-bottom:18px;">
-        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
-          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">👤 Usuários</div>
-          <div id="bkp-users" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
-        </div>
-        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
-          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">📦 Produtos</div>
-          <div id="bkp-products" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
-        </div>
-        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
-          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">🔑 Estoque</div>
-          <div id="bkp-stock" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
-        </div>
-        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
-          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">🛒 Pedidos</div>
-          <div id="bkp-orders" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
-        </div>
-        <div style="flex:1;min-width:140px;padding:12px;background:rgba(126,34,206,0.12);border:1px solid var(--bd);border-radius:10px;">
-          <div style="font-size:12px;color:var(--tm);text-transform:uppercase;letter-spacing:0.06em;">🎰 Licenças</div>
-          <div id="bkp-licenses" style="font-size:22px;font-weight:800;color:var(--g);margin-top:4px;">—</div>
-        </div>
-      </div>
-
-      <div style="display:flex;flex-wrap:wrap;gap:10px;">
-        <button onclick="downloadBackup()" style="background:linear-gradient(135deg,#0891b2,#0e7490);color:#fff;border:none;padding:12px 22px;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px;">
-          ⬇️ Baixar Backup (JSON)
-        </button>
-        <label style="background:linear-gradient(135deg,#16a34a,#15803d);color:#fff;border:none;padding:12px 22px;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px;display:inline-block;">
-          ⬆️ Restaurar Backup (substituir)
-          <input type="file" id="bkp-file-replace" accept=".json" style="display:none" onchange="uploadBackup('replace')"/>
-        </label>
-        <label style="background:linear-gradient(135deg,#7e22ce,#6b21a8);color:#fff;border:none;padding:12px 22px;border-radius:10px;font-weight:700;cursor:pointer;font-size:14px;display:inline-block;">
-          ➕ Restaurar (mesclar)
-          <input type="file" id="bkp-file-merge" accept=".json" style="display:none" onchange="uploadBackup('merge')"/>
-        </label>
-      </div>
-      <div id="bkp-result" style="margin-top:14px;"></div>
-    </div>
-
   </div><!-- /main -->
 
   <!-- modal: alterar senha -->
@@ -1240,12 +1082,8 @@
       loadOrders();
       checkMasterAndShowLicencas();
       showLoja2IfRios();
-      showCobrancaIfMaster();
-      showVinculosIfMaster();
       showConsultaAdminCodigosIfMaster();
       showAdminLiveInboxIfSupported();
-      loadBackupSummary();
-      syncBlocosEmailsTabVisibility();
     })();
 
     /* ============ BACKUP / RESTORE ============ */
