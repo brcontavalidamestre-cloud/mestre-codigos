@@ -816,7 +816,7 @@ def _admin_live_inbox_match_platform(from_value, subject, body, selected_platfor
     return None
 
 
-def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120, selected_user=None):
+def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=None):
     visible_entries = _admin_live_inbox_visible_user_entries(selected_user=selected_user)
     allowed = sorted({str(item.get('email') or '').strip().lower() for item in visible_entries if str(item.get('email') or '').strip()})
     if not allowed:
@@ -858,7 +858,10 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120, selected_user=N
                     st_sel, _ = mail.select(mailbox, readonly=True)
                     if st_sel != "OK":
                         continue
-                    st_search, msgs = mail.search(None, "ALL")
+                    since_date = time.strftime("%d-%b-%Y", time.gmtime(max(cutoff_ts - 86400, 0)))
+                    st_search, msgs = mail.search(None, "SINCE", since_date)
+                    if st_search != "OK" or not msgs or not msgs[0]:
+                        st_search, msgs = mail.search(None, "ALL")
                     if st_search != "OK" or not msgs or not msgs[0]:
                         continue
                     recent_ids = msgs[0].split()[-max_per_box:]
@@ -867,18 +870,20 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120, selected_user=N
                         if unique_key in seen:
                             continue
                         seen.add(unique_key)
-                        st_fetch, data = mail.fetch(eid, "(RFC822)")
-                        if st_fetch != "OK" or not data:
+
+                        st_fetch_head, data_head = mail.fetch(eid, "(BODY.PEEK[HEADER])")
+                        if st_fetch_head != "OK" or not data_head:
                             continue
-                        raw_msg = None
-                        for part in data:
+                        raw_head = None
+                        for part in data_head:
                             if isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], (bytes, bytearray)):
-                                raw_msg = part[1]
+                                raw_head = part[1]
                                 break
-                        if not raw_msg:
+                        if not raw_head:
                             continue
-                        msg = email.message_from_bytes(raw_msg)
-                        recipients = _admin_inbox_extract_recipients(msg)
+
+                        head_msg = email.message_from_bytes(raw_head)
+                        recipients = _admin_inbox_extract_recipients(head_msg)
                         matched_original = None
                         for rcpt in recipients:
                             rcpt_norm = str(rcpt or '').strip().lower()
@@ -887,12 +892,26 @@ def _fetch_admin_live_inbox_items(max_per_box=25, max_items=120, selected_user=N
                                 break
                         if not matched_original:
                             continue
-                        from_value = decode_str(msg.get("From", ""))
-                        subject = decode_str(msg.get("Subject", ""))
-                        body = get_html_body(msg) or ""
-                        msg_ts = _admin_inbox_date_ts(msg)
+
+                        from_value = decode_str(head_msg.get("From", ""))
+                        subject = decode_str(head_msg.get("Subject", ""))
+                        msg_ts = _admin_inbox_date_ts(head_msg)
                         if not msg_ts or msg_ts < cutoff_ts:
                             continue
+
+                        st_fetch_full, data_full = mail.fetch(eid, "(RFC822)")
+                        if st_fetch_full != "OK" or not data_full:
+                            continue
+                        raw_msg = None
+                        for part in data_full:
+                            if isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], (bytes, bytearray)):
+                                raw_msg = part[1]
+                                break
+                        if not raw_msg:
+                            continue
+
+                        msg = email.message_from_bytes(raw_msg)
+                        body = get_html_body(msg) or ""
                         snippet = _admin_inbox_strip_html(body)[:280]
                         matched_platform = _admin_live_inbox_match_platform(from_value, subject, body, expanded_filters)
                         if not matched_platform:

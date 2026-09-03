@@ -1086,8 +1086,6 @@
       } catch { location.href = '/login'; return; }
       loadUsers();
       renderAssinUsuarios();
-      loadLojaProdutos();
-      loadOrders();
       checkMasterAndShowLicencas();
       showLoja2IfRios();
       showConsultaAdminCodigosIfMaster();
@@ -1216,7 +1214,6 @@
         const cur = sel.value;
         sel.innerHTML = j.products.map(p => `<option value="${p.id}">${p.emoji||''} ${p.name}</option>`).join('');
         if (cur) sel.value = cur;
-        loadStock();
       } catch(e){}
     }
 
@@ -1678,8 +1675,10 @@
       if (!ok) return;
       const m = document.getElementById('admin-live-inbox-modal');
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
-      await loadAdminLiveInboxAllowed();
-      await loadAdminLiveInboxFilters();
+      await Promise.all([
+        loadAdminLiveInboxAllowed(),
+        loadAdminLiveInboxFilters()
+      ]);
       await loadAdminLiveInboxMessages();
       startAdminLiveInboxAutoRefresh();
     }
@@ -1695,7 +1694,7 @@
       _adminLiveInboxTimer = setInterval(() => {
         const modal = document.getElementById('admin-live-inbox-modal');
         if (modal && modal.style.display !== 'none') loadAdminLiveInboxMessages();
-      }, 8000);
+      }, 12000);
     }
 
     function stopAdminLiveInboxAutoRefresh() {
@@ -2745,7 +2744,6 @@
         if (j && j.is_master) {
           const btn = document.getElementById('licencas-launch');
           if (btn) btn.style.display = 'flex';
-          loadLicencas();
         }
       } catch(e){}
     }
