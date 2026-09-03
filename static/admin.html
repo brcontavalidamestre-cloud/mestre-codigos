@@ -356,6 +356,13 @@
                   placeholder="Pesquisar usuário, nome ou email vinculado..."
                   oninput="filterUsers(this.value)"/>
               </div>
+              <div class="swrap">
+                <span class="sico">📩</span>
+                <input class="sin" id="s-email-in" type="text"
+                  placeholder="Ir direto pelo email vinculado..."
+                  onkeydown="if(event.key==='Enter'){event.preventDefault(); jumpToUserByLinkedEmail();}"/>
+              </div>
+              <button class="btn-ref" onclick="jumpToUserByLinkedEmail()">📩 Buscar email</button>
               <button class="btn-ref" onclick="loadUsers()">🔄 Atualizar</button>
             </div>
           </div>
@@ -2976,6 +2983,21 @@
         : `❌ Nenhum usuário encontrado para "${q}"`;
     }
 
+    function jumpToUserByLinkedEmail() {
+      const emailInput = document.getElementById('s-email-in');
+      const mainInput = document.getElementById('s-in');
+      const q = String(emailInput?.value || '').trim().toLowerCase();
+      if (!q) {
+        if (mainInput) mainInput.focus();
+        showToast('✗ Digite um email para pesquisar');
+        return;
+      }
+      if (mainInput) mainInput.value = q;
+      filterUsers(q);
+      scrollToText('tbody', q);
+      if (emailInput) emailInput.focus();
+    }
+
     /* load */
     async function openDirectLogin(username) {
       try {
@@ -3002,6 +3024,8 @@
         `<tr><td colspan="6"><div class="empty"><span class="sp"></span> Carregando...</div></td></tr>`;
       const si = document.getElementById('s-in');
       if (si) si.value = '';
+      const sei = document.getElementById('s-email-in');
+      if (sei) sei.value = '';
       document.getElementById('s-info').textContent = '';
       try {
         const { j: d } = await fetchJsonNoCache('/api/admin/users');
