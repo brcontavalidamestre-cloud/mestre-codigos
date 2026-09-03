@@ -353,7 +353,7 @@
               <div class="swrap">
                 <span class="sico">🔍</span>
                 <input class="sin" id="s-in" type="text"
-                  placeholder="Pesquisar usuário ou nome..."
+                  placeholder="Pesquisar usuário, nome ou email vinculado..."
                   oninput="filterUsers(this.value)"/>
               </div>
               <button class="btn-ref" onclick="loadUsers()">🔄 Atualizar</button>
@@ -2944,7 +2944,10 @@
           </td>
           <td>
             ${linkedBox}
-            <button class="btn-ref" style="margin-top:8px;font-size:.74rem;padding:5px 8px;" onclick="openUserVinculos('${x(u.username)}')">📩 Abrir vínculos</button>
+            <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
+              <button class="btn-ref" style="font-size:.74rem;padding:5px 8px;" onclick="openUserVinculos('${x(u.username)}')">📩 Abrir vínculos</button>
+              <button class="btn-ref" style="font-size:.74rem;padding:5px 8px;" onclick="const si=document.getElementById('s-in'); if(si){si.value='${x((Array.isArray(u.linked_emails) && u.linked_emails[0]) ? u.linked_emails[0] : '')}'; filterUsers(si.value); si.focus();}">🔎 Buscar email</button>
+            </div>
           </td>
           <td>
             <div class="abts">
@@ -2963,14 +2966,16 @@
       q = q.trim().toLowerCase();
       const info = document.getElementById('s-info');
       if (!q) { renderTable(_users); info.textContent = ''; return; }
-      const f = _users.filter(u =>
-        u.username.toLowerCase().includes(q) ||
-        (u.name || '').toLowerCase().includes(q)
-      );
+      const f = _users.filter(u => {
+        const linked = Array.isArray(u.linked_emails) ? u.linked_emails : [];
+        return u.username.toLowerCase().includes(q) ||
+          (u.name || '').toLowerCase().includes(q) ||
+          linked.some(email => String(email || '').toLowerCase().includes(q));
+      });
       renderTable(f);
       info.textContent = f.length
         ? `🔍 ${f.length} de ${_users.length} resultado(s)`
-        : `❌ Nenhum resultado para "${q}"`;
+        : `❌ Nenhum usuário encontrado para "${q}"`;
     }
 
     /* load */
