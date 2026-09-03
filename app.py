@@ -6369,11 +6369,6 @@ def api_admin_import_vinculos_emails():
         if idx >= 0:
             sub = existing or {}
             old_assigned = str(sub.get("assigned_user", "")).strip().lower()
-            old_user_exists = old_assigned in users if old_assigned else False
-            # Se o vínculo antigo aponta para um usuário já removido, permite reassociar.
-            if old_assigned and old_user_exists and not _admin_can_see_assignment(old_assigned):
-                skipped += 1
-                continue
             sub["assigned_user"] = assigned_user
             sub["assigned_user_name"] = assigned_user_name
             sub["show_in_panel"] = False
