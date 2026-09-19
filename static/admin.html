@@ -356,13 +356,13 @@
                   placeholder="Pesquisar usuário, nome ou email vinculado..."
                   oninput="filterUsers(this.value)"/>
               </div>
-              <div class="swrap">
+              <div class="swrap" id="s-email-wrap" style="display:none;">
                 <span class="sico">📩</span>
                 <input class="sin" id="s-email-in" type="text"
                   placeholder="Ir direto pelo email vinculado..."
                   onkeydown="if(event.key==='Enter'){event.preventDefault(); jumpToUserByLinkedEmail();}"/>
               </div>
-              <button class="btn-ref" onclick="jumpToUserByLinkedEmail()">📩 Buscar email</button>
+              <button class="btn-ref" id="s-email-btn" style="display:none;" onclick="jumpToUserByLinkedEmail()">📩 Buscar email</button>
               <button class="btn-ref" onclick="loadUsers()">🔄 Atualizar</button>
             </div>
           </div>
@@ -970,6 +970,7 @@
 
       // ── TEMA STREAM ROGER ──
       const isRoger = host.startsWith('roger.') || host.includes('roger.up.railway.app') || host.includes('-roger') || host.includes('roger-');
+      window._isRogerHost = isRoger;
       if (isRoger) {
         const t = document.getElementById('site-title-h1');
         if (t) t.textContent = 'STREAM ROGER';
@@ -1081,6 +1082,18 @@
       return { r, j };
     }
 
+    function toggleRogerEmailJumpUI() {
+      const show = !!window._isRogerHost;
+      const wrap = document.getElementById('s-email-wrap');
+      const btn = document.getElementById('s-email-btn');
+      if (wrap) wrap.style.display = show ? '' : 'none';
+      if (btn) btn.style.display = show ? '' : 'none';
+      if (!show) {
+        const inp = document.getElementById('s-email-in');
+        if (inp) inp.value = '';
+      }
+    }
+
     /* init */
     (async function init() {
       try {
@@ -1091,6 +1104,7 @@
         _meUser = { username: d.username || '', name: d.name || d.username || '', role: d.role || 'admin' };
         document.getElementById('topbar-name').textContent = d.name || d.username;
       } catch { location.href = '/login'; return; }
+      toggleRogerEmailJumpUI();
       loadUsers();
       renderAssinUsuarios();
       checkMasterAndShowLicencas();
