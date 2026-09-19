@@ -3644,6 +3644,12 @@ def search_code_unified(user_email, platform_list):
                 primary_since = since_2d
                 secondary_since = since_7d
                 spam_boxes = _get_spam_boxes(mail, account_cfg)
+            elif _is_roger_request():
+                global_window_min = int(os.environ.get("ROGER_TIME_WINDOW_MIN", "15"))
+                global_max_emails = int(os.environ.get("ROGER_MAX_EMAILS", "80"))
+                primary_since = since_2d
+                secondary_since = since_7d
+                spam_boxes = _get_spam_boxes(mail, account_cfg)
             else:
                 global_window_min = int(os.environ.get("GLOBAL_TIME_WINDOW_MIN", "15"))
                 global_max_emails = int(os.environ.get("GLOBAL_MAX_EMAILS", "30"))
