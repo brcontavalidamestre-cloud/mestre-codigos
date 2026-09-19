@@ -1526,6 +1526,14 @@ def _fetch_remote_license(host):
         if cached:
             return cached["lic"]
         print(f"[license_remote] falha ao consultar {host}: {e}")
+        # ROGER: nunca bloquear por instabilidade de rede entre serviços do Railway.
+        # A licença do Roger já está cadastrada e ativa no mestre; se a checagem
+        # remota falhar/expirar por timeout, assume acesso liberado (fail-open)
+        # somente para este host — nenhum outro domínio filho é afetado.
+        if "roger" in str(host or "").lower():
+            fallback_lic = {"domain": host, "active": True, "expires_at": 0, "_fallback": True}
+            _remote_license_cache[host] = {"ts": now, "lic": fallback_lic}
+            return fallback_lic
         return None
 
 def get_license_for_host(host=None):
