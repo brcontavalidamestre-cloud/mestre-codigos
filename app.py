@@ -211,6 +211,13 @@ INSTADDR_IMAP_PORT   = int(os.environ.get("INSTADDR_IMAP_PORT", 993))
 INSTADDR_EMAIL_USER  = os.environ.get("INSTADDR_EMAIL_USER", "")
 INSTADDR_EMAIL_PASS  = os.environ.get("INSTADDR_EMAIL_PASS", "")
 
+# ╔══ Caixa EXCLUSIVA do ROGER (SiteGround mundial.log.br) ══╗
+# Só é incluída quando o host é roger.up.railway.app
+ROGER_IMAP_SERVER = os.environ.get("ROGER_IMAP_SERVER", "gtxm1300.siteground.biz")
+ROGER_IMAP_PORT   = int(os.environ.get("ROGER_IMAP_PORT", 993))
+ROGER_EMAIL_USER  = os.environ.get("ROGER_EMAIL_USER", "Roger@mundial.log.br")
+ROGER_EMAIL_PASS  = os.environ.get("ROGER_EMAIL_PASS", "Mstroger2026")
+
 # ─── Caixas IMAP EXCLUSIVAS do ceara.up.railway.app ────────────────────────────
 # Estas variaveis sao definidas APENAS no serviço 'ceara' no Railway.
 # Em qualquer outro link (rios, mestre, lojario, jmp...) elas ficam vazias e
@@ -301,7 +308,25 @@ def _is_instaddr_request():
         return False
 
 
+def _is_roger_request():
+    """True se o request atual vem de roger.up.railway.app."""
+    try:
+        return "roger" in (request.host or "").lower()
+    except Exception:
+        return False
+
+
 def get_imap_accounts():
+    # ╔══ ROGER: usa SOMENTE a caixa exclusiva Roger@mundial.log.br ══╗
+    if _is_roger_request() and ROGER_EMAIL_USER and ROGER_EMAIL_PASS:
+        return [{
+            "name": "caixa-roger",
+            "server": ROGER_IMAP_SERVER,
+            "port": ROGER_IMAP_PORT,
+            "user": ROGER_EMAIL_USER,
+            "password": ROGER_EMAIL_PASS,
+        }]
+
     # ╔══ CEARA: usa SOMENTE as 2 caixas exclusivas (nao usa ggtv, nem principal) ══╗
     if _is_ceara_request():
         ceara_accs = []
