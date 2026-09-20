@@ -172,8 +172,11 @@ def save_users(users):
         parent = os.path.dirname(USERS_FILE)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        with open(USERS_FILE, "w") as f:
-            json.dump(users, f, indent=2)
+        with _json_write_lock:
+            tmp_path = f"{USERS_FILE}.tmp"
+            with open(tmp_path, "w") as f:
+                json.dump(users, f, indent=2)
+            os.replace(tmp_path, USERS_FILE)
         print(f"[users] salvo em {USERS_FILE} ({len(users)} usuarios)")
     except Exception as e:
         print(f"[users] ERRO ao salvar: {e}")
@@ -1263,6 +1266,10 @@ def save_orders2(orders):
         orders = []
     return _write_json_file(ORDERS_FILE_2, orders)
 
+# Lock global para gravacoes de JSON: evita corrupcao de arquivo quando
+# multiplas threads (gunicorn --threads) gravam ao mesmo tempo.
+_json_write_lock = threading.Lock()
+
 def _read_json_file(path, default):
     if os.path.exists(path):
         try:
@@ -1277,8 +1284,11 @@ def _write_json_file(path, data):
         parent = os.path.dirname(path)
         if parent:
             os.makedirs(parent, exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(data, f, indent=2, ensure_ascii=False)
+        with _json_write_lock:
+            tmp_path = f"{path}.tmp"
+            with open(tmp_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            os.replace(tmp_path, path)
         return True
     except Exception as e:
         print(f"[loja] erro ao gravar {path}: {e}")
