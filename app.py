@@ -5828,6 +5828,32 @@ def mark_order_paid_and_deliver(order_id):
     save_orders(orders)
     return order
 
+def _process_loja_webhook_efi_payload(data):
+    """Processa o payload do webhook Pix da loja no banco central de pedidos."""
+    data = data or {}
+    pix_list = data.get("pix", [])
+    processed = 0
+    matched = 0
+    for px in pix_list:
+        txid = str((px or {}).get("txid") or "").strip()
+        if not txid:
+            continue
+        processed += 1
+        orders = load_orders()
+        order = next((o for o in orders if isinstance(o, dict) and o.get("pix_txid") == txid), None)
+        if order and order.get("status") == "pending":
+            matched += 1
+            mark_order_paid_and_deliver(order["id"])
+    return {"success": True, "processed": processed, "matched": matched}
+
+@app.route("/api/internal/loja/webhook/efi", methods=["POST"])
+def api_internal_loja_webhook_efi():
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    data = request.get_json(silent=True) or {}
+    return jsonify(_process_loja_webhook_efi_payload(data))
+
 @app.route("/api/loja/webhook/efi", methods=["POST", "GET"])
 @app.route("/api/loja/webhook/efi/pix", methods=["POST", "GET"])
 def api_loja_webhook_efi():
@@ -5835,6 +5861,16 @@ def api_loja_webhook_efi():
     # Aceita validacao GET da Efi (handshake)
     if request.method == "GET":
         return jsonify({"success": True}), 200
+
+    # Loja standalone: o pedido/estoque fica no MESTRE. Se o webhook estiver
+    # apontando para a URL publica da loja (ex.: lojamestre.up.railway.app),
+    # encaminha o payload ao servidor central para marcar o pedido como pago e
+    # liberar o login automaticamente.
+    if is_loja_host() and not is_master_host():
+        data = request.get_json(silent=True) or {}
+        result, status = _proxy_to_master("/api/internal/loja/webhook/efi", method="POST", json_body=data)
+        return jsonify(result), status
+
     token = (request.args.get("token", "") or
              request.args.get("hmac", "") or
              request.headers.get("X-Webhook-Token", ""))
@@ -5842,17 +5878,13 @@ def api_loja_webhook_efi():
     if token and token != EFI_WEBHOOK_TOKEN:
         return jsonify({"success": False, "message": "Token invalido."}), 403
     data = request.get_json(silent=True) or {}
-    pix_list = data.get("pix", [])
-    for px in pix_list:
-        txid = px.get("txid")
-        if not txid:
-            continue
-        orders = load_orders()
-        order  = next((o for o in orders if o.get("pix_txid") == txid), None)
-        if order and order["status"] == "pending":
-            mark_order_paid_and_deliver(order["id"])
-    return jsonify({"success": True})
+    return jsonify(_process_loja_webhook_efi_payload(data))
 
+
+@app.route("/api/admin/loja/efi-setup-webhook", methods=["POST"])
+@admin_required
+def api_admin_efi_setup_webhook():
+    """Cadastra automaticamente o webhook Pix da loja na Efi via API."""
 @app.route("/api/admin/loja/efi-setup-webhook", methods=["POST"])
 @admin_required
 def api_admin_efi_setup_webhook():
