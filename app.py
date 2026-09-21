@@ -5842,6 +5842,26 @@ def api_loja_webhook_efi():
     if token and token != EFI_WEBHOOK_TOKEN:
         return jsonify({"success": False, "message": "Token invalido."}), 403
     data = request.get_json(silent=True) or {}
+
+    # Lojamestre roda como loja standalone: o pedido e o estoque ficam no
+    # servidor central. Se o webhook cair no dominio publico da lojamestre,
+    # apenas encaminha o payload ao webhook ja existente do mestre, sem mexer
+    # na logica do painel principal.
+    if _is_lojamestre_store() and not is_master_host():
+        try:
+            import requests
+            master_url = f"{MASTER_API_URL}/api/loja/webhook/efi?hmac={EFI_WEBHOOK_TOKEN}"
+            r = requests.post(master_url, json=data, timeout=15)
+            try:
+                return jsonify(r.json()), r.status_code
+            except Exception:
+                return jsonify({"success": bool(r.ok)}), r.status_code
+        except Exception as e:
+            return jsonify({
+                "success": False,
+                "message": f"Erro ao encaminhar webhook ao servidor central: {str(e)[:200]}"
+            }), 502
+
     pix_list = data.get("pix", [])
     for px in pix_list:
         txid = px.get("txid")
