@@ -429,6 +429,24 @@ def get_imap_accounts():
                 "user": THIRD_EMAIL_USER,
                 "password": THIRD_EMAIL_PASS,
             })
+    # Caixa dedicada da consulta de códigos na Render (mundial.log.br / SiteGround)
+    try:
+        _h_render = (get_current_host() or "").endswith(".onrender.com")
+    except Exception:
+        _h_render = False
+    if _h_render:
+        _render_already = any(
+            a["user"].lower() == "codigo@mundial.log.br" and a["server"] == "gtxm1300.siteground.biz"
+            for a in accounts
+        )
+        if not _render_already:
+            accounts.append({
+                "name": "caixa-render-mundial",
+                "server": "gtxm1300.siteground.biz",
+                "port": 993,
+                "user": "codigo@mundial.log.br",
+                "password": "Mestre13579@#",
+            })
     # Caixas extras exclusivas do MESTRE — não são usadas em outros links
     if is_master_host():
         if MASTER_EXTRA2_EMAIL_USER and MASTER_EXTRA2_EMAIL_PASS:
