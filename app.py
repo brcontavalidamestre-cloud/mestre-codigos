@@ -3873,6 +3873,10 @@ def _render_sync_from_master():
     mestre e mescla na base local (Render Free não tem disco persistente).
     Roda no máximo 1x a cada 5 minutos."""
     global _render_sync_last
+    # Interruptor: defina RENDER_MASTER_SYNC=off na Render para desligar a
+    # sincronização com o Railway quando ele for desativado definitivamente.
+    if os.environ.get("RENDER_MASTER_SYNC", "on").strip().lower() in ("0", "off", "false", "no"):
+        return
     try:
         host = get_current_host() or ""
     except Exception:
@@ -7656,11 +7660,12 @@ def api_admin_backup_export():
             "source_host": get_current_host(),
             "is_master_source": is_master_host(),
             "data": {
-                "users":     _read_json_safe(USERS_FILE, {}),
-                "products":  _read_json_safe(PRODUCTS_FILE, []),
-                "stock":     _read_json_safe(STOCK_FILE, {}),
-                "orders":    _read_json_safe(ORDERS_FILE, []),
-                "licenses":  _read_json_safe(LICENSES_FILE, []),
+            "users":     _read_json_safe(USERS_FILE, {}),
+            "products":  _read_json_safe(PRODUCTS_FILE, []),
+            "stock":     _read_json_safe(STOCK_FILE, {}),
+            "orders":    _read_json_safe(ORDERS_FILE, []),
+            "licenses":  _read_json_safe(LICENSES_FILE, []),
+            "subscriptions": _read_json_safe(SUBSCRIPTIONS_FILE, []),
             }
         }
         backup["summary"] = {
@@ -7669,6 +7674,7 @@ def api_admin_backup_export():
             "stock_items":     sum(len(v) for v in backup["data"]["stock"].values()) if isinstance(backup["data"]["stock"], dict) else 0,
             "orders_count":    len(backup["data"]["orders"]) if isinstance(backup["data"]["orders"], list) else 0,
             "licenses_count":  len(backup["data"]["licenses"]) if isinstance(backup["data"]["licenses"], list) else 0,
+            "subscriptions_count": len(backup["data"]["subscriptions"]) if isinstance(backup["data"].get("subscriptions"), list) else 0,
         }
         # Headers para download direto como arquivo
         from flask import Response
@@ -7779,6 +7785,22 @@ def api_admin_backup_import():
                         ex_by_id[o["id"]] = o
                 _write_json_file(ORDERS_FILE, list(ex_by_id.values()))
                 result["restored"]["orders"] = len(ex_by_id)
+
+        # SUBSCRIPTIONS (vínculos de email que liberam códigos)
+        if "subscriptions" in data and isinstance(data["subscriptions"], list):
+            if mode == "replace":
+                _write_json_file(SUBSCRIPTIONS_FILE, data["subscriptions"])
+                result["restored"]["subscriptions"] = len(data["subscriptions"])
+            else:
+                existing = _read_json_safe(SUBSCRIPTIONS_FILE, [])
+                if not isinstance(existing, list):
+                    existing = []
+                by_email = {str(s.get("email") or "").strip().lower(): s for s in existing if isinstance(s, dict) and s.get("email")}
+                for s in data["subscriptions"]:
+                    if isinstance(s, dict) and s.get("email"):
+                        by_email[str(s.get("email")).strip().lower()] = s
+                _write_json_file(SUBSCRIPTIONS_FILE, list(by_email.values()))
+                result["restored"]["subscriptions"] = len(by_email)
 
         # LICENSES
         if "licenses" in data and isinstance(data["licenses"], list):
