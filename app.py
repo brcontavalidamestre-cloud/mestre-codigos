@@ -3864,6 +3864,70 @@ _LICENSE_BYPASS_PATHS = (
     "/favicon.ico",
 )
 
+_render_sync_last = 0
+_render_sync_lock = threading.Lock()
+_RENDER_SYNC_TTL = 300  # segundos
+
+def _render_sync_from_master():
+    """No serviço da Render (onrender.com), puxa usuários/vínculos/licenças do
+    mestre e mescla na base local (Render Free não tem disco persistente).
+    Roda no máximo 1x a cada 5 minutos."""
+    global _render_sync_last
+    try:
+        host = get_current_host() or ""
+    except Exception:
+        return
+    if not host.endswith(".onrender.com"):
+        return
+    if is_master_host():
+        return
+    now = time.time()
+    if now - _render_sync_last < _RENDER_SYNC_TTL:
+        return
+    with _render_sync_lock:
+        if now - _render_sync_last < _RENDER_SYNC_TTL:
+            return
+        _render_sync_last = now
+    try:
+        import urllib.request, urllib.parse
+        url = f"{MASTER_API_URL}/api/internal/backup/export?token={urllib.parse.quote(MASTER_API_TOKEN)}"
+        req = urllib.request.Request(url, headers={"User-Agent": "render-sync/1.0"})
+        with urllib.request.urlopen(req, timeout=12) as resp:
+            payload = json.loads(resp.read().decode("utf-8", errors="ignore"))
+        if not payload.get("success"):
+            return
+        data = ((payload.get("backup") or {}).get("data") or {})
+
+        # USERS — mescla por username (mestre vence)
+        src_users = data.get("users")
+        if isinstance(src_users, dict) and src_users:
+            existing = _read_json_safe(USERS_FILE, {})
+            if not isinstance(existing, dict):
+                existing = {}
+            existing.update(src_users)
+            _write_json_file(USERS_FILE, existing)
+
+        # SUBSCRIPTIONS (vínculos de email) — mescla por email (mestre vence)
+        src_subs = data.get("subscriptions")
+        if isinstance(src_subs, list):
+            existing_subs = _read_json_safe(SUBSCRIPTIONS_FILE, [])
+            if not isinstance(existing_subs, list):
+                existing_subs = []
+            idx = {str(s.get("email") or "").strip().lower(): s for s in existing_subs if isinstance(s, dict) and s.get("email")}
+            for s in src_subs:
+                if isinstance(s, dict) and s.get("email"):
+                    idx[str(s.get("email")).strip().lower()] = s
+            _write_json_file(SUBSCRIPTIONS_FILE, list(idx.values()))
+
+        # LICENSES — substitui pelo estado atual do mestre
+        src_lic = data.get("licenses")
+        if isinstance(src_lic, list):
+            _write_json_file(LICENSES_FILE, src_lic)
+
+        print(f"[render-sync] sincronizado do mestre: users={len(src_users or {})} subs={len(src_subs or [])}")
+    except Exception as e:
+        print(f"[render-sync] falha ao sincronizar com o mestre: {e}")
+
 @app.before_request
 def _jmp_autorestore_hook():
     """Dispara auto-restauração de usuários no JMP (1x por processo)."""
@@ -3874,6 +3938,13 @@ def _jmp_autorestore_hook():
             pass
     try:
         _cleanup_customer_purchases_once()
+    except Exception:
+        pass
+    # Sync Render <- mestre (a cada 5 min, apenas em hosts onrender.com)
+    try:
+        path_now = request.path or "/"
+        if path_now in ("/", "/login", "/admin") or path_now in ("/api/auth/me", "/api/admin/users", "/api/admin/vinculos-emails"):
+            _render_sync_from_master()
     except Exception:
         pass
     return None
@@ -7552,6 +7623,24 @@ def _count_users(u):
     if isinstance(u, list):
         return len(u)
     return 0
+
+@app.route("/api/internal/backup/export", methods=["GET"])
+def api_internal_backup_export():
+    """Export interno (token) usado pelo serviço de consulta na Render para
+    sincronizar usuários, vínculos (subscriptions) e licenças do mestre."""
+    token = request.headers.get("X-Loja-Proxy-Token", "") or request.args.get("token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    backup = {
+        "version": "1.1",
+        "exported_at": int(time.time()),
+        "data": {
+            "users":         _read_json_safe(USERS_FILE, {}),
+            "subscriptions": _read_json_safe(SUBSCRIPTIONS_FILE, []),
+            "licenses":      _read_json_safe(LICENSES_FILE, []),
+        }
+    }
+    return jsonify({"success": True, "backup": backup})
 
 @app.route("/api/admin/backup/export", methods=["GET"])
 @admin_required
