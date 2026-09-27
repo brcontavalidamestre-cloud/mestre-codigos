@@ -1218,7 +1218,7 @@
     <section class="platforms-section">
       <div class="section-title">📥 Bandeja de Entrada</div>
       <p class="section-subtitle">Códigos em tempo real dos emails vinculados à sua conta</p>
-      <div id="bd-emails" style="margin:10px 0 14px;font-size:.82rem;color:var(--text-muted,#9ca3af)"></div>
+      <div id="bd-emails" style="display:none"></div>
       <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
         <button class="btn-primary" style="padding:8px 14px;font-size:.85rem" onclick="loadBandeja(true)">🔄 Atualizar agora</button>
         <span id="bd-status" style="font-size:.78rem;color:var(--text-muted,#9ca3af)">Atualização automática a cada 12s</span>
@@ -3123,9 +3123,13 @@
         }
         const emailsEl = document.getElementById('bd-emails');
         if (emailsEl) {
-          emailsEl.innerHTML = (j.emails || []).length
-            ? '📧 Emails vinculados: <b>' + (j.emails || []).map(_esc).join(', ') + '</b>'
-            : '⚠️ Nenhum email vinculado à sua conta. Peça ao administrador para vincular.';
+          if (!(j.emails || []).length) {
+            emailsEl.style.display = 'block';
+            emailsEl.innerHTML = '⚠️ Nenhum email vinculado à sua conta. Peça ao administrador para vincular.';
+          } else {
+            emailsEl.style.display = 'none';
+            emailsEl.innerHTML = '';
+          }
         }
         const items = j.items || [];
         if (!items.length) {
