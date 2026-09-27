@@ -429,6 +429,23 @@ def get_imap_accounts():
                 "user": THIRD_EMAIL_USER,
                 "password": THIRD_EMAIL_PASS,
             })
+    # Caixa EXCLUSIVA do link jmp-codigos (Render): jmp@mundial.log.br / SiteGround
+    try:
+        _h_jmp = (get_current_host() or "")
+    except Exception:
+        _h_jmp = ""
+    if _h_jmp == "jmp-codigos.onrender.com":
+        _jmp_already = any(
+            a["user"].lower() == "jmp@mundial.log.br" for a in accounts
+        )
+        if not _jmp_already:
+            accounts.append({
+                "name": "caixa-jmp-render-mundial",
+                "server": "gtxm1300.siteground.biz",
+                "port": 993,
+                "user": "jmp@mundial.log.br",
+                "password": "q#1~21n(1pz+",
+            })
     # Caixa EXCLUSIVA do link consulta-codigos (Render): margos@outlok.space / Hostinger
     try:
         _h_cc = (get_current_host() or "")
