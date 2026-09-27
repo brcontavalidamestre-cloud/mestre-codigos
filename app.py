@@ -5178,10 +5178,30 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     return items[:max_items], errors
 
 
+_bd_cache = {}
+_bd_cache_lock = threading.Lock()
+_bd_refreshing = set()
+_BD_CACHE_TTL = 60  # segundos
+
+
+def _bd_refresh_background(username):
+    """Varredura IMAP em segundo plano — atualiza o cache sem travar a tela."""
+    try:
+        items, errors = _fetch_user_live_inbox_items(username)
+        with _bd_cache_lock:
+            _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors}
+    except Exception as e:
+        print(f"[bandeja] refresh erro ({username}): {e}")
+    finally:
+        with _bd_cache_lock:
+            _bd_refreshing.discard(username)
+
+
 @app.route("/api/live-inbox/messages", methods=["GET"])
 def api_user_live_inbox_messages():
     """Bandeja de entrada do usuário logado: códigos em tempo real apenas dos
-    emails vinculados a ele."""
+    emails vinculados a ele. Responde instantaneamente do cache (60s); a
+    varredura IMAP roda em segundo plano e renova o cache."""
     if not session.get("logged_in"):
         return jsonify({"success": False, "message": "Faça login para ver sua bandeja."}), 401
     username = str(session.get("username") or "").strip().lower()
@@ -5189,7 +5209,41 @@ def api_user_live_inbox_messages():
     if not emails:
         return jsonify({"success": True, "items": [], "emails": [], "count": 0,
                         "message": "Nenhum email vinculado a este usuário."})
+
+    now = time.time()
+    with _bd_cache_lock:
+        cached = _bd_cache.get(username)
+
+    fresh = request.args.get("fresh") == "1"
+
+    if cached and (now - cached["ts"] < _BD_CACHE_TTL) and not fresh:
+        return jsonify({"success": True, "items": cached["items"], "emails": emails,
+                        "count": len(cached["items"]), "cached": True,
+                        "errors": cached.get("errors") or []})
+
+    # Cache vencido ou ausente: dispara refresh em background e responde
+    # imediatamente com o que tiver (cache velho) ou faz a 1ª varredura.
+    with _bd_cache_lock:
+        already = username in _bd_refreshing
+        if not already:
+            _bd_refreshing.add(username)
+    if not already:
+        try:
+            threading.Thread(target=_bd_refresh_background, args=(username,), daemon=True).start()
+        except Exception:
+            with _bd_cache_lock:
+                _bd_refreshing.discard(username)
+
+    if cached:
+        return jsonify({"success": True, "items": cached["items"], "emails": emails,
+                        "count": len(cached["items"]), "cached": True, "refreshing": True,
+                        "errors": cached.get("errors") or []})
+
+    # Primeira vez de todos (sem cache nenhum): faz a varredura agora.
     items, errors = _fetch_user_live_inbox_items(username)
+    with _bd_cache_lock:
+        _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors}
+        _bd_refreshing.discard(username)
     return jsonify({"success": True, "items": items, "emails": emails,
                     "count": len(items), "errors": errors})
 

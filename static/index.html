@@ -3108,6 +3108,34 @@
       }
     }
 
+    let _bdLast = null;
+
+    function renderBandeja(j) {
+      const list = document.getElementById('bd-list');
+      const items = j.items || [];
+      if (!items.length) {
+        list.innerHTML = '<div style="padding:22px;text-align:center;color:var(--text-muted,#9ca3af);border:1px dashed #4c1d95;border-radius:12px">Nenhum código recebido nos últimos 2 dias nos seus emails vinculados.</div>';
+        return;
+      }
+      list.innerHTML = items.map(it => {
+        const badge = it.code
+          ? '<span style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-weight:800;letter-spacing:1px;padding:5px 12px;border-radius:8px;font-size:1rem">' + _esc(it.code) + '</span>'
+          : '<span style="color:#9ca3af;font-size:.78rem">sem código</span>';
+        const btns = [];
+        if (it.code) btns.push('<button class="btn-primary" style="padding:5px 12px;font-size:.75rem" onclick="copyBandeja(\'' + _esc(it.code) + '\', this)">📋 Copiar</button>');
+        if (it.link) btns.push('<a href="' + _esc(it.link) + '" target="_blank" rel="noopener" style="padding:5px 12px;font-size:.75rem;background:#059669;color:#fff;border-radius:8px;text-decoration:none">🔗 Abrir link</a>');
+        return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(23,6,42,.85);border:1px solid #4c1d95;border-radius:12px">'
+          + '<div style="min-width:110px">' + badge + '</div>'
+          + '<div style="flex:1;min-width:0">'
+          +   '<div style="font-size:.82rem;color:#e9d5ff;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(it.subject) + '</div>'
+          +   '<div style="font-size:.72rem;color:var(--text-muted,#9ca3af);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📧 ' + _esc(it.email) + ' · ' + _esc(it.from) + '</div>'
+          +   '<div style="font-size:.7rem;color:var(--text-muted,#9ca3af)">' + _fmtDate(it.date_ts) + ' · ' + _esc(it.platform) + '</div>'
+          + '</div>'
+          + '<div style="display:flex;gap:6px;flex-shrink:0">' + btns.join('') + '</div>'
+          + '</div>';
+      }).join('');
+    }
+
     async function loadBandeja(manual) {
       if (_bdLoading) return;
       _bdLoading = true;
@@ -3115,7 +3143,7 @@
       const status = document.getElementById('bd-status');
       try {
         if (manual && status) status.textContent = 'Atualizando...';
-        const r = await fetch('/api/live-inbox/messages');
+        const r = await fetch('/api/live-inbox/messages' + (manual ? '?fresh=1' : ''));
         const j = await r.json();
         if (!j.success) {
           if (status) status.textContent = j.message || 'Erro ao carregar.';
@@ -3131,28 +3159,8 @@
             emailsEl.innerHTML = '';
           }
         }
-        const items = j.items || [];
-        if (!items.length) {
-          list.innerHTML = '<div style="padding:22px;text-align:center;color:var(--text-muted,#9ca3af);border:1px dashed #4c1d95;border-radius:12px">Nenhum código recebido nos últimos 2 dias nos seus emails vinculados.</div>';
-        } else {
-          list.innerHTML = items.map(it => {
-            const badge = it.code
-              ? '<span style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-weight:800;letter-spacing:1px;padding:5px 12px;border-radius:8px;font-size:1rem">' + _esc(it.code) + '</span>'
-              : '<span style="color:#9ca3af;font-size:.78rem">sem código</span>';
-            const btns = [];
-            if (it.code) btns.push('<button class="btn-primary" style="padding:5px 12px;font-size:.75rem" onclick="copyBandeja(\'' + _esc(it.code) + '\', this)">📋 Copiar</button>');
-            if (it.link) btns.push('<a href="' + _esc(it.link) + '" target="_blank" rel="noopener" style="padding:5px 12px;font-size:.75rem;background:#059669;color:#fff;border-radius:8px;text-decoration:none">🔗 Abrir link</a>');
-            return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(23,6,42,.85);border:1px solid #4c1d95;border-radius:12px">'
-              + '<div style="min-width:110px">' + badge + '</div>'
-              + '<div style="flex:1;min-width:0">'
-              +   '<div style="font-size:.82rem;color:#e9d5ff;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(it.subject) + '</div>'
-              +   '<div style="font-size:.72rem;color:var(--text-muted,#9ca3af);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📧 ' + _esc(it.email) + ' · ' + _esc(it.from) + '</div>'
-              +   '<div style="font-size:.7rem;color:var(--text-muted,#9ca3af)">' + _fmtDate(it.date_ts) + ' · ' + _esc(it.platform) + '</div>'
-              + '</div>'
-              + '<div style="display:flex;gap:6px;flex-shrink:0">' + btns.join('') + '</div>'
-              + '</div>';
-          }).join('');
-        }
+        _bdLast = j;
+        renderBandeja(j);
         if (status) status.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR') + ' · automático a cada 12s';
       } catch (e) {
         if (status) status.textContent = 'Erro de conexão. Tentando novamente...';
@@ -3163,6 +3171,7 @@
 
     function startBandeja() {
       stopBandeja();
+      if (_bdLast) { renderBandeja(_bdLast); }
       loadBandeja(true);
       _bdTimer = setInterval(() => loadBandeja(false), 12000);
     }
