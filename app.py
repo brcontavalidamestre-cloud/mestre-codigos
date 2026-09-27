@@ -5046,12 +5046,14 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     if not expanded_filters:
         return [], []
     allowed_set = set(emails)
-    # aceita alias com +tag (ex: nome+disn05@gmail.com casa com nome@gmail.com)
+    # REGRA estrita: alias com +tag só é aceito quando o usuário tem o email
+    # BASE vinculado (ex: tem nome@gmail.com -> aceita nome+tag@gmail.com).
+    # Se o usuário só tem aliases específicos vinculados (nome+tag1@gmail.com),
+    # NÃO mostra outros aliases do mesmo base (nome+tag2@gmail.com).
     base_map = {}
     for em in emails:
-        if "@" in em:
-            local, domain = em.split("@", 1)
-            base_map[local.split("+")[0] + "@" + domain] = em
+        if "@" in em and "+" not in em.split("@", 1)[0]:
+            base_map[em] = em
 
     items = []
     errors = []
@@ -5099,7 +5101,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                                 break
                             if "@" in rc2:
                                 base = rc2.split("@", 1)[0].split("+")[0] + "@" + rc2.split("@", 1)[1]
-                                if base in base_map:
+                                if base != rc2 and base in base_map:
                                     matched_email = base_map[base]
                                     break
                         if not matched_email:
