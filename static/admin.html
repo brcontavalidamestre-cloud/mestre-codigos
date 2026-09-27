@@ -1645,7 +1645,7 @@
 
     function hostSupportsAdminLiveInbox() {
       const host = (window.location.hostname || '').toLowerCase();
-      return host === 'jmp.up.railway.app' || host === 'mestre-codigos-production.up.railway.app';
+      return host === 'jmp.up.railway.app' || host === 'mestre-codigos-production.up.railway.app' || host.endsWith('.onrender.com');
     }
 
     function showAdminLiveInboxIfSupported() {
