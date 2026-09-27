@@ -1209,8 +1209,23 @@
     <!-- MENU TOPO -->
     <div class="top-menu">
       <button id="btn-view-codigos" class="active" onclick="switchView('codigos')">🔎 Consultar Códigos</button>
+      <button id="btn-view-bandeja" onclick="switchView('bandeja')">📥 Bandeja de Entrada</button>
       <button id="btn-view-loja" onclick="switchView('loja')" style="display:none">🛒 Loja com Pix</button>
     </div>
+
+  <!-- ============ VIEW: BANDEJA DE ENTRADA (códigos em tempo real dos emails vinculados) ============ -->
+  <div class="view" id="view-bandeja">
+    <section class="platforms-section">
+      <div class="section-title">📥 Bandeja de Entrada</div>
+      <p class="section-subtitle">Códigos em tempo real dos emails vinculados à sua conta</p>
+      <div id="bd-emails" style="margin:10px 0 14px;font-size:.82rem;color:var(--text-muted,#9ca3af)"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <button class="btn-primary" style="padding:8px 14px;font-size:.85rem" onclick="loadBandeja(true)">🔄 Atualizar agora</button>
+        <span id="bd-status" style="font-size:.78rem;color:var(--text-muted,#9ca3af)">Atualização automática a cada 12s</span>
+      </div>
+      <div id="bd-list" style="display:flex;flex-direction:column;gap:8px"></div>
+    </section>
+  </div>
 
   <!-- ============ VIEW: CONSULTAR CÓDIGOS ============ -->
   <div class="view active" id="view-codigos">
@@ -3071,11 +3086,93 @@
     // ─────────────────────────────────────────
     let lojaUnlocked = false;
 
+    let _bdTimer = null;
+    let _bdLoading = false;
+
+    function _esc(s) {
+      if (typeof escapeHtml === 'function') return escapeHtml(s);
+      return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    }
+
+    function _fmtDate(ts) {
+      if (!ts) return '';
+      try { return new Date(Number(ts) * 1000).toLocaleString('pt-BR'); } catch(e) { return ''; }
+    }
+
+    function copyBandeja(txt, btn) {
+      const done = () => { if (btn) { const t = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = t, 1500); } };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt).then(done).catch(() => { window.prompt('Copie:', txt); });
+      } else {
+        window.prompt('Copie:', txt);
+      }
+    }
+
+    async function loadBandeja(manual) {
+      if (_bdLoading) return;
+      _bdLoading = true;
+      const list = document.getElementById('bd-list');
+      const status = document.getElementById('bd-status');
+      try {
+        if (manual && status) status.textContent = 'Atualizando...';
+        const r = await fetch('/api/live-inbox/messages');
+        const j = await r.json();
+        if (!j.success) {
+          if (status) status.textContent = j.message || 'Erro ao carregar.';
+          return;
+        }
+        const emailsEl = document.getElementById('bd-emails');
+        if (emailsEl) {
+          emailsEl.innerHTML = (j.emails || []).length
+            ? '📧 Emails vinculados: <b>' + (j.emails || []).map(_esc).join(', ') + '</b>'
+            : '⚠️ Nenhum email vinculado à sua conta. Peça ao administrador para vincular.';
+        }
+        const items = j.items || [];
+        if (!items.length) {
+          list.innerHTML = '<div style="padding:22px;text-align:center;color:var(--text-muted,#9ca3af);border:1px dashed #4c1d95;border-radius:12px">Nenhum código recebido nos últimos 2 dias nos seus emails vinculados.</div>';
+        } else {
+          list.innerHTML = items.map(it => {
+            const badge = it.code
+              ? '<span style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-weight:800;letter-spacing:1px;padding:5px 12px;border-radius:8px;font-size:1rem">' + _esc(it.code) + '</span>'
+              : '<span style="color:#9ca3af;font-size:.78rem">sem código</span>';
+            const btns = [];
+            if (it.code) btns.push('<button class="btn-primary" style="padding:5px 12px;font-size:.75rem" onclick="copyBandeja(\'' + _esc(it.code) + '\', this)">📋 Copiar</button>');
+            if (it.link) btns.push('<a href="' + _esc(it.link) + '" target="_blank" rel="noopener" style="padding:5px 12px;font-size:.75rem;background:#059669;color:#fff;border-radius:8px;text-decoration:none">🔗 Abrir link</a>');
+            return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(23,6,42,.85);border:1px solid #4c1d95;border-radius:12px">'
+              + '<div style="min-width:110px">' + badge + '</div>'
+              + '<div style="flex:1;min-width:0">'
+              +   '<div style="font-size:.82rem;color:#e9d5ff;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(it.subject) + '</div>'
+              +   '<div style="font-size:.72rem;color:var(--text-muted,#9ca3af);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📧 ' + _esc(it.email) + ' · ' + _esc(it.from) + '</div>'
+              +   '<div style="font-size:.7rem;color:var(--text-muted,#9ca3af)">' + _fmtDate(it.date_ts) + ' · ' + _esc(it.platform) + '</div>'
+              + '</div>'
+              + '<div style="display:flex;gap:6px;flex-shrink:0">' + btns.join('') + '</div>'
+              + '</div>';
+          }).join('');
+        }
+        if (status) status.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR') + ' · automático a cada 12s';
+      } catch (e) {
+        if (status) status.textContent = 'Erro de conexão. Tentando novamente...';
+      } finally {
+        _bdLoading = false;
+      }
+    }
+
+    function startBandeja() {
+      stopBandeja();
+      loadBandeja(true);
+      _bdTimer = setInterval(() => loadBandeja(false), 12000);
+    }
+
+    function stopBandeja() {
+      if (_bdTimer) { clearInterval(_bdTimer); _bdTimer = null; }
+    }
+
     function switchView(name) {
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.getElementById('view-' + name).classList.add('active');
       document.querySelectorAll('.top-menu button').forEach(b => b.classList.remove('active'));
       document.getElementById('btn-view-' + name).classList.add('active');
+      if (name === 'bandeja') { startBandeja(); } else { stopBandeja(); }
       if (name === 'loja') {
         if (lojaUnlocked) {
           document.getElementById('loja-lock-screen').style.display = 'none';

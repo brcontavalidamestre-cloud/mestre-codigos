@@ -4941,6 +4941,221 @@ def api_admin_live_inbox_delete_allowed(email_addr):
     }), 400
 
 
+# ═══ BANDEJA DE ENTRADA DO USUÁRIO (códigos em tempo real dos emails vinculados) ═══
+
+def _user_live_inbox_emails(username):
+    """Emails vinculados ao usuário logado (via subscriptions.assigned_user)."""
+    username = str(username or "").strip().lower()
+    if not username:
+        return []
+    found = set()
+    try:
+        for s in load_subscriptions():
+            if not isinstance(s, dict):
+                continue
+            if str(s.get("assigned_user") or "").strip().lower() != username:
+                continue
+            em = str(s.get("email") or "").strip().lower()
+            if em:
+                found.add(em)
+    except Exception:
+        pass
+    return sorted(found)
+
+
+def _decode_mime_value(value):
+    try:
+        parts = decode_header(str(value or ""))
+        out = []
+        for txt, enc in parts:
+            if isinstance(txt, bytes):
+                try:
+                    out.append(txt.decode(enc or "utf-8", errors="ignore"))
+                except Exception:
+                    out.append(txt.decode("utf-8", errors="ignore"))
+            else:
+                out.append(str(txt))
+        return "".join(out).strip()
+    except Exception:
+        return str(value or "").strip()
+
+
+def _extract_msg_text(msg):
+    texts = []
+    try:
+        if msg.is_multipart():
+            for part in msg.walk():
+                ctype = (part.get_content_type() or "").lower()
+                if ctype not in ("text/plain", "text/html"):
+                    continue
+                try:
+                    payload = part.get_payload(decode=True)
+                    if payload:
+                        texts.append(payload.decode(part.get_content_charset() or "utf-8", errors="ignore"))
+                except Exception:
+                    continue
+        else:
+            payload = msg.get_payload(decode=True)
+            if payload:
+                texts.append(payload.decode(msg.get_content_charset() or "utf-8", errors="ignore"))
+    except Exception:
+        pass
+    return "\n".join(texts)
+
+
+def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48):
+    """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
+    vinculados do usuário (INBOX + Spam), extraindo código/link."""
+    emails = _user_live_inbox_emails(username)
+    if not emails:
+        return [], []
+    allowed_set = set(emails)
+    # aceita alias com +tag (ex: nome+disn05@gmail.com casa com nome@gmail.com)
+    base_map = {}
+    for em in emails:
+        if "@" in em:
+            local, domain = em.split("@", 1)
+            base_map[local.split("+")[0] + "@" + domain] = em
+
+    items = []
+    errors = []
+    seen = set()
+    accounts = get_imap_accounts()
+    since_date = time.strftime("%d-%b-%Y", time.gmtime(time.time() - lookback_hours * 3600))
+
+    for account_cfg in accounts:
+        mail = None
+        try:
+            mail = connect_imap(account_cfg)
+            spam_boxes = _get_spam_boxes(mail, account_cfg)
+            boxes = ["INBOX"] + [b for b in spam_boxes if b and b.upper() != "INBOX"]
+            for mailbox in boxes:
+                try:
+                    st_sel, _ = mail.select(mailbox, readonly=True)
+                    if st_sel != "OK":
+                        continue
+                    st_search, msgs = mail.search(None, "SINCE", since_date)
+                    if st_search != "OK" or not msgs or not msgs[0]:
+                        continue
+                    recent_ids = msgs[0].split()[-80:]
+                    for eid in reversed(recent_ids):
+                        key = (account_cfg.get("name"), mailbox, bytes(eid))
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        st_h, data_h = mail.fetch(eid, "(BODY.PEEK[HEADER])")
+                        if st_h != "OK" or not data_h:
+                            continue
+                        raw_h = None
+                        for part in data_h:
+                            if isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], (bytes, bytearray)):
+                                raw_h = part[1]
+                                break
+                        if not raw_h:
+                            continue
+                        head = email.message_from_bytes(bytes(raw_h))
+                        recipients = _admin_inbox_extract_recipients(head)
+                        matched_email = None
+                        for rc in recipients:
+                            rc2 = str(rc or "").strip().lower()
+                            if rc2 in allowed_set:
+                                matched_email = rc2
+                                break
+                            if "@" in rc2:
+                                base = rc2.split("@", 1)[0].split("+")[0] + "@" + rc2.split("@", 1)[1]
+                                if base in base_map:
+                                    matched_email = base_map[base]
+                                    break
+                        if not matched_email:
+                            continue
+                        st_f, data_f = mail.fetch(eid, "(RFC822)")
+                        raw_full = None
+                        for part in (data_f or []):
+                            if isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], (bytes, bytearray)):
+                                raw_full = part[1]
+                                break
+                        if not raw_full:
+                            continue
+                        msg = email.message_from_bytes(bytes(raw_full))
+                        subject = _decode_mime_value(msg.get("Subject", ""))
+                        from_v = _decode_mime_value(msg.get("From", ""))
+                        body_text = _admin_inbox_strip_html(_extract_msg_text(msg))
+
+                        plat = None
+                        try:
+                            plat = _admin_live_inbox_match_platform(from_v, subject, body_text, None)
+                        except Exception:
+                            plat = None
+
+                        code = None
+                        try:
+                            code = extract_code_from_html(_extract_msg_text(msg))
+                        except Exception:
+                            code = None
+                        if code:
+                            code = str(code).strip()
+                        if not code:
+                            m = re.search(r"(?i)(?:c[óo]digo|code)[^0-9]{0,20}(\d{4,8})", body_text)
+                            if m:
+                                code = m.group(1)
+                        if not code:
+                            m = re.search(r"\b(\d{4,6})\b", (subject or "") + " " + body_text[:400])
+                            if m:
+                                code = m.group(1)
+
+                        link = None
+                        for u in re.findall(r"https?://[^\s\"'<>)\]]+", body_text):
+                            ul = u.lower()
+                            if any(k in ul for k in ["netflix", "disney", "primevideo", "amazon", "hbomax", "max.com", "globo", "apple", "login", "verify", "codigo", "code"]):
+                                link = u.rstrip(".,;")
+                                break
+
+                        items.append({
+                            "email": matched_email,
+                            "from": from_v,
+                            "subject": subject or "(sem assunto)",
+                            "code": code,
+                            "link": link,
+                            "platform": plat or "outros",
+                            "date_ts": _admin_inbox_date_ts(msg),
+                            "mailbox": mailbox,
+                            "account_name": account_cfg.get("name") or "caixa",
+                        })
+                        if len(items) >= max_items:
+                            break
+                    if len(items) >= max_items:
+                        break
+                except Exception as box_err:
+                    errors.append(f"[{account_cfg.get('name')}/{mailbox}] {box_err}")
+                    continue
+            _safe_logout(mail)
+        except Exception as e:
+            errors.append(f"[{account_cfg.get('name')}] {e}")
+            _force_logout(mail)
+            continue
+        if len(items) >= max_items:
+            break
+
+    items.sort(key=lambda x: int(x.get("date_ts") or 0), reverse=True)
+    return items[:max_items], errors
+
+
+@app.route("/api/live-inbox/messages", methods=["GET"])
+def api_user_live_inbox_messages():
+    """Bandeja de entrada do usuário logado: códigos em tempo real apenas dos
+    emails vinculados a ele."""
+    if not session.get("logged_in"):
+        return jsonify({"success": False, "message": "Faça login para ver sua bandeja."}), 401
+    username = str(session.get("username") or "").strip().lower()
+    emails = _user_live_inbox_emails(username)
+    if not emails:
+        return jsonify({"success": True, "items": [], "emails": [], "count": 0,
+                        "message": "Nenhum email vinculado a este usuário."})
+    items, errors = _fetch_user_live_inbox_items(username)
+    return jsonify({"success": True, "items": items, "emails": emails,
+                    "count": len(items), "errors": errors})
+
+
 @app.route("/api/admin/live-inbox/messages", methods=["GET"])
 @admin_required
 def api_admin_live_inbox_messages():
