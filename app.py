@@ -5039,6 +5039,12 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     emails = _user_live_inbox_emails(username)
     if not emails:
         return [], []
+    # REGRA: bandeja so mostra emails que batem com os FILTROS cadastrados
+    # (mesma lista de plataformas ativadas no painel admin).
+    selected_filters = load_admin_live_inbox_filters()
+    expanded_filters = _expand_admin_live_inbox_filters(selected_filters)
+    if not expanded_filters:
+        return [], []
     allowed_set = set(emails)
     # aceita alias com +tag (ex: nome+disn05@gmail.com casa com nome@gmail.com)
     base_map = {}
@@ -5113,9 +5119,11 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
 
                         plat = None
                         try:
-                            plat = _admin_live_inbox_match_platform(from_v, subject, body_text, None)
+                            plat = _admin_live_inbox_match_platform(from_v, subject, body_text, expanded_filters)
                         except Exception:
                             plat = None
+                        if not plat:
+                            continue
 
                         code = None
                         try:
