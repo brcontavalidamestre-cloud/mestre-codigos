@@ -5296,6 +5296,20 @@ def get_code():
                           "Nenhum email Max ou Prime Video encontrado para este endereço."),
     }
     username = session.get("username")
+    # REGRA: cliente logado só consulta código de email vinculado a ele.
+    # Sem vínculo -> não consulta (e a bandeja segue a mesma regra).
+    if username and session.get("role") != "admin" and not _is_instaddr_request():
+        _linked = _user_live_inbox_emails(username)
+        _norm = str(user_email or "").strip().lower()
+        _base = _norm.split("@", 1)[0].split("+")[0] + "@" + _norm.split("@", 1)[1] if "@" in _norm else _norm
+        _allowed = set(_linked) | {
+            (e.split("@", 1)[0].split("+")[0] + "@" + e.split("@", 1)[1]) for e in _linked if "@" in e
+        }
+        if _norm not in _allowed and _base not in _allowed:
+            return jsonify({
+                "success": False,
+                "message": "Este email não está vinculado ao seu usuário. Peça ao administrador para vincular."
+            }), 403
     pending_owner = username or user_email
     # No mestre, para Netflix, deve SEMPRE prevalecer o email mais recente,
     # seja ele código, link temporário, residência ou redefinição de senha.
