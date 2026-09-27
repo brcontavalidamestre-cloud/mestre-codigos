@@ -429,6 +429,23 @@ def get_imap_accounts():
                 "user": THIRD_EMAIL_USER,
                 "password": THIRD_EMAIL_PASS,
             })
+    # Caixa EXCLUSIVA do link consulta-codigos (Render): margos@outlok.space / Hostinger
+    try:
+        _h_cc = (get_current_host() or "")
+    except Exception:
+        _h_cc = ""
+    if _h_cc == "consulta-codigos-jr7z.onrender.com":
+        _cc_already = any(
+            a["user"].lower() == "margos@outlok.space" for a in accounts
+        )
+        if not _cc_already:
+            accounts.append({
+                "name": "caixa-consulta-hostinger",
+                "server": "imap.hostinger.com",
+                "port": 993,
+                "user": "margos@outlok.space",
+                "password": "Fisica10a@",
+            })
     # Caixa dedicada da consulta de códigos na Render (mundial.log.br / SiteGround)
     try:
         _h_render = (get_current_host() or "").endswith(".onrender.com")
