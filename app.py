@@ -3890,6 +3890,13 @@ def _license_gate():
         # Loja separada nunca é bloqueada (não depende de licença)
         if is_loja_host():
             return None
+        # Serviço de consulta de códigos hospedado na Render (onrender.com)
+        # nunca é bloqueado por licença — é um deploy próprio do dono da plataforma.
+        try:
+            if (get_current_host() or "").endswith(".onrender.com"):
+                return None
+        except Exception:
+            pass
         block, lic = should_block_site()
         if not block:
             return None
