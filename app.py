@@ -6621,6 +6621,10 @@ def api_admin_add_stock(product_id):
     items.append(new_item)
     stock[product_id] = items
     save_stock(stock)
+    # espelha para a lojamestre (adicionar acesso ao estoque da loja)
+    _mirror_to_lojamestre(f"/api/internal/loja/estoque/{product_id}", method="POST", json_body={
+        "email": email_acc, "password": password, "note": note,
+    })
     return jsonify({"success": True, "item": new_item})
 
 @app.route("/api/admin/loja/estoque/<product_id>/<item_id>", methods=["DELETE"])
@@ -6633,6 +6637,7 @@ def api_admin_delete_stock(product_id, item_id):
         return jsonify({"success": False, "message": "Item não encontrado."}), 404
     stock[product_id] = new_items
     save_stock(stock)
+    _mirror_to_lojamestre(f"/api/internal/loja/estoque/{product_id}/{item_id}", method="POST")
     return jsonify({"success": True})
 
 @app.route("/api/admin/loja/estoque/<product_id>/<item_id>/reset", methods=["POST"])
@@ -6648,6 +6653,7 @@ def api_admin_reset_stock(product_id, item_id):
             it["delivered_to"] = None
             it["order_id"] = None
             save_stock(stock)
+            _mirror_to_lojamestre(f"/api/internal/loja/estoque/{product_id}/{item_id}/reset", method="POST")
             return jsonify({"success": True})
     return jsonify({"success": False, "message": "Item não encontrado."}), 404
 
