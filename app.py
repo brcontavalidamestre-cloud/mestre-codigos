@@ -6408,6 +6408,125 @@ def api_admin_loja2_efi_status_webhook():
 
 
 # ─── ROTAS ADMIN LOJA ───────────────────────────────────────────────────────────────────────
+# ═══ ESPELHAMENTO CENTRAL → LOJAMESTRE (admin único) ═══
+# O painel do central-codigos administra a loja; cada escrita (produto/estoque)
+# é replicada para a lojamestre via canal interno autenticado.
+
+_LOJAMESTRE_ADMIN_URL = os.environ.get("LOJAMESTRE_ADMIN_URL", "https://lojamestre.onrender.com").rstrip("/")
+
+def _mirror_to_lojamestre(path, method="POST", json_body=None):
+    """Espelha uma operação admin de loja para a lojamestre (melhor esforço)."""
+    try:
+        host = ""
+        try:
+            host = get_current_host() or ""
+        except Exception:
+            pass
+        # Nunca espelha de volta quando já estamos na própria lojamestre
+        if "lojamestre" in host:
+            return
+        if not _LOJAMESTRE_ADMIN_URL:
+            return
+        import urllib.request, urllib.error
+        url = f"{_LOJAMESTRE_ADMIN_URL}{path}"
+        data = None
+        if json_body is not None:
+            data = json.dumps(json_body).encode("utf-8")
+        req = urllib.request.Request(url, data=data, method=method, headers={
+            "X-Loja-Proxy-Token": MASTER_API_TOKEN,
+            "Content-Type": "application/json",
+            "User-Agent": "central-loja-mirror/1.0",
+        })
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            resp.read()
+        print(f"[mirror-lojamestre] {method} {path} OK")
+    except Exception as e:
+        print(f"[mirror-lojamestre] {method} {path} falhou: {e}")
+
+
+@app.route("/api/internal/loja/produtos/<product_id>", methods=["POST"])
+def api_internal_loja_update_product(product_id):
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    data = request.get_json(silent=True) or {}
+    products = load_products()
+    product = next((p for p in products if p.get("id") == product_id), None)
+    if not product:
+        return jsonify({"success": False, "message": "Produto não encontrado."}), 404
+    if "name" in data:
+        product["name"] = str(data["name"]).strip()[:80] or product["name"]
+    if "price" in data:
+        try:
+            product["price"] = float(str(data["price"]).replace(",", "."))
+        except Exception:
+            return jsonify({"success": False, "message": "Preço inválido."}), 400
+    if "description" in data:
+        product["description"] = str(data["description"]).strip()[:200]
+    if "emoji" in data:
+        product["emoji"] = str(data["emoji"]).strip()[:4]
+    if "assigned_user" in data:
+        product["assigned_user"] = str(data["assigned_user"] or "").strip().lower()
+    if "assigned_user_name" in data:
+        product["assigned_user_name"] = str(data["assigned_user_name"] or "").strip()
+    save_products(products)
+    return jsonify({"success": True, "product": product})
+
+
+@app.route("/api/internal/loja/estoque/<product_id>", methods=["POST"])
+def api_internal_loja_add_stock(product_id):
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    data = request.get_json(silent=True) or {}
+    email_addr = str(data.get("email") or "").strip().lower()
+    password = str(data.get("password") or "").strip()
+    note = str(data.get("note") or "").strip()
+    if not email_addr or not password:
+        return jsonify({"success": False, "message": "Email e senha são obrigatórios."}), 400
+    stock = load_stock()
+    items = stock.setdefault(product_id, [])
+    item_id = f"acc-{int(time.time())}-{len(items)+1}"
+    items.append({
+        "id": item_id, "email": email_addr, "password": password, "note": note,
+        "used": False, "used_at": None, "delivered_to": None,
+    })
+    save_stock(stock)
+    return jsonify({"success": True, "item_id": item_id})
+
+
+@app.route("/api/internal/loja/estoque/<product_id>/<item_id>", methods=["POST"])
+def api_internal_loja_delete_stock(product_id, item_id):
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    stock = load_stock()
+    items = stock.get(product_id, [])
+    new_items = [i for i in items if str(i.get("id")) != item_id]
+    if len(new_items) == len(items):
+        return jsonify({"success": False, "message": "Acesso não encontrado."}), 404
+    stock[product_id] = new_items
+    save_stock(stock)
+    return jsonify({"success": True})
+
+
+@app.route("/api/internal/loja/estoque/<product_id>/<item_id>/reset", methods=["POST"])
+def api_internal_loja_reset_stock(product_id, item_id):
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    stock = load_stock()
+    items = stock.get(product_id, [])
+    for i in items:
+        if str(i.get("id")) == item_id:
+            i["used"] = False
+            i["used_at"] = None
+            i["delivered_to"] = None
+            save_stock(stock)
+            return jsonify({"success": True})
+    return jsonify({"success": False, "message": "Acesso não encontrado."}), 404
+
+
 @app.route("/api/admin/loja/produtos", methods=["GET"])
 @admin_required
 def api_admin_list_products():
@@ -6439,6 +6558,12 @@ def api_admin_update_product(product_id):
         product["description"] = str(data["description"]).strip()[:200]
     if "emoji" in data:
         product["emoji"] = str(data["emoji"]).strip()[:4]
+    # espelha para a lojamestre
+    _mirror_to_lojamestre(f"/api/internal/loja/produtos/{product_id}", method="POST", json_body={
+        "name": product.get("name"), "price": product.get("price"),
+        "description": product.get("description"), "emoji": product.get("emoji"),
+        "assigned_user": product.get("assigned_user"), "assigned_user_name": product.get("assigned_user_name"),
+    })
     if "color" in data:
         product["color"] = str(data["color"]).strip()[:20]
     if "assigned_user" in data:
