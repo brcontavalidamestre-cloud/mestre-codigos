@@ -6313,7 +6313,8 @@ def api_admin_efi_setup_webhook():
         efi = EfiPay(options)
         # Efi adiciona /pix no final da URL ao chamar o webhook
         # Por isso a URL base nao precisa ter /pix - mas precisa terminar sem barra
-        webhook_url = f"https://mestre-codigos-production.up.railway.app/api/loja/webhook/efi?hmac={EFI_WEBHOOK_TOKEN}"
+        _wh_host = get_current_host() or "lojamestre.onrender.com"
+        webhook_url = f"https://{_wh_host}/api/loja/webhook/efi?hmac={EFI_WEBHOOK_TOKEN}"
         params = {"chave": EFI_PIX_KEY}
         body   = {"webhookUrl": webhook_url}
         # PUT /v2/webhook/{chave} - cadastra ou substitui o webhook
