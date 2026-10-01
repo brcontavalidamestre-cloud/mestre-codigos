@@ -3085,6 +3085,8 @@
     // NAVEGAÇÃO ENTRE VIEWS (CÓDIGOS / LOJA)
     // ─────────────────────────────────────────
     let lojaUnlocked = false;
+    // Lojamestre (Render): loja sem trava de senha — a compra já exige usuário/senha do painel
+    try { if (((window.location.hostname || '').toLowerCase()).includes('lojamestre')) { lojaUnlocked = true; } } catch(e) {}
 
     let _bdTimer = null;
     let _bdLoading = false;
