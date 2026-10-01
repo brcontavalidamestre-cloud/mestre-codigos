@@ -5744,7 +5744,34 @@ def _do_checkout():
             }), 400
         users = load_users()
         panel_user = users.get(panel_username)
-        if not panel_user or not check_password_hash(panel_user.get("password", ""), panel_password):
+        _ok_local = bool(panel_user) and check_password_hash(panel_user.get("password", ""), panel_password)
+        if not _ok_local:
+            # Lojamestre: se o usuário não existe localmente, valida no painel
+            # central (consulta-codigos) e registra localmente para as próximas.
+            try:
+                import urllib.request as _ur
+                _vu = os.environ.get("LOJA_CENTRAL_VALIDATE_URL", "https://consulta-codigos-jr7z.onrender.com").rstrip("/")
+                _req = _ur.Request(
+                    f"{_vu}/api/internal/loja/validate-user",
+                    data=json.dumps({"username": panel_username, "password": panel_password}).encode("utf-8"),
+                    headers={"X-Loja-Proxy-Token": MASTER_API_TOKEN, "Content-Type": "application/json"},
+                    method="POST",
+                )
+                with _ur.urlopen(_req, timeout=10) as _resp:
+                    _vj = json.loads(_resp.read().decode("utf-8", errors="ignore"))
+                if _vj.get("success"):
+                    users[panel_username] = {
+                        "password": generate_password_hash(panel_password),
+                        "password_plain": panel_password,
+                        "role": _vj.get("role", "client"),
+                        "name": _vj.get("name") or panel_username,
+                    }
+                    save_users(users)
+                    panel_user = users[panel_username]
+                    _ok_local = True
+            except Exception as _e:
+                print(f"[loja] validacao central falhou: {_e}")
+        if not _ok_local:
             return jsonify({
                 "success": False,
                 "message": "Usuário ou senha do painel inválidos."
@@ -6452,6 +6479,23 @@ def _mirror_to_lojamestre(path, method="POST", json_body=None):
     except Exception as e:
         print(f"[mirror-lojamestre] {method} {path} falhou: {e}")
 
+
+
+@app.route("/api/internal/loja/validate-user", methods=["POST"])
+def api_internal_loja_validate_user():
+    """A lojamestre valida aqui o usuário/senha do painel quando não encontra
+    o usuário na base local (usuários criados no central valem na loja)."""
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False}), 403
+    data = request.get_json(silent=True) or {}
+    uname = str(data.get("username") or "").strip().lower()
+    pw = str(data.get("password") or "")
+    users = load_users()
+    u = users.get(uname)
+    if not u or not pw or not check_password_hash(u.get("password", ""), pw):
+        return jsonify({"success": False, "message": "invalid"}), 401
+    return jsonify({"success": True, "username": uname, "name": u.get("name", uname), "role": u.get("role", "client")})
 
 @app.route("/api/internal/loja/produtos/<product_id>", methods=["POST"])
 def api_internal_loja_update_product(product_id):
