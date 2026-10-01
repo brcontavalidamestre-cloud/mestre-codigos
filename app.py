@@ -4524,8 +4524,11 @@ def index():
 
 @app.route("/login")
 def login_page():
-    # LOJA SEPARADA e InstAddr público: não têm tela de login
-    if is_loja_host() or _is_instaddr_request():
+    # InstAddr público: não tem tela de login.
+    # Lojamestre TEM tela de login (o admin precisa gerenciar a loja em /admin).
+    if _is_instaddr_request():
+        return redirect("/")
+    if is_loja_host() and not _is_lojamestre_store():
         return redirect("/")
     if session.get("logged_in"):
         if session.get("role") == "admin":
