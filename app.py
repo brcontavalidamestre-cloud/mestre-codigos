@@ -5707,7 +5707,13 @@ def api_internal_loja_checkout():
         return jsonify({"success": False, "message": f"Erro interno: {e}"}), 500
 
 def _do_checkout():
-    if not session.get("loja_unlocked"):
+    # Lojamestre (Render): a compra já exige usuário/senha do painel de códigos,
+    # então a trava de senha da loja não se aplica a este host.
+    try:
+        _lj = "lojamestre" in (get_current_host() or "")
+    except Exception:
+        _lj = False
+    if not _lj and not session.get("loja_unlocked"):
         return jsonify({"success": False, "message": "Acesso à loja bloqueado. Informe a senha."}), 403
     data = request.get_json(silent=True) or {}
     product_id = str(data.get("product_id", "")).strip()
