@@ -1540,6 +1540,38 @@ def _ensure_delivery_email_binding(order):
             "renew_count": 0,
         })
     save_subscriptions(subs)
+    # Espelha o vínculo para o painel central (consulta-codigos) quando a
+    # entrega acontece na lojamestre — sem isso o cliente não consegue
+    # consultar os códigos no painel onde ele faz login.
+    try:
+        _host_now = ""
+        try:
+            _host_now = get_current_host() or ""
+        except Exception:
+            pass
+        _central_base = os.environ.get("LOJA_CENTRAL_VALIDATE_URL", "https://consulta-codigos-jr7z.onrender.com").rstrip("/")
+        _central_host = _central_base.split("://", 1)[-1]
+        if _host_now and _host_now != _central_host and "onrender.com" in _host_now:
+            import urllib.request as _ur2
+            _req2 = _ur2.Request(
+                f"{_central_base}/api/internal/loja/vinculo",
+                data=json.dumps({
+                    "email": delivered_email,
+                    "assigned_user": assigned_user,
+                    "assigned_user_name": assigned_user_name,
+                    "senha": senha,
+                    "plataforma": plataforma,
+                    "cliente": cliente,
+                    "telefone": telefone,
+                }).encode("utf-8"),
+                headers={"X-Loja-Proxy-Token": MASTER_API_TOKEN, "Content-Type": "application/json"},
+                method="POST",
+            )
+            with _ur2.urlopen(_req2, timeout=10) as _r2:
+                _r2.read()
+            print(f"[vinculo-mirror] {delivered_email} -> {assigned_user} espelhado ao central")
+    except Exception as _e2:
+        print(f"[vinculo-mirror] falha: {_e2}")
     return True
 
 # URL pública do painel MESTRE (sites filhos consultam a licença aqui)
@@ -6480,6 +6512,58 @@ def _mirror_to_lojamestre(path, method="POST", json_body=None):
         print(f"[mirror-lojamestre] {method} {path} falhou: {e}")
 
 
+
+
+@app.route("/api/internal/loja/vinculo", methods=["POST"])
+def api_internal_loja_vinculo():
+    """A lojamestre espelha aqui o vínculo email->usuário após a entrega,
+    para a consulta de códigos do cliente funcionar no painel central."""
+    token = request.headers.get("X-Loja-Proxy-Token", "")
+    if token != MASTER_API_TOKEN:
+        return jsonify({"success": False, "message": "Token inválido."}), 403
+    data = request.get_json(silent=True) or {}
+    em = str(data.get("email") or "").strip().lower()
+    au = str(data.get("assigned_user") or "").strip().lower()
+    if not em or not au or "@" not in em:
+        return jsonify({"success": False, "message": "Dados inválidos."}), 400
+    aun = str(data.get("assigned_user_name") or au).strip()
+    subs = load_subscriptions()
+    now = int(time.time())
+    long_days = 3650
+    long_exp = now + long_days * 86400
+    existing, idx = _find_subscription(em)
+    if idx >= 0:
+        sub = existing or {}
+        sub["assigned_user"] = au
+        sub["assigned_user_name"] = aun
+        sub["show_in_panel"] = False
+        if not sub.get("created_at"):
+            sub["created_at"] = now
+        if not sub.get("expires_at") or not _sub_is_active(sub):
+            sub["start_at"] = now
+            sub["expires_at"] = long_exp
+            sub["dur_days"] = long_days
+        subs[idx] = sub
+    else:
+        subs.append({
+            "email": em,
+            "senha": str(data.get("senha") or "")[:80],
+            "plataforma": str(data.get("plataforma") or "Conta entregue")[:40],
+            "cliente": str(data.get("cliente") or aun)[:80],
+            "telefone": str(data.get("telefone") or "")[:30],
+            "valor": 0.0,
+            "dur_days": long_days,
+            "assigned_user": au,
+            "assigned_user_name": aun,
+            "start_at": now,
+            "expires_at": long_exp,
+            "created_at": now,
+            "show_in_panel": False,
+            "renew_pix_txid": None,
+            "renew_count": 0,
+        })
+    save_subscriptions(subs)
+    return jsonify({"success": True})
 
 @app.route("/api/internal/loja/validate-user", methods=["POST"])
 def api_internal_loja_validate_user():
