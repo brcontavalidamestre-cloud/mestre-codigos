@@ -1506,6 +1506,10 @@ def _ensure_delivery_email_binding(order):
 
     if idx >= 0:
         sub = existing or {}
+        old_assigned = str(sub.get("assigned_user") or "").strip().lower()
+        if old_assigned and old_assigned != assigned_user:
+            print(f"[vinculo] preservado: {delivered_email} continua com {old_assigned}; tentativa de trocar para {assigned_user} bloqueada")
+            return False
         sub["assigned_user"] = assigned_user
         sub["assigned_user_name"] = assigned_user_name
         sub["plataforma"] = sub.get("plataforma") or plataforma
@@ -3892,6 +3896,10 @@ def _admin_can_see_assignment(assigned_user):
         return created_by == current_admin
     except Exception:
         return False
+
+
+def _is_master_admin_session():
+    return str(session.get("username") or "").strip().lower() == "admin"
 
 
 def _get_user_compras_reset_at(username):
@@ -6534,6 +6542,9 @@ def api_internal_loja_vinculo():
     existing, idx = _find_subscription(em)
     if idx >= 0:
         sub = existing or {}
+        old_assigned = str(sub.get("assigned_user") or "").strip().lower()
+        if old_assigned and old_assigned != au:
+            return jsonify({"success": False, "message": "Email já vinculado a outro usuário."}), 409
         sub["assigned_user"] = au
         sub["assigned_user_name"] = aun
         sub["show_in_panel"] = False
@@ -7125,11 +7136,17 @@ def api_admin_import_vinculos_emails():
     updated = 0
     skipped = 0
 
+    conflict_emails = []
     for email in emails:
         existing, idx = _find_subscription(email)
         if idx >= 0:
             sub = existing or {}
             old_assigned = str(sub.get("assigned_user", "")).strip().lower()
+            if old_assigned and old_assigned != assigned_user and not _is_master_admin_session():
+                skipped += 1
+                if len(conflict_emails) < 10:
+                    conflict_emails.append(email)
+                continue
             sub["assigned_user"] = assigned_user
             sub["assigned_user_name"] = assigned_user_name
             sub["show_in_panel"] = False
@@ -7168,9 +7185,12 @@ def api_admin_import_vinculos_emails():
             created += 1
 
     save_subscriptions(subs)
+    msg = f"Emails vinculados com sucesso ao usuário {assigned_user_name}."
+    if skipped:
+        msg += " Alguns emails já estavam vinculados a outro usuário e só o admin principal pode alterar."
     return jsonify({
         "success": True,
-        "message": f"Emails vinculados com sucesso ao usuário {assigned_user_name}.",
+        "message": msg,
         "assigned_user": assigned_user,
         "assigned_user_name": assigned_user_name,
         "created": created,
@@ -7178,6 +7198,7 @@ def api_admin_import_vinculos_emails():
         "invalid": invalid,
         "duplicates": duplicates,
         "skipped": skipped,
+        "conflict_emails": conflict_emails,
         "total": len(emails)
     })
 
@@ -7190,6 +7211,8 @@ def api_admin_delete_vinculo_email(email):
     if idx < 0:
         return jsonify({"success": False, "message": "Email não encontrado."}), 404
     assigned_user = str((sub or {}).get("assigned_user", "")).strip().lower()
+    if not _is_master_admin_session():
+        return jsonify({"success": False, "message": "Somente o admin principal pode remover um email já vinculado."}), 403
     if assigned_user and not _admin_can_see_assignment(assigned_user):
         return jsonify({"success": False, "message": "Sem permissão para remover este vínculo."}), 403
     subs = load_subscriptions()
