@@ -2046,6 +2046,9 @@
         const rows = _vinculosCache
           .slice()
           .sort((a,b) => {
+            const ad = Number(a.created_at || 0);
+            const bd = Number(b.created_at || 0);
+            if (bd !== ad) return bd - ad;
             const an = String(a.assigned_user_name || a.assigned_user || '').localeCompare(String(b.assigned_user_name || b.assigned_user || ''), 'pt-BR');
             if (an !== 0) return an;
             return String(a.email || '').localeCompare(String(b.email || ''), 'pt-BR');
