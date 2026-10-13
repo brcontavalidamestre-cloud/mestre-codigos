@@ -739,8 +739,8 @@
             </div>
             <div class="twrap">
               <table>
-                <thead><tr><th>Cliente / Usuário</th><th>Emails atribuídos</th><th>Status</th><th>Ações</th></tr></thead>
-                <tbody id="ve-tbody"><tr><td colspan="4" style="text-align:center;color:#888;">Carregando vínculos...</td></tr></tbody>
+                <thead><tr><th>Cliente / Usuário</th><th>Email</th><th>Data de vinculação</th><th>Status</th><th>Ações</th></tr></thead>
+                <tbody id="ve-tbody"><tr><td colspan="5" style="text-align:center;color:#888;">Carregando vínculos...</td></tr></tbody>
               </table>
             </div>
           </div>
@@ -2029,7 +2029,7 @@
       const tb = document.getElementById('ve-tbody');
       if (!tb) return;
       const assignedUser = (document.getElementById('ve-user')?.value || '').trim();
-      tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">Carregando...</td></tr>';
+      tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Carregando...</td></tr>';
       try {
         const url = assignedUser
           ? '/api/admin/vinculos-emails?assigned_user=' + encodeURIComponent(assignedUser)
@@ -2037,69 +2037,50 @@
         const { j } = await fetchJsonNoCache(url);
         _vinculosCache = Array.isArray(j.items) ? j.items.slice() : [];
         if (!j.success || !_vinculosCache.length) {
-          tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">Nenhum email vinculado encontrado.</td></tr>';
+          tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Nenhum email vinculado encontrado.</td></tr>';
           updateVinculosSelectionInfo();
           clearVinculosSearch();
           return;
         }
 
-        const groups = {};
-        _vinculosCache.forEach(it => {
-          const key = String(it.assigned_user || '').trim().toLowerCase() || '_sem_usuario';
-          if (!groups[key]) {
-            groups[key] = {
-              assigned_user: it.assigned_user || '',
-              assigned_user_name: it.assigned_user_name || it.assigned_user || 'Sem usuário',
-              items: []
-            };
-          }
-          groups[key].items.push(it);
-        });
-
-        const rows = Object.values(groups)
-          .sort((a,b) => String(a.assigned_user_name || '').localeCompare(String(b.assigned_user_name || ''), 'pt-BR'))
-          .map(group => {
-            const total = group.items.length;
-            const ativos = group.items.filter(it => it.active).length;
-            const status = ativos === total
-              ? `<span style="color:#4caf50;">✓ ${ativos}/${total} liberado(s)</span>`
-              : `<span style="color:#facc15;">${ativos}/${total} liberado(s)</span>`;
-            const emailsHtml = group.items
-              .sort((a,b) => String(a.email || '').localeCompare(String(b.email || ''), 'pt-BR'))
-              .map(it => {
-                const badge = it.active
-                  ? '<span style="color:#4caf50;font-size:.78rem;">✓ liberado</span>'
-                  : '<span style="color:#ff5252;font-size:.78rem;">✗ inativo</span>';
-                const safeEmail = String(it.email || '').replace(/'/g, "\'");
-                const normalizedEmail = String(it.email || '').trim().toLowerCase();
-                const isChecked = _vinculosSelecionados.has(normalizedEmail) ? 'checked' : '';
-                const purchaseDate = it.purchase_created_at
-                  ? new Date(it.purchase_created_at * 1000).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
-                  : '';
-                const purchaseMeta = purchaseDate
-                  ? `<div style="font-size:.78rem;color:#fcd34d;">🗓️ Compra: ${x(purchaseDate)}</div>`
-                  : '';
-                return `<div style="display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:start;padding:10px 12px;border:1px solid rgba(125,211,252,.18);border-radius:12px;background:rgba(15,23,42,.35);">
-                  <input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>
-                  <div style="min-width:0;">
-                    <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(it.email || '')}</div>
-                    <div style="font-size:.78rem;color:#93c5fd;">${badge}</div>
-                    ${purchaseMeta}
-                  </div>
-                  <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
-                </div>`;
-              }).join('');
+        const rows = _vinculosCache
+          .slice()
+          .sort((a,b) => {
+            const an = String(a.assigned_user_name || a.assigned_user || '').localeCompare(String(b.assigned_user_name || b.assigned_user || ''), 'pt-BR');
+            if (an !== 0) return an;
+            return String(a.email || '').localeCompare(String(b.email || ''), 'pt-BR');
+          })
+          .map(it => {
+            const badge = it.active
+              ? '<span style="color:#4caf50;">✓ liberado</span>'
+              : '<span style="color:#ff5252;">✗ inativo</span>';
+            const safeEmail = String(it.email || '').replace(/'/g, "\'");
+            const normalizedEmail = String(it.email || '').trim().toLowerCase();
+            const isChecked = _vinculosSelecionados.has(normalizedEmail) ? 'checked' : '';
+            const vincDate = it.created_at
+              ? new Date(it.created_at * 1000).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' })
+              : '-';
             return `<tr>
               <td>
-                <div style="font-weight:800;color:#fff;">${x(group.assigned_user_name || group.assigned_user || '-')}</div>
-                <div style="font-size:.82rem;color:#93c5fd;">@${x(group.assigned_user || '-')}</div>
+                <div style="display:flex;gap:10px;align-items:flex-start;">
+                  <input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>
+                  <div>
+                    <div style="font-weight:800;color:#fff;">${x(it.assigned_user_name || it.assigned_user || '-')}</div>
+                    <div style="font-size:.82rem;color:#93c5fd;">@${x(it.assigned_user || '-')}</div>
+                  </div>
+                </div>
               </td>
               <td>
-                <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;">${emailsHtml}</div>
+                <div style="font-weight:700;color:#e0f2fe;word-break:break-all;">${x(it.email || '')}</div>
+                <div style="font-size:.78rem;color:#93c5fd;">${x(it.plataforma || 'Conta vinculada')}</div>
               </td>
-              <td>${status}</td>
+              <td style="white-space:nowrap;">${x(vincDate)}</td>
+              <td>${badge}</td>
               <td>
-                <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(group.assigned_user || '')}'; loadVinculosEmails();">🎯 Ver só este</button>
+                <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                  <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(it.assigned_user || '')}'; loadVinculosEmails();">🎯 Ver só este</button>
+                  <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
+                </div>
               </td>
             </tr>`;
           }).join('');
@@ -2110,7 +2091,7 @@
         if (q) searchVinculosEmails();
       } catch(e) {
         _vinculosCache = [];
-        tb.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#ff8a80;">Erro ao carregar emails vinculados.</td></tr>';
+        tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff8a80;">Erro ao carregar emails vinculados.</td></tr>';
         updateVinculosSelectionInfo();
       }
     }
