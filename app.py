@@ -7142,7 +7142,7 @@ def api_admin_import_vinculos_emails():
         if idx >= 0:
             sub = existing or {}
             old_assigned = str(sub.get("assigned_user", "")).strip().lower()
-            if old_assigned and old_assigned != assigned_user and not _is_master_admin_session():
+            if old_assigned and old_assigned != assigned_user:
                 skipped += 1
                 if len(conflict_emails) < 10:
                     conflict_emails.append(email)
@@ -7187,7 +7187,7 @@ def api_admin_import_vinculos_emails():
     save_subscriptions(subs)
     msg = f"Emails vinculados com sucesso ao usuário {assigned_user_name}."
     if skipped:
-        msg += " Alguns emails já estavam vinculados a outro usuário e só o admin principal pode alterar."
+        msg += " Alguns emails já estavam vinculados a outro usuário; remova o vínculo antigo antes de vincular novamente."
     return jsonify({
         "success": True,
         "message": msg,
