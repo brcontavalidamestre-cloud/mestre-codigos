@@ -7211,8 +7211,6 @@ def api_admin_delete_vinculo_email(email):
     if idx < 0:
         return jsonify({"success": False, "message": "Email não encontrado."}), 404
     assigned_user = str((sub or {}).get("assigned_user", "")).strip().lower()
-    if not _is_master_admin_session():
-        return jsonify({"success": False, "message": "Somente o admin principal pode remover um email já vinculado."}), 403
     if assigned_user and not _admin_can_see_assignment(assigned_user):
         return jsonify({"success": False, "message": "Sem permissão para remover este vínculo."}), 403
     subs = load_subscriptions()
