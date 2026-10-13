@@ -7187,7 +7187,7 @@ def api_admin_import_vinculos_emails():
     save_subscriptions(subs)
     msg = f"Emails vinculados com sucesso ao usuário {assigned_user_name}."
     if skipped:
-        msg += " Alguns emails já estavam vinculados a outro usuário; remova o vínculo antigo antes de vincular novamente."
+        msg += " Este email já está vinculado a outro cliente. Remova o vínculo antigo antes de continuar."
     return jsonify({
         "success": True,
         "message": msg,
