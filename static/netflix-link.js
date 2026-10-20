@@ -5,8 +5,10 @@
   const status = text => { el('nfl-status').textContent = text; };
   const url = () => location.origin + '/netflix#' + token;
   async function api(action, method = 'GET') {
-    const response = await fetch('/api/netflix-link/' + action, { method, cache: 'no-store', credentials: 'omit', headers: { Authorization: 'Bearer ' + token } });
+    const requestedToken = token;
+    const response = await fetch('/api/netflix-link/' + action, { method, cache: 'no-store', credentials: 'omit', headers: { Authorization: 'Bearer ' + requestedToken } });
     const data = await response.json();
+    if (token !== requestedToken) throw new Error('O link mudou. Atualize a consulta.');
     if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível concluir.');
     return data;
   }
@@ -58,8 +60,19 @@
     } catch (error) { status(error.message); }
     finally { button.disabled = false; }
   });
-  api('access').then(data => {
-    el('nfl-email').textContent = data.email;
-    el('nfl-controls').hidden = false;
-  }).catch(error => { el('nfl-email').textContent = ''; status(error.message); });
+  async function validateLink() {
+    token = location.hash.slice(1);
+    el('nfl-controls').hidden = true;
+    el('nfl-result').textContent = '';
+    el('nfl-new').replaceChildren();
+    status('Validando seu link…');
+    try {
+      const data = await api('access');
+      el('nfl-email').textContent = data.email;
+      el('nfl-controls').hidden = false;
+      status('');
+    } catch (error) { el('nfl-email').textContent = ''; status(error.message); }
+  }
+  window.addEventListener('hashchange', validateLink);
+  validateLink();
 })();
