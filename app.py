@@ -2426,6 +2426,9 @@ def extract_link(html_body, platform):
         return domain_links[0]
     return None
 def email_matches_user(msg, html_body, user_email):
+    # Exact recipient matching only for the new isolated bearer-link flow.
+    if strict_email_context.get() is not None:
+        return exact_email_match(msg, html_body, strict_email_context.get())
     user_lower = user_email.lower()
     user_lower = user_lower.strip()
 
@@ -9102,6 +9105,10 @@ def api_keepalive():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)[:200]})
     return jsonify({"success": True, "imap_ready": False})
+
+# Isolated Netflix access links: central host only; no changes to existing flows.
+from netflix_links import register_netflix_links, strict_email_context, exact_email_match
+register_netflix_links(app, _data_dir, search_code_unified)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
