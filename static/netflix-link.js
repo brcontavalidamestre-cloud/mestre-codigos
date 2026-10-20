@@ -45,26 +45,10 @@
     finally { button.disabled = false; }
   });
   el('nfl-copy').onclick = () => copy(url());
-  el('nfl-reset').addEventListener('click', async () => {
-    if (!confirm('Gerar um novo link? O link atual deixará de funcionar. Guarde o novo endereço.')) return;
-    const button = el('nfl-reset'); button.disabled = true;
-    try {
-      const data = await api('reset', 'POST');
-      token = new URL(data.item.url).hash.slice(1);
-      history.replaceState(null, '', '/netflix#' + token);
-      el('nfl-result').textContent = '';
-      const field = document.createElement('input');
-      field.value = url(); field.readOnly = true; field.setAttribute('aria-label', 'Novo link');
-      el('nfl-new').replaceChildren(field);
-      status('Link redefinido. Copie e guarde o novo link; o antigo foi invalidado.');
-    } catch (error) { status(error.message); }
-    finally { button.disabled = false; }
-  });
   async function validateLink() {
     token = location.hash.slice(1);
     el('nfl-controls').hidden = true;
     el('nfl-result').textContent = '';
-    el('nfl-new').replaceChildren();
     status('Validando seu link…');
     try {
       const data = await api('access');

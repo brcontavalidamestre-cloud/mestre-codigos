@@ -38,9 +38,16 @@ def exact_email_match(msg, html_body, target):
     for text in texts:
         text = quopri.decodestring(text.encode('utf-8')).decode('utf-8', errors='ignore')
         text = html.unescape(text).lower()
-        addresses = re.findall(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}", text)
-        if target in addresses:
-            return True
+        # Forwarded mail may keep the original recipient only inside its body.
+        # Accept recipient-labelled lines, never an arbitrary email mention.
+        text = re.sub(r'<(?:br\b[^>]*|/p|/div|/tr)>', '\n', text)
+        text = re.sub(r'</?[a-z][a-z0-9]*(?:\s[^>]*?)?/?>', '', text)
+        for line in text.splitlines():
+            if not re.match(r'^\s*(?:>\s*)?(?:to|para|destinat[aá]rio|delivered-to|x-original-to)\s*:', line):
+                continue
+            addresses = re.findall(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9.-]+\.[a-z]{2,}", line)
+            if target in addresses:
+                return True
     return False
 
 
@@ -138,20 +145,49 @@ def register_netflix_links(app, data_dir, search):
             with db() as conn:
                 rows = conn.execute('SELECT * FROM links ORDER BY updated_at DESC, email').fetchall()
             return jsonify(success=True, items=[row_payload(r) for r in rows])
-        email = str((request.get_json(silent=True) or {}).get('email', '')).strip().lower()
-        if len(email) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
-            return jsonify(success=False, message='Informe um email válido.'), 400
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify(success=False, message='Informe a lista de emails.'), 400
+        batch = 'emails' in data
+        raw = data.get('emails') if batch else data.get('email', '')
+        if isinstance(raw, list):
+            raw = '\n'.join(str(value) for value in raw)
+        if not isinstance(raw, str) or len(raw) > 60000:
+            return jsonify(success=False, message='Informe até 200 emails por vez.'), 400
+        candidates = [s.strip().lower() for s in re.split(r'[\s,;]+', raw) if s.strip()]
+        unique = list(dict.fromkeys(candidates))
+        if not batch and len(unique) != 1:
+            return jsonify(success=False, message='Informe um email válido ou use o cadastro em lote.'), 400
+        if len(unique) > 200:
+            return jsonify(success=False, message='O limite é de 200 emails por vez.'), 400
+        invalid = [s for s in unique if len(s) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', s)]
+        valid = [s for s in unique if s not in invalid]
+        if not valid:
+            return jsonify(success=False, message='Informe ao menos um email válido.', invalid_emails=invalid), 400
+        generated, existing = [], 0
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
-            row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
-            if row:
-                return jsonify(success=False, message='Este email já possui um link. Use Redefinir link.', item=row_payload(row)), 409
-            token = secrets.token_urlsafe(32)
             now = int(time.time())
-            conn.execute('INSERT INTO links(email,token,digest,created_at,updated_at) VALUES(?,?,?,?,?)',
-                         (email, token, digest(token), now, now))
-            row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
-        return jsonify(success=True, item=row_payload(row)), 201
+            for email in valid:
+                row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
+                if row:
+                    if not batch:
+                        return jsonify(success=False, message='Este email já possui um link. Use Redefinir link.', item=row_payload(row)), 409
+                    existing += 1
+                    result = row_payload(row)
+                    result['created'] = False
+                else:
+                    token = secrets.token_urlsafe(32)
+                    conn.execute('INSERT INTO links(email,token,digest,created_at,updated_at) VALUES(?,?,?,?,?)',
+                                 (email, token, digest(token), now, now))
+                    row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
+                    result = row_payload(row)
+                    result['created'] = True
+                generated.append(result)
+        if not batch:
+            return jsonify(success=True, item=generated[0]), 201
+        return jsonify(success=True, items=generated, created=len(generated)-existing,
+                       existing=existing, duplicates=len(candidates)-len(unique), invalid_emails=invalid), 200
 
     @bp.post('/api/admin/netflix-links/reset')
     @admin_only
@@ -183,16 +219,8 @@ def register_netflix_links(app, data_dir, search):
 
     @bp.post('/api/netflix-link/reset')
     def client_reset():
-        with db() as conn:
-            conn.execute('BEGIN IMMEDIATE')
-            row = authorized_row(conn)
-            if not row:
-                return jsonify(success=False, message='Link inválido ou redefinido.'), 403
-            token = secrets.token_urlsafe(32)
-            conn.execute('UPDATE links SET token=?,digest=?,updated_at=?,last_query=0 WHERE email=? AND digest=?',
-                         (token, digest(token), int(time.time()), row['email'], row['digest']))
-            updated = conn.execute('SELECT * FROM links WHERE email=?', (row['email'],)).fetchone()
-        return jsonify(success=True, item=row_payload(updated))
+        # Deny old client pages too; only the authenticated principal admin resets.
+        return jsonify(success=False, message='Somente o administrador pode redefinir este link.'), 403
 
     @bp.post('/api/netflix-link/code')
     def client_code():
@@ -201,6 +229,12 @@ def register_netflix_links(app, data_dir, search):
             row = authorized_row(conn)
             if not row:
                 return jsonify(success=False, message='Link inválido ou redefinido.'), 403
+            supplied = request.get_json(silent=True) or {}
+            if not isinstance(supplied, dict):
+                return jsonify(success=False, message='Consulta inválida.'), 400
+            for override in (supplied.get('email'), request.args.get('email')):
+                if override is not None and str(override).strip().lower() != row['email']:
+                    return jsonify(success=False, message='Este link permite consultar somente o email cadastrado.'), 403
             now = time.time()
             if now - row['last_query'] < 12:
                 return jsonify(success=False, message='Aguarde alguns segundos antes de atualizar.'), 429
@@ -228,7 +262,7 @@ def register_netflix_links(app, data_dir, search):
             hostname = (parsed.hostname or '').lower()
             if parsed.scheme == 'https' and (hostname == 'netflix.com' or hostname.endswith('.netflix.com')):
                 return jsonify(success=True, link=link, platform=platform)
-        if error:
+        if error and not str(error).lower().startswith('nenhum email encontrado'):
             return jsonify(success=False, message='Não foi possível consultar a caixa agora. Tente novamente.'), 503
         return jsonify(success=True, message='Nenhum código Netflix recente encontrado. Solicite o código na Netflix e atualize aqui.')
 
