@@ -7,7 +7,7 @@
     const me = await (await fetch('/api/auth/me', {cache:'no-store'})).json();
     if (!me.logged_in || me.role !== 'admin' || me.username !== 'admin') return;
   } catch { return; }
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/static/netflix-links.css?v=3'; document.head.append(css);
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/static/netflix-links.css?v=4'; document.head.append(css);
   const section = document.createElement('section'); section.className = 'nfl-admin';
   section.innerHTML = `<h2>🔗 Links Netflix</h2><p>Um link exclusivo por email, somente para códigos Netflix. Apenas o administrador pode redefinir os links. Compartilhe cada endereço somente com o respectivo cliente.</p><form id="nfl-create"><label for="nfl-add-email">Adicionar vários emails de uma vez</label><textarea id="nfl-add-email" rows="6" maxlength="60000" required placeholder="cliente1@exemplo.com&#10;cliente2@exemplo.com&#10;cliente3@exemplo.com" aria-label="Emails dos clientes"></textarea><small>Até 200 emails por vez. Use um por linha ou separe por vírgula ou ponto e vírgula. Emails já cadastrados mantêm seu link atual.</small><button type="submit">Gerar links para os emails</button></form><label for="nfl-search">Pesquisar email</label><input id="nfl-search" type="search" placeholder="Digite parte do email…"><div id="nfl-admin-status" role="status" aria-live="polite"></div><div id="nfl-generated" hidden><label for="nfl-generated-url">Emails e links gerados</label><textarea id="nfl-generated-url" rows="8" readonly></textarea><button id="nfl-generated-copy" type="button">Copiar todos os links gerados</button></div><div class="nfl-scroll"><table><thead><tr><th>Email</th><th>Criado em</th><th>Última redefinição</th><th>Ações</th></tr></thead><tbody id="nfl-rows"></tbody></table></div><button id="nfl-refresh" type="button" class="nfl-secondary">Atualizar lista</button>`;
   const main = document.querySelector('.main'); if (!main) return;
@@ -21,6 +21,7 @@
   const el = id => section.querySelector('#' + id);
   const message = text => { el('nfl-admin-status').textContent = text; };
   let items = [];
+  let generatedItems = [];
   async function api(path = '', body) {
     const response = await fetch('/api/admin/netflix-links' + path, {method: body ? 'POST':'GET', cache:'no-store', headers:body ? {'Content-Type':'application/json'} : {}, body:body ? JSON.stringify(body):undefined});
     const data = await response.json();
@@ -32,8 +33,9 @@
     catch { el('nfl-generated').hidden=false; el('nfl-generated-url').value=text; el('nfl-generated-url').select(); message('Selecione e copie o texto no campo acima.'); }
   }
   function showLinks(generated) {
-    el('nfl-generated').hidden = false;
-    el('nfl-generated-url').value = generated.map(item => item.email + '\n' + item.url).join('\n\n');
+    generatedItems = generated.slice();
+    el('nfl-generated').hidden = generatedItems.length === 0;
+    el('nfl-generated-url').value = generatedItems.map(item => item.email + '\n' + item.url).join('\n\n');
   }
   function render() {
     const query = el('nfl-search').value.trim().toLowerCase();
@@ -54,7 +56,20 @@
         try { const data=await api('/reset',{email:item.email}); showLinks([data.item]); await load(); message('Link redefinido. Envie o novo link ao cliente.'); }
         catch(error){message(error.message);} finally{reset.disabled=false;}
       };
-      actions.append(copyButton, reset); tr.append(actions); rows.append(tr);
+      const remove = document.createElement('button'); remove.type='button'; remove.className='nfl-danger'; remove.textContent='Excluir email e link';
+      remove.onclick=async()=>{
+        if (!confirm('Excluir o email ' + item.email + ' e seu link? O acesso por esse link será bloqueado. Essa ação não apaga a caixa de email.')) return;
+        remove.disabled=true; reset.disabled=true; copyButton.disabled=true;
+        try {
+          const data=await api('/delete',{email:item.email});
+          items=items.filter(existing=>existing.email!==item.email);
+          showLinks(generatedItems.filter(existing=>existing.email!==item.email));
+          render(); message(data.message);
+        } catch(error) {
+          message(error.message); remove.disabled=false; reset.disabled=false; copyButton.disabled=false;
+        }
+      };
+      actions.append(copyButton, reset, remove); tr.append(actions); rows.append(tr);
     });
   }
   async function load() { const data=await api(); items=data.items; render(); }

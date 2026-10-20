@@ -203,6 +203,22 @@ def register_netflix_links(app, data_dir, search):
             row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
         return jsonify(success=True, item=row_payload(row))
 
+    @bp.post('/api/admin/netflix-links/delete')
+    @admin_only
+    def admin_delete():
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify(success=False, message='Informe o email que deseja excluir.'), 400
+        email = str(data.get('email', '')).strip().lower()
+        if not email:
+            return jsonify(success=False, message='Informe o email que deseja excluir.'), 400
+        with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            result = conn.execute('DELETE FROM links WHERE email=?', (email,))
+            if not result.rowcount:
+                return jsonify(success=False, message='Email não cadastrado.'), 404
+        return jsonify(success=True, email=email, message='Email e link excluídos. O acesso por esse link foi bloqueado.')
+
     @bp.get('/netflix')
     def client_page():
         if not host_allowed():
