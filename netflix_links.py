@@ -12,7 +12,7 @@ import time
 from contextlib import contextmanager
 from functools import wraps
 from urllib.parse import urlparse
-from flask import Blueprint, abort, jsonify, request, session, send_from_directory
+from flask import Blueprint, abort, jsonify, request, session, send_from_directory, redirect
 
 HOST = 'consulta-codigos-jr7z.onrender.com'
 NETFLIX_PLATFORMS = ('netflix', 'netflix-login', 'netflix-temp', 'netflix-residence')
@@ -78,6 +78,8 @@ def register_netflix_links(app, data_dir, search):
         def wrapped(*args, **kwargs):
             if not host_allowed():
                 abort(404)
+            if not session.get('logged_in') and request.path == '/admin/netflix-links':
+                return redirect('/login')
             if not session.get('logged_in') or session.get('role') != 'admin' or session.get('username') != 'admin':
                 return jsonify(success=False, message='Somente o administrador principal pode gerenciar estes links.'), 403
             if request.method != 'GET' and request.headers.get('Origin') not in (None, 'https://' + HOST):
@@ -109,6 +111,25 @@ def register_netflix_links(app, data_dir, search):
         response.headers['X-Content-Type-Options'] = 'nosniff'
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         return response
+
+    @app.after_request
+    def central_admin_entry(response):
+        if host_allowed() and request.path == '/admin':
+            response.headers['Cache-Control'] = 'no-store, max-age=0'
+            response.headers.pop('ETag', None)
+            response.headers.pop('Last-Modified', None)
+            if response.status_code == 200 and session.get('logged_in') and session.get('role') == 'admin' and session.get('username') == 'admin':
+                response.direct_passthrough = False
+                page = response.get_data(as_text=True)
+                entry = '<a id="nfl-nav-link" href="/admin/netflix-links" style="display:block;margin:16px 0;padding:22px;border:2px solid #ed4168;border-radius:16px;color:#ffd3de;background:#291327;text-decoration:none;font-size:1.15rem;font-weight:800;">🔗 Links Netflix — criar e gerenciar</a>'
+                page = page.replace('<div class="main">', '<div class="main">' + entry, 1)
+                response.set_data(page)
+        return response
+
+    @bp.get('/admin/netflix-links')
+    @admin_only
+    def admin_panel():
+        return send_from_directory(app.static_folder, 'netflix-links-panel.html')
 
     @bp.route('/api/admin/netflix-links', methods=['GET', 'POST'])
     @admin_only

@@ -1,11 +1,13 @@
 'use strict';
 (async () => {
   if (location.hostname !== 'consulta-codigos-jr7z.onrender.com') return;
+  if (location.pathname === '/admin' && document.getElementById('nfl-nav-link')) return;
+  const directPanel = location.pathname === '/admin/netflix-links';
   try {
     const me = await (await fetch('/api/auth/me', {cache:'no-store'})).json();
     if (!me.logged_in || me.role !== 'admin' || me.username !== 'admin') return;
   } catch { return; }
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/static/netflix-links.css'; document.head.append(css);
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/static/netflix-links.css?v=2'; document.head.append(css);
   const section = document.createElement('section'); section.className = 'nfl-admin';
   section.innerHTML = `<h2>🔗 Links Netflix</h2><p>Um link individual por email, somente para códigos Netflix. Qualquer pessoa com o link poderá consultar esse email; compartilhe apenas com o cliente. Redefinir invalida o link antigo.</p><form id="nfl-create"><input id="nfl-add-email" type="email" maxlength="254" required placeholder="Email do cliente" aria-label="Email do cliente"><button type="submit">Adicionar e gerar link</button></form><label for="nfl-search">Pesquisar email</label><input id="nfl-search" type="search" placeholder="Digite parte do email…"><div id="nfl-admin-status" role="status" aria-live="polite"></div><div id="nfl-generated" hidden><label for="nfl-generated-url">Link gerado</label><input id="nfl-generated-url" readonly><button id="nfl-generated-copy" type="button">Copiar link</button></div><div class="nfl-scroll"><table><thead><tr><th>Email</th><th>Criado em</th><th>Última redefinição</th><th>Ações</th></tr></thead><tbody id="nfl-rows"></tbody></table></div><button id="nfl-refresh" type="button" class="nfl-secondary">Atualizar lista</button>`;
   const main = document.querySelector('.main'); if (!main) return;
@@ -13,8 +15,9 @@
   launcher.type = 'button'; launcher.className = 'btn-ref';
   launcher.textContent = '🔗 Links Netflix — criar e gerenciar';
   launcher.style.cssText = 'display:block;width:100%;margin:16px 0;padding:20px;border-color:#e24b68;color:#ffc1cc;font-size:1.05rem';
-  section.hidden = true;
-  main.prepend(launcher, section);
+  section.hidden = !directPanel;
+  if (directPanel) main.append(section);
+  else main.prepend(launcher, section);
   const el = id => section.querySelector('#' + id);
   const message = text => { el('nfl-admin-status').textContent = text; };
   let items = [];
@@ -61,4 +64,7 @@
     try {const data=await api('',{email:el('nfl-add-email').value}); showLink(data.item.url); el('nfl-add-email').value=''; await load(); message('Link criado. Copie e envie ao cliente.');}
     catch(error){message(error.message);} finally{button.disabled=false;}
   });
+  if (directPanel) {
+    try { await load(); } catch (error) { message(error.message); }
+  }
 })();
