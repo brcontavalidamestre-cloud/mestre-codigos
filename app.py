@@ -411,6 +411,23 @@ def get_imap_accounts():
                 "user": "jmp@mundial.log.br",
                 "password": "q#1~21n(1pz+",
             })
+        # Extra consultation mailboxes are configured only on this Render service.
+        # Keep existing accounts; credentials stay in environment variables.
+        if _h_jmp == "jmp-codigos.onrender.com":
+            for i in range(4, 11):
+                srv = os.environ.get(f"IMAP_SERVER_{i}")
+                usr = os.environ.get(f"EMAIL_USER_{i}")
+                pwd = os.environ.get(f"EMAIL_PASS_{i}")
+                if not (srv and usr and pwd):
+                    continue
+                try:
+                    port = int(os.environ.get(f"IMAP_PORT_{i}", "993"))
+                except (TypeError, ValueError):
+                    continue
+                if any(str(a.get("user", "")).lower() == usr.lower() and str(a.get("server", "")).lower() == srv.lower() for a in jmp_accs):
+                    continue
+                jmp_accs.append({"name": f"caixa-jmp-extra-{i}", "server": srv,
+                                 "port": port, "user": usr, "password": pwd})
         return jmp_accs
 
     accounts = [
