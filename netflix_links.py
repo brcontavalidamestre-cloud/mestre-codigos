@@ -17,14 +17,7 @@ from urllib.parse import urlparse
 from flask import Blueprint, abort, jsonify, request, session, send_from_directory, redirect, g
 
 HOST = 'consulta-codigos-jr7z.onrender.com'
-NETFLIX_PLATFORMS = ('netflix', 'netflix-login', 'netflix-temp', 'netflix-residence', 'password-reset')
-NETFLIX_FILTER_LABELS = {
-    'netflix': 'Código de acesso',
-    'netflix-login': 'Acesso início',
-    'netflix-temp': 'Acesso temporário',
-    'netflix-residence': 'Atualização de residência',
-    'password-reset': 'Redefinir senha',
-}
+NETFLIX_PLATFORMS = ('netflix', 'netflix-login', 'netflix-temp', 'netflix-residence')
 strict_email_context = ContextVar('netflix_link_exact_email', default=None)
 
 
@@ -165,40 +158,6 @@ def register_netflix_links(app, data_dir, search):
         return {'email': row['email'], 'url': 'https://' + HOST + '/netflix#' + row['token'],
                 'created_at': row['created_at'], 'updated_at': row['updated_at'],
                 'manager': row['manager'] if 'manager' in row.keys() else ('admin' if not row['owner'] else '')}
-
-    def collect_client_results(email):
-        items = []
-        seen = set()
-        service_errors = []
-        for platform_key in NETFLIX_PLATFORMS:
-            try:
-                code, link, matched_platform, error = search(email, [platform_key])
-            except Exception as exc:
-                service_errors.append(str(exc))
-                continue
-            matched_platform = matched_platform or platform_key
-            if matched_platform != platform_key and matched_platform not in NETFLIX_PLATFORMS:
-                continue
-            label = NETFLIX_FILTER_LABELS.get(platform_key, platform_key)
-            if code:
-                value = str(code).strip()
-                marker = ('code', platform_key, value)
-                if value and marker not in seen:
-                    seen.add(marker)
-                    items.append({'platform': platform_key, 'label': label, 'type': 'code', 'value': value})
-                continue
-            if link:
-                parsed = urlparse(link)
-                hostname = (parsed.hostname or '').lower()
-                if parsed.scheme == 'https' and (hostname == 'netflix.com' or hostname.endswith('.netflix.com')):
-                    marker = ('link', platform_key, link)
-                    if marker not in seen:
-                        seen.add(marker)
-                        items.append({'platform': platform_key, 'label': label, 'type': 'link', 'value': link})
-                continue
-            if error and not str(error).lower().startswith('nenhum email encontrado'):
-                service_errors.append(str(error))
-        return items, service_errors
 
     def authorized_row(conn):
         if not host_allowed():
@@ -477,7 +436,7 @@ def register_netflix_links(app, data_dir, search):
             # Email and platforms come only from server state, never from request JSON.
             marker = strict_email_context.set(row['email'])
             try:
-                results, errors = collect_client_results(row['email'])
+                code, link, platform, error = search(row['email'], list(NETFLIX_PLATFORMS))
             finally:
                 strict_email_context.reset(marker)
         except Exception:
@@ -487,16 +446,16 @@ def register_netflix_links(app, data_dir, search):
             current = authorized_row(conn)
         if not current:
             return jsonify(success=False, message='Este link foi redefinido. Use o novo link.'), 403
-        if results:
-            payload = {'success': True, 'results': results}
-            first = results[0]
-            payload['platform'] = first['platform']
-            if first['type'] == 'code':
-                payload['code'] = first['value']
-            else:
-                payload['link'] = first['value']
-            return jsonify(**payload)
-        if errors:
+        if platform not in NETFLIX_PLATFORMS and (code or link):
+            return jsonify(success=False, message='Nenhum código Netflix encontrado.'), 200
+        if code:
+            return jsonify(success=True, code=str(code), platform=platform)
+        if link:
+            parsed = urlparse(link)
+            hostname = (parsed.hostname or '').lower()
+            if parsed.scheme == 'https' and (hostname == 'netflix.com' or hostname.endswith('.netflix.com')):
+                return jsonify(success=True, link=link, platform=platform)
+        if error and not str(error).lower().startswith('nenhum email encontrado'):
             return jsonify(success=False, message='Não foi possível consultar a caixa agora. Tente novamente.'), 503
         return jsonify(success=True, message='Nenhum código Netflix recente encontrado. Solicite o código na Netflix e atualize aqui.')
 
