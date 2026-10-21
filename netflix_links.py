@@ -17,7 +17,14 @@ from urllib.parse import urlparse
 from flask import Blueprint, abort, jsonify, request, session, send_from_directory, redirect, g
 
 HOST = 'consulta-codigos-jr7z.onrender.com'
-NETFLIX_PLATFORMS = ('netflix', 'netflix-login', 'netflix-temp', 'netflix-residence')
+NETFLIX_PLATFORMS = ('netflix', 'netflix-login', 'netflix-temp', 'netflix-residence', 'password-reset')
+NETFLIX_FILTER_LABELS = {
+    'netflix': 'Código de acesso Netflix',
+    'netflix-login': 'Código de início de sessão',
+    'netflix-temp': 'Acesso temporário',
+    'netflix-residence': 'Confirmação de residência',
+    'password-reset': 'Redefinição de senha',
+}
 strict_email_context = ContextVar('netflix_link_exact_email', default=None)
 
 
@@ -53,7 +60,7 @@ def exact_email_match(msg, html_body, target):
     return False
 
 
-def register_netflix_links(app, data_dir, search):
+def register_netflix_links(app, data_dir, search, search_all=None):
     bp = Blueprint('netflix_links', __name__)
     db_path = os.path.join(data_dir, 'netflix_links.sqlite3')
     schema_ready = False
@@ -408,7 +415,7 @@ def register_netflix_links(app, data_dir, search):
             row = authorized_row(conn)
         if not row:
             return jsonify(success=False, message='Link inválido ou redefinido. Solicite o link atual ao administrador.'), 403
-        return jsonify(success=True, email=row['email'])
+        return jsonify(success=True, email=row['email'], filters=[{'key': p, 'label': NETFLIX_FILTER_LABELS[p]} for p in NETFLIX_PLATFORMS])
 
     @bp.post('/api/netflix-link/reset')
     def client_reset():
@@ -436,7 +443,12 @@ def register_netflix_links(app, data_dir, search):
             # Email and platforms come only from server state, never from request JSON.
             marker = strict_email_context.set(row['email'])
             try:
-                code, link, platform, error = search(row['email'], list(NETFLIX_PLATFORMS))
+                if search_all is not None:
+                    raw_results, errors = search_all(row['email'], list(NETFLIX_PLATFORMS))
+                else:
+                    code, link, platform, error = search(row['email'], list(NETFLIX_PLATFORMS))
+                    raw_results = [{'code': code, 'link': link, 'platform': platform}] if code or link else []
+                    errors = [error] if error and not str(error).lower().startswith('nenhum email encontrado') else []
             finally:
                 strict_email_context.reset(marker)
         except Exception:
@@ -446,17 +458,38 @@ def register_netflix_links(app, data_dir, search):
             current = authorized_row(conn)
         if not current:
             return jsonify(success=False, message='Este link foi redefinido. Use o novo link.'), 403
-        if platform not in NETFLIX_PLATFORMS and (code or link):
-            return jsonify(success=False, message='Nenhum código Netflix encontrado.'), 200
-        if code:
-            return jsonify(success=True, code=str(code), platform=platform)
-        if link:
-            parsed = urlparse(link)
-            hostname = (parsed.hostname or '').lower()
-            if parsed.scheme == 'https' and (hostname == 'netflix.com' or hostname.endswith('.netflix.com')):
-                return jsonify(success=True, link=link, platform=platform)
-        if error and not str(error).lower().startswith('nenhum email encontrado'):
+        results = []
+        seen = set()
+        for item in raw_results:
+            platform = item.get('platform')
+            if platform not in NETFLIX_PLATFORMS or platform in seen:
+                continue
+            label = NETFLIX_FILTER_LABELS[platform]
+            if item.get('code'):
+                results.append({'platform': platform, 'label': label, 'type': 'code', 'value': str(item['code'])})
+                seen.add(platform)
+            elif item.get('link'):
+                try:
+                    link = html.unescape(str(item['link']))
+                    parsed = urlparse(link)
+                    hostname = (parsed.hostname or '').lower()
+                    safe = parsed.scheme == 'https' and (hostname == 'netflix.com' or hostname.endswith('.netflix.com'))
+                    safe = safe and not parsed.username and not parsed.password and parsed.port in (None, 443)
+                except ValueError:
+                    safe = False
+                if safe:
+                    results.append({'platform': platform, 'label': label, 'type': 'link', 'value': link})
+                    seen.add(platform)
+        if results:
+            results.sort(key=lambda item: NETFLIX_PLATFORMS.index(item['platform']))
+            first = results[0]
+            payload = {'success': True, 'results': results, 'platform': first['platform']}
+            payload['code' if first['type'] == 'code' else 'link'] = first['value']
+            if errors:
+                payload['warning'] = 'Algumas caixas não puderam ser consultadas. Você pode tentar atualizar novamente.'
+            return jsonify(**payload)
+        if errors:
             return jsonify(success=False, message='Não foi possível consultar a caixa agora. Tente novamente.'), 503
-        return jsonify(success=True, message='Nenhum código Netflix recente encontrado. Solicite o código na Netflix e atualize aqui.')
+        return jsonify(success=True, results=[], message='Nenhum código ou link Netflix recente encontrado. Faça a solicitação na Netflix e atualize aqui.')
 
     app.register_blueprint(bp)

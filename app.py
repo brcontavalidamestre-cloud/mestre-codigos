@@ -9108,7 +9108,10 @@ def api_keepalive():
 
 # Isolated Netflix access links: central host only; no changes to existing flows.
 from netflix_links import register_netflix_links, strict_email_context, exact_email_match
-register_netflix_links(app, _data_dir, search_code_unified)
+from netflix_search import make_netflix_batch_search
+register_netflix_links(app, _data_dir, search_code_unified,
+    search_all=make_netflix_batch_search(PLATFORM_CONFIG, get_imap_accounts,
+        _batch_search_mailbox, _fetch_and_extract, _get_spam_boxes, _targeted_body_extract))
 
 # Central stock report reads the store's authoritative sales without altering delivery.
 from stock_ledger import register_stock_ledger
