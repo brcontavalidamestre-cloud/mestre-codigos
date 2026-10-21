@@ -11,8 +11,10 @@ import sqlite3
 import time
 from contextlib import contextmanager
 from functools import wraps
+from threading import Lock
+from werkzeug.security import generate_password_hash, check_password_hash
 from urllib.parse import urlparse
-from flask import Blueprint, abort, jsonify, request, session, send_from_directory, redirect
+from flask import Blueprint, abort, jsonify, request, session, send_from_directory, redirect, g
 
 HOST = 'consulta-codigos-jr7z.onrender.com'
 NETFLIX_PLATFORMS = ('netflix', 'netflix-login', 'netflix-temp', 'netflix-residence')
@@ -54,18 +56,39 @@ def exact_email_match(msg, html_body, target):
 def register_netflix_links(app, data_dir, search):
     bp = Blueprint('netflix_links', __name__)
     db_path = os.path.join(data_dir, 'netflix_links.sqlite3')
+    schema_ready = False
+    schema_lock = Lock()
+    dummy_hash = generate_password_hash(secrets.token_urlsafe(24))
 
     @contextmanager
     def db():
+        nonlocal schema_ready
         os.makedirs(data_dir, exist_ok=True)
         conn = sqlite3.connect(db_path, timeout=15)
         conn.row_factory = sqlite3.Row
         try:
-            conn.execute('''CREATE TABLE IF NOT EXISTS links (
-                email TEXT PRIMARY KEY, token TEXT NOT NULL,
-                digest TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL,
-                updated_at INTEGER NOT NULL, last_query REAL NOT NULL DEFAULT 0)''')
-            os.chmod(db_path, 0o600)
+            if not schema_ready:
+                with schema_lock:
+                    if not schema_ready:
+                        with conn:
+                            conn.execute('BEGIN IMMEDIATE')
+                            conn.execute('''CREATE TABLE IF NOT EXISTS links (
+                                email TEXT PRIMARY KEY, token TEXT NOT NULL,
+                                digest TEXT NOT NULL UNIQUE, created_at INTEGER NOT NULL,
+                                updated_at INTEGER NOT NULL, last_query REAL NOT NULL DEFAULT 0,
+                                owner TEXT NOT NULL DEFAULT '')''')
+                            if 'owner' not in {r['name'] for r in conn.execute('PRAGMA table_info(links)')}:
+                                conn.execute("ALTER TABLE links ADD COLUMN owner TEXT NOT NULL DEFAULT ''")
+                            conn.execute('''CREATE TABLE IF NOT EXISTS netflix_admins (
+                                id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+                                name TEXT NOT NULL, password_hash TEXT NOT NULL,
+                                created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1,
+                                active INTEGER NOT NULL DEFAULT 1)''')
+                            conn.execute('CREATE INDEX IF NOT EXISTS links_owner_idx ON links(owner)')
+                            conn.execute('''CREATE TABLE IF NOT EXISTS netflix_login_attempts (
+                                key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires INTEGER NOT NULL)''')
+                        os.chmod(db_path, 0o600)
+                        schema_ready = True
             with conn:
                 yield conn
         finally:
@@ -94,12 +117,47 @@ def register_netflix_links(app, data_dir, search):
             return fn(*args, **kwargs)
         return wrapped
 
+    def principal():
+        return bool(session.get('logged_in') and session.get('role') == 'admin' and session.get('username') == 'admin')
+
+    def actor():
+        if principal():
+            return {'principal': True, 'id': '', 'username': 'admin', 'name': 'Administrador principal'}
+        account_id = session.get('netflix_admin_id')
+        if not account_id or int(session.get('netflix_admin_expires') or 0) <= int(time.time()):
+            return None
+        with db() as conn:
+            row = conn.execute('SELECT id,username,name,version,active FROM netflix_admins WHERE id=?', (account_id,)).fetchone()
+        if not row or not row['active'] or row['version'] != session.get('netflix_admin_version'):
+            return None
+        return {'principal': False, 'id': row['id'], 'username': row['username'], 'name': row['name']}
+
+    def manager_only(fn):
+        @wraps(fn)
+        def wrapped(*args, **kwargs):
+            if not host_allowed():
+                abort(404)
+            current = actor()
+            if not current:
+                if request.path == '/admin/netflix-links':
+                    return redirect('/netflix-admin/login')
+                return jsonify(success=False, message='Entre com seu acesso exclusivo de Links Netflix.'), 403
+            if request.method != 'GET' and request.headers.get('Origin') not in (None, 'https://' + HOST):
+                abort(403)
+            g.netflix_manager = current
+            return fn(*args, **kwargs)
+        return wrapped
+
+    def owns(row):
+        return bool(row and (g.netflix_manager['principal'] or row['owner'] == g.netflix_manager['id']))
+
     def digest(token):
         return hashlib.sha256(token.encode()).hexdigest()
 
     def row_payload(row):
         return {'email': row['email'], 'url': 'https://' + HOST + '/netflix#' + row['token'],
-                'created_at': row['created_at'], 'updated_at': row['updated_at']}
+                'created_at': row['created_at'], 'updated_at': row['updated_at'],
+                'manager': row['manager'] if 'manager' in row.keys() else ('admin' if not row['owner'] else '')}
 
     def authorized_row(conn):
         if not host_allowed():
@@ -133,17 +191,125 @@ def register_netflix_links(app, data_dir, search):
                 response.set_data(page)
         return response
 
-    @bp.get('/admin/netflix-links')
+    @bp.get('/netflix-admin/login')
+    def manager_login_page():
+        return send_from_directory(app.static_folder, 'netflix-admin-login.html')
+
+    @bp.get('/api/netflix-admin/me')
+    def manager_me():
+        current = actor()
+        if not current:
+            return jsonify(success=False, message='Não autenticado.'), 403
+        return jsonify(success=True, **current)
+
+    @bp.post('/api/netflix-admin/login')
+    def manager_login():
+        if request.headers.get('Origin') not in (None, 'https://' + HOST):
+            abort(403)
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify(success=False, message='Dados inválidos.'), 400
+        username = str(data.get('username', '')).strip().lower()[:80]
+        password = str(data.get('password', ''))
+        if not username or not password or len(password) > 256:
+            return jsonify(success=False, message='Informe usuário e senha válidos.'), 400
+        now = int(time.time())
+        key = hashlib.sha256(username.encode()).hexdigest()
+        with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            conn.execute('DELETE FROM netflix_login_attempts WHERE expires<=?', (now,))
+            attempts = conn.execute('SELECT attempts FROM netflix_login_attempts WHERE key=?', (key,)).fetchone()
+            if attempts and attempts['attempts'] >= 10:
+                return jsonify(success=False, message='Muitas tentativas. Aguarde 15 minutos.'), 429
+            conn.execute('''INSERT INTO netflix_login_attempts(key,attempts,expires) VALUES(?,1,?)
+                ON CONFLICT(key) DO UPDATE SET attempts=attempts+1''', (key, now+900))
+            row = conn.execute('SELECT * FROM netflix_admins WHERE username=?', (username,)).fetchone()
+        valid = check_password_hash(row['password_hash'] if row else dummy_hash, password)
+        if not row or not row['active'] or not valid:
+            return jsonify(success=False, message='Usuário ou senha inválidos.'), 401
+        with db() as conn:
+            conn.execute('DELETE FROM netflix_login_attempts WHERE key=?', (key,))
+        session.clear()
+        session.update(netflix_admin_id=row['id'], netflix_admin_version=row['version'], netflix_admin_expires=now+8*3600)
+        return jsonify(success=True, redirect='/admin/netflix-links')
+
+    @bp.post('/api/netflix-admin/logout')
+    def manager_logout():
+        if request.headers.get('Origin') not in (None, 'https://' + HOST):
+            abort(403)
+        for key in ('netflix_admin_id', 'netflix_admin_version', 'netflix_admin_expires'):
+            session.pop(key, None)
+        return jsonify(success=True)
+
+    @bp.route('/api/admin/netflix-link-admins', methods=['GET', 'POST'])
     @admin_only
+    def principal_manage_accounts():
+        if request.method == 'GET':
+            with db() as conn:
+                rows = conn.execute('SELECT id,username,name,created_at,active FROM netflix_admins ORDER BY created_at DESC,username').fetchall()
+            return jsonify(success=True, items=[dict(r) for r in rows], login_url='https://' + HOST + '/netflix-admin/login')
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify(success=False, message='Dados inválidos.'), 400
+        username = str(data.get('username', '')).strip().lower()
+        name = str(data.get('name', '')).strip()[:80] or username
+        password = str(data.get('password', ''))
+        if not re.fullmatch(r'[a-z0-9_.-]{3,40}', username) or username == 'admin':
+            return jsonify(success=False, message='Use um usuário de 3 a 40 letras, números, ponto, traço ou sublinhado. O nome admin é reservado.'), 400
+        if not 8 <= len(password) <= 128:
+            return jsonify(success=False, message='A senha deve ter de 8 a 128 caracteres.'), 400
+        password_hash = generate_password_hash(password)
+        with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            if conn.execute('SELECT id FROM netflix_admins WHERE username=?', (username,)).fetchone():
+                return jsonify(success=False, message='Esse usuário já está cadastrado.'), 409
+            account_id = secrets.token_hex(16)
+            conn.execute('INSERT INTO netflix_admins(id,username,name,password_hash,created_at) VALUES(?,?,?,?,?)',
+                         (account_id, username, name, password_hash, int(time.time())))
+        return jsonify(success=True, username=username, id=account_id, login_url='https://' + HOST + '/netflix-admin/login'), 201
+
+    @bp.post('/api/admin/netflix-link-admins/update')
+    @admin_only
+    def principal_update_account():
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify(success=False, message='Dados inválidos.'), 400
+        account_id = str(data.get('id', ''))
+        password = data.get('password')
+        active = data.get('active')
+        if password is None and active is None:
+            return jsonify(success=False, message='Informe a nova senha ou o status.'), 400
+        if password is not None and (not isinstance(password, str) or not 8 <= len(password) <= 128):
+            return jsonify(success=False, message='A senha deve ter de 8 a 128 caracteres.'), 400
+        if active is not None and not isinstance(active, bool):
+            return jsonify(success=False, message='Status inválido.'), 400
+        password_hash = generate_password_hash(password) if password is not None else None
+        with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT id FROM netflix_admins WHERE id=?', (account_id,)).fetchone()
+            if not row:
+                return jsonify(success=False, message='Administrador não encontrado.'), 404
+            if password_hash:
+                conn.execute('UPDATE netflix_admins SET password_hash=? WHERE id=?', (password_hash, account_id))
+            if active is not None:
+                conn.execute('UPDATE netflix_admins SET active=? WHERE id=?', (int(active), account_id))
+            conn.execute('UPDATE netflix_admins SET version=version+1 WHERE id=?', (account_id,))
+        return jsonify(success=True, message='Acesso atualizado. As sessões anteriores foram encerradas.')
+
+    @bp.get('/admin/netflix-links')
+    @manager_only
     def admin_panel():
         return send_from_directory(app.static_folder, 'netflix-links-panel.html')
 
     @bp.route('/api/admin/netflix-links', methods=['GET', 'POST'])
-    @admin_only
+    @manager_only
     def admin_links():
         if request.method == 'GET':
             with db() as conn:
-                rows = conn.execute('SELECT * FROM links ORDER BY updated_at DESC, email').fetchall()
+                if g.netflix_manager['principal']:
+                    rows = conn.execute("SELECT l.*,coalesce(a.username,'admin') AS manager FROM links l LEFT JOIN netflix_admins a ON a.id=l.owner ORDER BY l.updated_at DESC,l.email").fetchall()
+                else:
+                    rows = conn.execute('SELECT l.*,? AS manager FROM links l WHERE owner=? ORDER BY updated_at DESC,email', (g.netflix_manager['username'], g.netflix_manager['id'])).fetchall()
             return jsonify(success=True, items=[row_payload(r) for r in rows])
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
@@ -164,13 +330,18 @@ def register_netflix_links(app, data_dir, search):
         valid = [s for s in unique if s not in invalid]
         if not valid:
             return jsonify(success=False, message='Informe ao menos um email válido.', invalid_emails=invalid), 400
-        generated, existing = [], 0
+        generated, existing, conflicts = [], 0, []
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
             now = int(time.time())
             for email in valid:
                 row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
                 if row:
+                    if not owns(row):
+                        if not batch:
+                            return jsonify(success=False, message='Este email já está cadastrado em outro acesso. Não é possível usar o link.'), 409
+                        conflicts.append(email)
+                        continue
                     if not batch:
                         return jsonify(success=False, message='Este email já possui um link. Use Redefinir link.', item=row_payload(row)), 409
                     existing += 1
@@ -178,8 +349,8 @@ def register_netflix_links(app, data_dir, search):
                     result['created'] = False
                 else:
                     token = secrets.token_urlsafe(32)
-                    conn.execute('INSERT INTO links(email,token,digest,created_at,updated_at) VALUES(?,?,?,?,?)',
-                                 (email, token, digest(token), now, now))
+                    conn.execute('INSERT INTO links(email,token,digest,created_at,updated_at,owner) VALUES(?,?,?,?,?,?)',
+                                 (email, token, digest(token), now, now, g.netflix_manager['id']))
                     row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
                     result = row_payload(row)
                     result['created'] = True
@@ -187,14 +358,17 @@ def register_netflix_links(app, data_dir, search):
         if not batch:
             return jsonify(success=True, item=generated[0]), 201
         return jsonify(success=True, items=generated, created=len(generated)-existing,
-                       existing=existing, duplicates=len(candidates)-len(unique), invalid_emails=invalid), 200
+                       existing=existing, duplicates=len(candidates)-len(unique), invalid_emails=invalid, conflict_emails=conflicts), 200
 
     @bp.post('/api/admin/netflix-links/reset')
-    @admin_only
+    @manager_only
     def admin_reset():
         email = str((request.get_json(silent=True) or {}).get('email', '')).strip().lower()
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            current = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
+            if not owns(current):
+                return jsonify(success=False, message='Email não cadastrado neste acesso.'), 404
             token = secrets.token_urlsafe(32)
             result = conn.execute('UPDATE links SET token=?,digest=?,updated_at=?,last_query=0 WHERE email=?',
                                   (token, digest(token), int(time.time()), email))
@@ -204,7 +378,7 @@ def register_netflix_links(app, data_dir, search):
         return jsonify(success=True, item=row_payload(row))
 
     @bp.post('/api/admin/netflix-links/delete')
-    @admin_only
+    @manager_only
     def admin_delete():
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
@@ -214,6 +388,9 @@ def register_netflix_links(app, data_dir, search):
             return jsonify(success=False, message='Informe o email que deseja excluir.'), 400
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
+            current = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
+            if not owns(current):
+                return jsonify(success=False, message='Email não cadastrado neste acesso.'), 404
             result = conn.execute('DELETE FROM links WHERE email=?', (email,))
             if not result.rowcount:
                 return jsonify(success=False, message='Email não cadastrado.'), 404
