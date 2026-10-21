@@ -12,6 +12,7 @@ def make_netflix_batch_search(configs, get_accounts, batch_search, fetch_extract
     def collect(user_email, platforms):
         allowed = [p for p in platforms if p in configs and configs[p].get('from_keyword') == 'netflix.com']
         found, errors = {}, []
+        successful_accounts = 0
         accounts, seen_accounts = [], set()
         for account in get_accounts():
             key = (str(account.get('server', '')).lower(), str(account.get('port', '993')),
@@ -31,6 +32,7 @@ def make_netflix_batch_search(configs, get_accounts, batch_search, fetch_extract
                     break
                 mail = imaplib.IMAP4_SSL(account['server'], int(account.get('port', 993)), timeout=8)
                 mail.login(account['user'], account['password'])
+                successful_accounts += 1
                 boxes = ['INBOX']
                 for box in spam_boxes(mail, account):
                     if box and box not in boxes:
@@ -72,5 +74,7 @@ def make_netflix_batch_search(configs, get_accounts, batch_search, fetch_extract
                         mail.logout()
                     except Exception:
                         pass
-        return [found[p] for p in allowed if p in found], errors
+        # One unavailable legacy mailbox must not turn an otherwise empty,
+        # successful lookup in the configured mailboxes into a service error.
+        return [found[p] for p in allowed if p in found], errors if found or not successful_accounts else []
     return collect
