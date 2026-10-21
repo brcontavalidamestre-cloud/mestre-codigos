@@ -9110,6 +9110,10 @@ def api_keepalive():
 from netflix_links import register_netflix_links, strict_email_context, exact_email_match
 register_netflix_links(app, _data_dir, search_code_unified)
 
+# Central stock report reads the store's authoritative sales without altering delivery.
+from stock_ledger import register_stock_ledger
+register_stock_ledger(app, _data_dir, load_stock, load_products, _LOJAMESTRE_ADMIN_URL)
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(debug=False, host="0.0.0.0", port=port)
