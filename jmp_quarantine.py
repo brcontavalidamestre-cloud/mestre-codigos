@@ -2,7 +2,8 @@
 import json
 import os
 import urllib.request
-from flask import g, jsonify, request, session
+from flask import g, has_request_context, jsonify, request, session
+from delegated_recipients import recipients
 
 HOST='jmp-codigos.onrender.com'
 MESSAGE='Esse email está na lista que não pode receber códigos.'
@@ -25,11 +26,24 @@ def register_jmp_quarantine(app, pending_resets):
         req=urllib.request.Request('https://consulta-codigos-jr7z.onrender.com/api/internal/quarantine',headers={'X-Quarantine-Token':token})
         with urllib.request.urlopen(req,timeout=8) as response:data=json.load(response)
         if not data.get('success') or not isinstance(data.get('emails'),list):raise RuntimeError('Invalid quarantine response')
+        if not isinstance(data.get('restricted_emails',[]),list):raise RuntimeError('Invalid delegated email response')
+        g.jmp_restricted_emails={str(email).strip().lower() for email in data.get('restricted_emails',[])}
         g.jmp_quarantine_emails={str(email).strip().lower() for email in data['emails']}
         return g.jmp_quarantine_emails
 
+    def restricted(email):
+        snapshot()
+        return str(email or '').strip().lower() in getattr(g,'jmp_restricted_emails',set())
+
+    def message_allowed(msg,body=''):
+        if not has_request_context() or request.host.lower().split(':',1)[0]!=HOST:return True
+        snapshot()
+        return not recipients(msg,body).intersection(getattr(g,'jmp_restricted_emails',set()))
+
+    app.config['EMAIL_POOL_MESSAGE_ALLOWED']=message_allowed
+
     def error(message,status=403):
-        response=jsonify(success=False,quarantined=status==403,message=message,items=[],results=[],count=0)
+        response=jsonify(success=False,quarantined=status==403 and 'exclusivo' not in message,delegated='exclusivo' in message,message=message,items=[],results=[],count=0)
         response.status_code=status;response.headers['Cache-Control']='no-store';return response
 
     def email():
@@ -49,7 +63,9 @@ def register_jmp_quarantine(app, pending_resets):
         except Exception:
             g.jmp_quarantine_failed=True
             return error('Não foi possível verificar a quarentena agora. Tente novamente em instantes.',503)
-        if request.path in QUERIES and blocked(email(),emails):return error(MESSAGE)
+        if request.path in QUERIES:
+            if blocked(email(),emails):return error(MESSAGE)
+            if restricted(email()):return error('Este email é exclusivo do admin responsável no painel principal.')
 
     @app.after_request
     def filter_response(response):
@@ -61,6 +77,7 @@ def register_jmp_quarantine(app, pending_resets):
             if request.path in QUERIES:
                 if hasattr(g,'jmp_quarantine_emails'):del g.jmp_quarantine_emails
                 if blocked(email(),snapshot()):return error(MESSAGE)
+                if restricted(email()):return error('Este email é exclusivo do admin responsável no painel principal.')
                 return response
             if not response.is_json or response.status_code!=200:return response
             data=response.get_json(silent=True)
@@ -68,11 +85,13 @@ def register_jmp_quarantine(app, pending_resets):
             emails=snapshot()
             def hits(value):
                 if isinstance(value,list):return any(hits(v) for v in value)
-                if isinstance(value,dict):return any(hits(value.get(key)) for key in ('email','allowed_email','recipients'))
-                return blocked(value,emails)
+                if isinstance(value,dict):return any(hits(value.get(key)) for key in ('email','allowed_email','recipient_email','recipients'))
+                return blocked(value,emails) or restricted(value)
             old=data.get('items') or []
             data['items']=[item for item in old if not hits(item)];data['count']=len(data['items'])
             affected=[em for em in data.get('emails',data.get('allowed',[])) if hits(em)]
+            for key in ('emails','allowed'):
+                if isinstance(data.get(key),list):data[key]=[em for em in data[key] if not hits(em)]
             if affected or len(old)!=len(data['items']):
                 data.update(quarantined_emails=affected,quarantine_message=MESSAGE,message=MESSAGE)
             response.set_data(app.json.dumps(data));response.headers['Cache-Control']='no-store';return response
