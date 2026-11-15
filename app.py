@@ -9137,6 +9137,10 @@ from stock_ledger import register_stock_ledger
 register_stock_ledger(app, _data_dir, load_stock, load_products, _LOJAMESTRE_ADMIN_URL)
 register_quarantine(app, email_quarantine, _data_dir, _pending_reset_links)
 
+from email_uniqueness import register_email_uniqueness
+app.config['EMAIL_UNIQUENESS_INTERNAL_TOKEN'] = MASTER_API_TOKEN
+register_email_uniqueness(app, _data_dir, load_subscriptions)
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(debug=False, host="0.0.0.0", port=port)

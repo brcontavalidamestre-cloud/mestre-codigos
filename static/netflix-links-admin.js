@@ -13,9 +13,9 @@
     back.href = '/netflix-admin/login';
     back.textContent = 'Acesso exclusivo — Links Netflix';
   }
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/static/netflix-links.css?v=5'; document.head.append(css);
+  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/static/netflix-links.css?v=7'; document.head.append(css);
   const section = document.createElement('section'); section.className = 'nfl-admin';
-  section.innerHTML = `<h2>🔗 Links Netflix</h2><p>Um link exclusivo por email, somente para códigos Netflix. Apenas o administrador pode redefinir os links. Compartilhe cada endereço somente com o respectivo cliente.</p><form id="nfl-create"><label for="nfl-add-email">Adicionar vários emails de uma vez</label><textarea id="nfl-add-email" rows="6" maxlength="60000" required placeholder="cliente1@exemplo.com&#10;cliente2@exemplo.com&#10;cliente3@exemplo.com" aria-label="Emails dos clientes"></textarea><small>Até 200 emails por vez. Use um por linha ou separe por vírgula ou ponto e vírgula. Emails já cadastrados mantêm seu link atual.</small><button type="submit">Gerar links para os emails</button></form><label for="nfl-search">Pesquisar email</label><input id="nfl-search" type="search" placeholder="Digite parte do email…"><div id="nfl-admin-status" role="status" aria-live="polite"></div><div id="nfl-generated" hidden><label for="nfl-generated-url">Emails e links gerados</label><textarea id="nfl-generated-url" rows="8" readonly></textarea><button id="nfl-generated-copy" type="button">Copiar todos os links gerados</button></div><div class="nfl-scroll"><table><thead><tr><th>Email</th><th>Criado em</th><th>Última redefinição</th><th>Responsável</th><th>Ações</th></tr></thead><tbody id="nfl-rows"></tbody></table></div><button id="nfl-refresh" type="button" class="nfl-secondary">Atualizar lista</button>`;
+  section.innerHTML = `<h2>🔗 Links Netflix</h2><p>Um link exclusivo por email, somente para códigos Netflix. Apenas o administrador pode redefinir os links. Compartilhe cada endereço somente com o respectivo cliente.</p><form id="nfl-create"><label for="nfl-add-email">Adicionar vários emails de uma vez</label><textarea id="nfl-add-email" rows="6" maxlength="60000" required placeholder="cliente1@exemplo.com&#10;cliente2@exemplo.com&#10;cliente3@exemplo.com" aria-label="Emails dos clientes"></textarea><small>Até 200 emails por vez. Use um por linha ou separe por vírgula ou ponto e vírgula. Não é permitido repetir emails já cadastrados nos links ou no painel. Somente o admin principal pode excluir cadastros.</small><button type="submit">Gerar links para os emails</button></form><label for="nfl-search">Pesquisar email</label><input id="nfl-search" type="search" placeholder="Digite parte do email…"><div id="nfl-admin-status" role="status" aria-live="polite"></div><div id="nfl-generated" hidden><label for="nfl-generated-url">Emails e links gerados</label><textarea id="nfl-generated-url" rows="8" readonly></textarea><button id="nfl-generated-copy" type="button">Copiar todos os links gerados</button></div><div class="nfl-scroll"><table><thead><tr><th>Email</th><th>Criado em</th><th>Última redefinição</th><th>Responsável</th><th>Ações</th></tr></thead><tbody id="nfl-rows"></tbody></table></div><button id="nfl-refresh" type="button" class="nfl-secondary">Atualizar lista</button>`;
   const main = document.querySelector('.main'); if (!main) return;
   const launcher = document.createElement('button');
   launcher.type = 'button'; launcher.className = 'btn-ref';
@@ -81,7 +81,10 @@
           message(error.message); remove.disabled=false; reset.disabled=false; copyButton.disabled=false;
         }
       };
-      actions.append(copyButton, reset, remove); tr.append(actions); rows.append(tr);
+      actions.append(copyButton, reset);
+      if (identity.principal) actions.append(remove);
+      else { const note=document.createElement('small'); note.textContent='Exclusão somente pelo admin principal'; actions.append(note); }
+      tr.append(actions); rows.append(tr);
     });
   }
   async function load() { const data=await api(); items=data.items; render(); }
