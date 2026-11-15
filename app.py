@@ -3896,6 +3896,10 @@ def _admin_can_see_assignment(assigned_user):
     assigned_user = str(assigned_user or "").strip().lower()
     current_admin = str(session.get("username") or "").strip().lower()
     if not assigned_user:
+        # Delegated, unlinked emails remain stored. Never expose those rows
+        # (including credentials) to unrelated subadmins through legacy lists.
+        if request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
+            return current_admin == 'admin'
         return True
     if not current_admin:
         return False
@@ -9139,6 +9143,10 @@ from quarantine_registry import search_jmp_registrations
 register_quarantine(app, email_quarantine, _data_dir, _pending_reset_links,
     load_subscriptions=load_subscriptions, save_subscriptions=save_subscriptions, load_users=load_users,
     remote_search=search_jmp_registrations)
+
+from email_delegation import register_email_delegation
+email_permission_store = register_email_delegation(app, _data_dir, load_subscriptions,
+    save_subscriptions, load_users, email_quarantine)
 
 from email_uniqueness import register_email_uniqueness
 app.config['EMAIL_UNIQUENESS_INTERNAL_TOKEN'] = MASTER_API_TOKEN

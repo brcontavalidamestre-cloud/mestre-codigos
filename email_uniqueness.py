@@ -9,7 +9,7 @@ import sqlite3
 import threading
 import time
 from functools import wraps
-from flask import jsonify, request, session
+from flask import g, jsonify, request, session
 
 HOST = 'consulta-codigos-jr7z.onrender.com'
 DUPLICATE_MESSAGE = 'Este email já está cadastrado nos links ou no painel. Não é permitido duplicar. Somente o administrador principal pode remover o cadastro existente.'
@@ -52,7 +52,10 @@ def register_email_uniqueness(app, data_dir, load_subscriptions):
 
     def conflict(emails):
         emails = list(dict.fromkeys(emails))
-        return jsonify(success=False, duplicate=True, message=DUPLICATE_MESSAGE,
+        message = DUPLICATE_MESSAGE
+        if app.config.get('EMAIL_POOL_MUTATION_GUARD') and panel_admin() and not principal():
+            message = 'Este email já está cadastrado nos links ou no painel. Remova o vínculo antigo antes de vincular a outro cliente. Você só pode remover vínculos dos emails da sua lista permitida; links individuais só podem ser excluídos pelo admin principal.'
+        return jsonify(success=False, duplicate=True, message=message,
                        duplicate_emails=emails, created=0, updated=0, items=[]), 409
 
     def wrap_endpoint(endpoint, kind):
@@ -78,10 +81,15 @@ def register_email_uniqueness(app, data_dir, load_subscriptions):
                 os.chmod(lock_path, 0o600)
                 fcntl.flock(handle.fileno(), fcntl.LOCK_EX)
                 try:
-                    if kind in ('remove', 'link-remove') and not principal():
-                        return jsonify(success=False, message=REMOVE_MESSAGE), 403
                     data = request.get_json(silent=True) or {}
                     data = data if isinstance(data, dict) else {}
+                    permission_guard = app.config.get('EMAIL_POOL_MUTATION_GUARD')
+                    if permission_guard:
+                        guarded_response = permission_guard(kind, kwargs, data)
+                        if guarded_response is not None:
+                            return guarded_response
+                    if kind in ('remove', 'link-remove') and not principal():
+                        return jsonify(success=False, message=REMOVE_MESSAGE), 403
                     subscriptions = [s for s in load_subscriptions() if isinstance(s, dict) and s.get('email')]
                     panel_emails = {str(s['email']).strip().lower() for s in subscriptions}
                     if kind in ('link-create', 'panel-create', 'panel-batch', 'internal'):
@@ -109,7 +117,12 @@ def register_email_uniqueness(app, data_dir, load_subscriptions):
                                 if len(owners) > 1 or (owners and owners[0] and owners[0] != target):
                                     repeated.append(email)
                         else:
-                            repeated = [email for email in candidates if email in panel_emails or email in all_links]
+                            # An unlinked delegated record retains its metadata;
+                            # claiming it updates the SAME row, never duplicates it.
+                            claims = getattr(g, 'email_pool_claims', None)
+                            delegated = set(claims['emails']) if claims else set()
+                            available = {email for email in delegated if sum(1 for s in subscriptions if str(s['email']).strip().lower()==email)==1 and all(not str(s.get('assigned_user') or '').strip() for s in subscriptions if str(s['email']).strip().lower()==email)} if kind == 'panel-batch' else set()
+                            repeated = [email for email in candidates if email in all_links or (email in panel_emails and email not in available)]
                         if repeated:
                             return conflict(repeated)
                     if kind == 'delete-user' and not principal():
@@ -129,6 +142,7 @@ def register_email_uniqueness(app, data_dir, load_subscriptions):
         ('api_admin_add_subscription', 'panel-create'),
         ('api_admin_delete_vinculo_email', 'remove'),
         ('api_admin_delete_subscription', 'remove'),
+        ('api_admin_renew_subscription', 'panel-renew'),
         ('api_internal_loja_vinculo', 'internal'),
         ('api_delete_user', 'delete-user'),
     ):

@@ -2936,6 +2936,7 @@
     }
 
     function renderTable(list) {
+      const principalEmailScope = location.hostname !== 'consulta-codigos-jr7z.onrender.com' || (_meUser && _meUser.username === 'admin');
       const tb = document.getElementById('tbody');
       if (!list.length) {
         tb.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="eico">👤</div>Nenhum usuário encontrado.</div></td></tr>`;
@@ -2960,6 +2961,7 @@
           </td>
           <td>
             ${linkedBox}
+            ${(location.hostname === 'consulta-codigos-jr7z.onrender.com' && principalEmailScope && u.role === 'admin' && u.username !== 'admin') ? `<a class="btn-ref" style="display:inline-block;margin:6px 0;font-size:.74rem;" href="/admin/emails-subadmins?admin_user=${encodeURIComponent(u.username)}">📋 Lista permitida de emails</a>` : ''}
             <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
               <button class="btn-ref" style="font-size:.74rem;padding:5px 8px;" onclick="openUserVinculos('${x(u.username)}')">📩 Abrir vínculos</button>
               <button class="btn-ref" style="font-size:.74rem;padding:5px 8px;" onclick="const si=document.getElementById('s-in'); if(si){si.value='${x((Array.isArray(u.linked_emails) && u.linked_emails[0]) ? u.linked_emails[0] : '')}'; filterUsers(si.value); si.focus();}">🔎 Buscar email</button>
@@ -2970,7 +2972,7 @@
               <button class="bsm bpw" onclick="openPw('${x(u.username)}')">🔑 Alterar Senha</button>
               <button class="bsm bpin locked" onclick="openPin('${x(u.username)}', ${u.reset_pin_custom})">${u.reset_pin_custom ? '🔒 PIN Personalizado' : '🔒 PIN Padrão 1995'}</button>
               <button class="bsm" onclick="openDirectLogin('${x(u.username)}')">🚀 Entrar Direto</button>
-              <button class="bsm bdel" onclick="openDel('${x(u.username)}')">🗑️ Remover</button>
+              ${principalEmailScope ? `<button class="bsm bdel" onclick="openDel('${x(u.username)}')">🗑️ Remover</button>` : ''}
             </div>
           </td>
         </tr>`;
@@ -3303,5 +3305,6 @@
 
   </script>
 <script src="/static/netflix-links-admin.js?v=7" defer></script>
+<script src="/static/email-delegation-launcher.js?v=1" defer></script>
 </body>
 </html>
