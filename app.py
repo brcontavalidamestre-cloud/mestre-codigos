@@ -14,6 +14,8 @@ import threading
 import hmac
 import hashlib
 from datetime import timedelta
+from store_guest import (guest_store_enabled, new_guest_fields, guest_order_id,
+    guest_order_allowed, public_delivery_fields, store_delivery_lock, register_store_guest)
 
 app = Flask(__name__, static_folder='static')
 CORS(app)
@@ -5747,8 +5749,7 @@ def api_internal_loja_checkout():
         return jsonify({"success": False, "message": f"Erro interno: {e}"}), 500
 
 def _do_checkout():
-    # Lojamestre (Render): a compra já exige usuário/senha do painel de códigos,
-    # então a trava de senha da loja não se aplica a este host.
+    # Loja Mestre pública: compra direta, sem cadastro ou vínculo no painel.
     try:
         _lj = "lojamestre" in (get_current_host() or "")
     except Exception:
@@ -5771,7 +5772,11 @@ def _do_checkout():
         return jsonify({"success": False, "message": "Informe um email válido."}), 400
 
     buyer_user_name = ""
-    if _is_lojamestre_store():
+    guest = guest_store_enabled()
+    if guest:
+        panel_username = ""
+        panel_password = ""
+    if _is_lojamestre_store() and not guest:
         if not panel_username or not panel_password:
             return jsonify({
                 "success": False,
@@ -5841,7 +5846,7 @@ def _do_checkout():
         }), 409
 
     # Cria pedido
-    order_id  = f"PED-{int(time.time())}-{product_id[:6].upper()}"
+    order_id  = guest_order_id(product_id) if guest else f"PED-{int(time.time())}-{product_id[:6].upper()}"
     order = {
         "id": order_id,
         "product_id": product_id,
@@ -5852,8 +5857,9 @@ def _do_checkout():
         "customer_phone": customer_phone,
         "buyer_username": panel_username,
         "buyer_user_name": buyer_user_name,
-        "assigned_user": product_assigned_user,
-        "assigned_user_name": product_assigned_user_name,
+        "assigned_user": "" if guest else product_assigned_user,
+        "assigned_user_name": "" if guest else product_assigned_user_name,
+        **(new_guest_fields() if guest else {}),
         "status": "pending",
         "created_at": int(time.time()),
         "paid_at": None,
@@ -5895,7 +5901,8 @@ def _do_checkout():
         "price": product.get("price", 0),
         "pix_qrcode": order.get("pix_qrcode"),
         "pix_copia_cola": order.get("pix_copia_cola"),
-        "pix_warning": order.get("pix_warning")
+        "pix_warning": order.get("pix_warning"),
+        **({"order_access_token": order["guest_receipt_token"]} if guest else {})
     })
 
 @app.route("/api/loja/meus-pedidos", methods=["POST"])
@@ -5932,6 +5939,7 @@ def _do_meus_pedidos():
             o for o in orders
             if isinstance(o, dict)
             and (o.get("customer_email", "") or "").lower() == email
+            and guest_order_allowed(o)
         ]
         my_orders.sort(key=lambda o: o.get("created_at", 0) or 0, reverse=True)
 
@@ -5964,6 +5972,7 @@ def _do_meus_pedidos():
                 "delivered_email":    o.get("delivered_email"),
                 "delivered_password": o.get("delivered_password"),
                 "delivered_note":     o.get("delivered_note"),
+                **public_delivery_fields(o),
                 "pix_copia_cola":     o.get("pix_copia_cola") if o.get("status") == "pending" else None,
                 "pix_qrcode":         o.get("pix_qrcode") if o.get("status") == "pending" else None,
                 "pix_expires_at":     o.get("pix_expires_at")
@@ -6005,6 +6014,8 @@ def _do_order_status(order_id):
         if not order:
             return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
 
+        if not guest_order_allowed(order):
+            return jsonify(success=False, message="Use o comprovante de acesso desta compra."), 403
         debug_info = {}
         # Se ainda pendente e tem txid Efi, consulta status no Efi
         if order.get("status") == "pending" and order.get("pix_txid"):
@@ -6025,6 +6036,7 @@ def _do_order_status(order_id):
             "delivered_email":    order.get("delivered_email"),
             "delivered_password": order.get("delivered_password"),
             "delivered_note":     order.get("delivered_note"),
+            **public_delivery_fields(order),
             "debug": debug_info
         })
     except Exception as e:
@@ -6058,14 +6070,16 @@ def _do_force_check(order_id):
         order  = next((o for o in orders if isinstance(o, dict) and o.get("id") == order_id), None)
         if not order:
             return jsonify({"success": False, "message": "Pedido não encontrado."}), 404
+        if not guest_order_allowed(order):
+            return jsonify(success=False, message="Use o comprovante de acesso desta compra."), 403
         if order.get("status") == "paid":
-            return jsonify({"success": True, "already_paid": True, "order": order})
+            return jsonify({"success": True, "already_paid": True, "order": {**order, **public_delivery_fields(order)}})
         if not order.get("pix_txid"):
             return jsonify({"success": False, "message": "Pedido sem txid."})
         check = efi_check_pix_status(order["pix_txid"])
         if check.get("paid"):
             order = mark_order_paid_and_deliver(order_id)
-            return jsonify({"success": True, "paid": True, "order": order})
+            return jsonify({"success": True, "paid": True, "order": {**order, **public_delivery_fields(order)}})
         return jsonify({
             "success": True,
             "paid": False,
@@ -6267,6 +6281,7 @@ def efi_check_pix_status(txid, loja2=False):
         print(f"[efi:{cfg['label']}] erro ao consultar txid {txid}: {e}\n{traceback.format_exc()}")
         return {"paid": False, "reason": str(e)}
 
+@store_delivery_lock(_data_dir)
 def mark_order_paid_and_deliver(order_id):
     """Marca pedido como pago, entrega o próximo acesso do estoque e vincula ao usuário comprador quando aplicável."""
     orders = load_orders()
@@ -6277,7 +6292,10 @@ def mark_order_paid_and_deliver(order_id):
 
     buyer_username = str(order.get("buyer_username", "")).strip().lower()
     buyer_user_name = str(order.get("buyer_user_name", "")).strip()
-    if _is_lojamestre_store() and not buyer_username:
+    direct_delivery = guest_store_enabled() and order.get("delivery_mode") == "direct-link"
+    if direct_delivery:
+        buyer_username = ""
+    if _is_lojamestre_store() and not buyer_username and not direct_delivery:
         order["status"] = "error"
         order["delivered_note"] = "Compra bloqueada: pedido sem login do painel vinculado."
         save_orders(orders)
@@ -6305,7 +6323,7 @@ def mark_order_paid_and_deliver(order_id):
         if buyer_username:
             order["assigned_user"] = buyer_username
             order["assigned_user_name"] = buyer_user_name or buyer_username
-        elif stock_item.get("assigned_user"):
+        elif stock_item.get("assigned_user") and not direct_delivery:
             order["assigned_user"] = str(stock_item.get("assigned_user", "")).strip().lower()
             order["assigned_user_name"] = stock_item.get("assigned_user_name") or order.get("assigned_user")
 
@@ -6320,7 +6338,8 @@ def mark_order_paid_and_deliver(order_id):
                     it["assigned_user_name"] = buyer_user_name or buyer_username
                 break
         save_stock(st)
-        _ensure_delivery_email_binding(order)
+        if not direct_delivery:
+            _ensure_delivery_email_binding(order)
         _sync_store_orders_to_daily_blocks(save=True)
     else:
         order["delivered_note"] = "Pagamento confirmado. Aguarde - entrega manual."
@@ -6369,6 +6388,9 @@ def api_loja_webhook_efi():
         orders = load_orders()
         order  = next((o for o in orders if o.get("pix_txid") == txid), None)
         if order and order["status"] == "pending":
+            # Confirm guest payments with Efi before releasing credentials.
+            if guest_store_enabled() and not efi_check_pix_status(txid).get("paid"):
+                continue
             mark_order_paid_and_deliver(order["id"])
     return jsonify({"success": True})
 
@@ -9102,6 +9124,8 @@ def api_keepalive():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)[:200]})
     return jsonify({"success": True, "imap_ready": False})
+
+register_store_guest(app, load_orders)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))

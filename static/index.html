@@ -1379,7 +1379,7 @@
       <div id="loja-tab-historico" style="display:none">
         <section class="platforms-section" style="padding:22px 24px;">
           <div class="section-title" style="margin-bottom:8px">✦ Histórico de Compras ✦</div>
-          <p class="section-subtitle" style="margin-bottom:14px">Informe o email usado nas suas compras para visualizar todos os pedidos e acessos.</p>
+          <p class="section-subtitle" style="margin-bottom:14px">Informe o email usado na compra. Para novas compras, os acessos ficam disponíveis neste navegador; guarde também seu email, senha e link dos códigos.</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <input type="email" id="hist-email" placeholder="seu@email.com"
               style="flex:1;min-width:200px;padding:12px;border-radius:10px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-white);font-size:0.95rem"
@@ -1416,7 +1416,7 @@
           <input type="text" id="co-panel-user" placeholder="Seu usuário do painel" autocomplete="username" />
           <label>Senha do painel de códigos</label>
           <input type="password" id="co-panel-pass" placeholder="Sua senha do painel" autocomplete="current-password" />
-          <div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)">Na Loja Mestre, a compra só é liberada com o usuário do painel para vincular automaticamente o email entregue e permitir a consulta de códigos.</div>
+          <div style="margin-top:8px;font-size:0.78rem;color:var(--text-muted)">Não é necessário criar usuário ou vincular emails para comprar. Após o pagamento, você recebe email, senha e link de consulta dos códigos.</div>
         </div>
         <div class="checkout-actions">
           <button class="btn-cancel" onclick="closeCheckout()">Cancelar</button>
@@ -3282,6 +3282,17 @@
       }
     }
 
+    const lojaOrderTokens = (()=>{try{return JSON.parse(localStorage.getItem('loja_order_access_tokens')||'{}')||{};}catch{return {};}})();
+    function orderHeaders(orderId){return lojaOrderTokens[orderId]?{Authorization:'Bearer '+lojaOrderTokens[orderId]}:{};}
+    function saveOrderReceipt(orderId,token){if(!token)return;lojaOrderTokens[orderId]=token;try{localStorage.setItem('loja_order_access_tokens',JSON.stringify(lojaOrderTokens));}catch{}}
+    function deliveryCodeHtml(data){
+      if(!data.delivered_code_link)return data.code_link_pending?'<p>Seu link de códigos está sendo preparado. Atualize o pedido em instantes.</p>':'';
+      let parsed;try{parsed=new URL(data.delivered_code_link);}catch{return '';}
+      if(parsed.protocol!=='https:'||parsed.hostname!=='consulta-codigos-jr7z.onrender.com'||parsed.pathname!=='/compra'||parsed.username||parsed.password)return '';
+      const link=escapeHtml(parsed.href);
+      return '<div class="credential-row"><div><div class="label">LINK PARA OS CÓDIGOS</div><a class="delivery-code-link" href="'+link+'" target="_blank" rel="noopener noreferrer" style="display:inline-block;margin:10px 0;color:#c4b5fd;font-weight:700">🔐 Consultar códigos desta conta</a><textarea class="selectable-value" readonly onclick="this.focus();this.select();">'+link+'</textarea></div><button onclick="selectRowValue(this)">✂️ Selecionar</button></div>';
+    }
+    function deliveryCombinedText(data){return 'Email: '+(data.delivered_email||'')+'\nSenha: '+(data.delivered_password||'')+(data.delivered_code_link?'\nLink dos códigos: '+data.delivered_code_link:'');}
     let currentCheckoutProduct = null;
     let pollTimer = null;
 
@@ -3298,7 +3309,7 @@
       document.getElementById('co-phone').value = '';
       document.getElementById('co-panel-user').value = '';
       document.getElementById('co-panel-pass').value = '';
-      document.getElementById('panel-login-box').style.display = isLojaMestre ? 'block' : 'none';
+      document.getElementById('panel-login-box').style.display = 'none';
       document.getElementById('checkout-modal').classList.add('show');
     }
 
@@ -3320,7 +3331,6 @@
       // Guarda email para pre-preencher histórico depois
       try { if (email) localStorage.setItem('mestre_last_buyer_email', email.toLowerCase()); } catch(e){}
       if (!name || !email) { showToast('Preencha nome e email'); return; }
-      if (isLojaMestre && (!panelUsername || !panelPassword)) { showToast('Informe usuário e senha do painel'); return; }
       const btn = document.getElementById('btn-pay');
       btn.disabled = true; btn.textContent = 'Gerando...';
       try {
@@ -3336,6 +3346,8 @@
         });
         const j = await r.json();
         if (!j.success) { showToast(j.message || 'Erro'); btn.disabled=false; btn.textContent='💰 Gerar Pix'; return; }
+        saveOrderReceipt(j.order_id,j.order_access_token);
+        currentOrderId=j.order_id;
         document.getElementById('checkout-form-area').style.display = 'none';
         const area = document.getElementById('pix-result-area');
         area.style.display = 'block';
@@ -3407,7 +3419,7 @@
 
     async function checkOrderOnce(orderId) {
       try {
-        const r = await fetch('/api/loja/order-status/' + orderId);
+        const r = await fetch('/api/loja/order-status/' + orderId,{headers:orderHeaders(orderId),cache:'no-store'});
         const j = await r.json();
         if (j.success && j.status === 'paid') {
           if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
@@ -3423,7 +3435,7 @@
       const btn = document.getElementById('btn-force-check');
       if (btn) { btn.disabled = true; btn.textContent = 'Verificando...'; }
       try {
-        const r = await fetch('/api/loja/force-check/' + currentOrderId, { method: 'POST' });
+        const r = await fetch('/api/loja/force-check/' + currentOrderId, { method: 'POST',headers:orderHeaders(currentOrderId) });
         const j = await r.json();
         if (j.success && (j.paid || (j.order && j.order.status === 'paid'))) {
           if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
@@ -3433,7 +3445,9 @@
             product_name: o.product_name,
             delivered_email: o.delivered_email,
             delivered_password: o.delivered_password,
-            delivered_note: o.delivered_note
+            delivered_note: o.delivered_note,
+            delivered_code_link: o.delivered_code_link,
+            code_link_pending: o.code_link_pending
           });
         } else {
           showToast('⏳ Pagamento ainda não confirmado pela Efi. Aguarde alguns segundos e tente de novo.');
@@ -3470,32 +3484,32 @@
       const area = document.getElementById('pix-result-area');
       let html = `<div class="paid-box">
         <h3>✓ Pagamento Confirmado!</h3>
-        <p style="color:var(--text-muted);margin-bottom:10px">Seu acesso ${data.product_name}:</p>`;
+        <p style="color:var(--text-muted);margin-bottom:10px">Seu acesso ${escapeHtml(data.product_name)}:</p>`;
       if (data.delivered_email && data.delivered_password) {
         html += `
           <div class="credential-row">
             <div>
               <div class="label">EMAIL</div>
-              <textarea class="selectable-value" readonly onclick="this.focus();this.select();" onfocus="this.select()">${data.delivered_email}</textarea>
+              <textarea class="selectable-value" readonly onclick="this.focus();this.select();" onfocus="this.select()">${escapeHtml(data.delivered_email)}</textarea>
             </div>
             <button onclick="selectRowValue(this)">✂️ Selecionar</button>
           </div>
           <div class="credential-row">
             <div>
               <div class="label">SENHA</div>
-              <textarea class="selectable-value" readonly onclick="this.focus();this.select();" onfocus="this.select()">${data.delivered_password}</textarea>
+              <textarea class="selectable-value" readonly onclick="this.focus();this.select();" onfocus="this.select()">${escapeHtml(data.delivered_password)}</textarea>
             </div>
             <button onclick="selectRowValue(this)">✂️ Selecionar</button>
           </div>
+          ${deliveryCodeHtml(data)}
           <button style="margin-top:14px;background:var(--purple-mid);color:white;border:none;padding:10px 18px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.85rem"
             onclick="selectCombinedBox(this)">
-            ✂️ Selecionar Email + Senha
+            ✂️ Selecionar Email + Senha + Link
           </button>
-          <textarea class="manual-copy-box" readonly onclick="this.focus();this.select();" onfocus="this.select()">Email: ${data.delivered_email}
-Senha: ${data.delivered_password}</textarea>
+          <textarea class="manual-copy-box" readonly onclick="this.focus();this.select();" onfocus="this.select()">${escapeHtml(deliveryCombinedText(data))}</textarea>
           <div class="manual-copy-tip">Clique no campo acima e use Ctrl+C se o navegador bloquear o botão.</div>`;
         if (data.delivered_note) {
-          html += `<p style="margin-top:12px;font-size:0.82rem;color:var(--text-muted)">📌 ${data.delivered_note}</p>`;
+          html += `<p style="margin-top:12px;font-size:0.82rem;color:var(--text-muted)">📌 ${escapeHtml(data.delivered_note)}</p>`;
         }
       } else {
         html += `<p style="color:var(--gold-light)">${data.delivered_note || 'Pagamento confirmado. Aguarde a entrega manual.'}</p>`;
@@ -3585,7 +3599,7 @@ Senha: ${data.delivered_password}</textarea>
         const r = await fetch('/api/loja/meus-pedidos', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email })
+          body: JSON.stringify({ email, order_access_tokens:lojaOrderTokens })
         });
         const j = await r.json();
         if (!j.success) {
@@ -3634,13 +3648,13 @@ Senha: ${data.delivered_password}</textarea>
               </div>
               <button onclick="selectRowValue(this)">✂️ Selecionar</button>
             </div>
+            ${deliveryCodeHtml(o)}
             ${o.delivered_note ? `<div style="font-size:0.78rem;color:var(--text-muted);margin-top:8px">📌 ${escapeHtml(o.delivered_note)}</div>` : ''}
             <button onclick="selectCombinedBox(this)"
               style="width:100%;margin-top:10px;background:var(--purple-mid);color:#fff;border:none;padding:9px;border-radius:8px;cursor:pointer;font-family:'Cinzel',serif;font-size:0.82rem;letter-spacing:1px">
-              ✂️ Selecionar Email + Senha
+              ✂️ Selecionar Email + Senha + Link
             </button>
-            <textarea class="manual-copy-box" readonly onclick="this.focus();this.select();" onfocus="this.select()">Email: ${escapeHtml(o.delivered_email)}
-Senha: ${escapeHtml(o.delivered_password)}</textarea>
+            <textarea class="manual-copy-box" readonly onclick="this.focus();this.select();" onfocus="this.select()">${escapeHtml(deliveryCombinedText(o))}</textarea>
             <div class="manual-copy-tip">Clique no campo acima e use Ctrl+C se o navegador bloquear o botão.</div>
           </div>
         `;
@@ -3683,7 +3697,7 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
     async function recheckHist(orderId) {
       showToast('⏳ Verificando pagamento...');
       try {
-        const r = await fetch('/api/loja/force-check/' + orderId, { method:'POST' });
+        const r = await fetch('/api/loja/force-check/' + orderId, { method:'POST',headers:orderHeaders(orderId) });
         const j = await r.json();
         if (j.success && (j.paid || (j.order && j.order.status === 'paid'))) {
           showToast('✓ Pagamento confirmado!');
