@@ -234,9 +234,42 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         return jsonify(success=True,message='Permissão removida. O vínculo atual e o cliente foram preservados.')
 
     def mutation_guard(kind, kwargs, data):
-        if kind not in ('panel-batch','panel-create','panel-renew','remove','delete-user','link-create','link-reset'):
+        if kind not in ('panel-batch','panel-create','panel-renew','remove','delete-user','link-create','link-reset','link-remove'):
             return None
         username = actor()
+        if kind=='link-remove' and username!='admin':
+            if not central() or not username:
+                return jsonify(success=False,message='Somente o subadmin responsável ou o admin principal pode excluir este email e link.'),403
+            try:emails=parse(data.get('email'))
+            except ValueError as error:return jsonify(success=False,message=str(error)),400
+            if len(emails)!=1:
+                return jsonify(success=False,message='Informe somente um email por exclusão.'),400
+            email=emails[0]
+            if not can_manage(email,username):
+                return jsonify(success=False,message=DENIED),403
+            path=os.path.join(data_dir,'netflix_links.sqlite3')
+            if os.path.isfile(path):
+                with sqlite3.connect(path,timeout=15) as conn:
+                    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='links'").fetchone():
+                        row=conn.execute('SELECT owner FROM links WHERE email=?',(email,)).fetchone()
+                        if row and row[0]!='panel:'+username:
+                            return jsonify(success=False,message='Este link não pertence ao seu admin.'),403
+            subs=load_subscriptions();previous=[]
+            for sub in subs:
+                if isinstance(sub,dict) and norm(sub.get('email'))==email:
+                    previous.append(norm(sub.get('assigned_user')))
+            # Revoke bearer access first. If JSON persistence fails, retrying the
+            # same request completes the unlink even though the link is gone.
+            revoke_link(email)
+            for sub in subs:
+                if isinstance(sub,dict) and norm(sub.get('email'))==email:
+                    sub['assigned_user']='';sub['assigned_user_name']=''
+            if any(previous) and save_subscriptions(subs) is False:
+                return jsonify(success=False,message='O link foi invalidado, mas não foi possível remover o vínculo. Clique em excluir novamente para concluir.'),503
+            invalidate=app.config.get('EMAIL_POOL_BINDINGS_CHANGED')
+            if invalidate:invalidate(set(previous)|{username})
+            store.audit(username,'delete-client-link',{'email':email,'previous_users':previous})
+            return jsonify(success=True,email=email,message='Email removido do cliente e link excluído. O usuário foi preservado e o email continua na sua lista permitida.')
         if kind in ('link-create','link-reset'):
             # Dedicated legacy link sessions never inherit a panel user's identity.
             if username=='admin':return None
