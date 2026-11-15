@@ -9144,6 +9144,12 @@ from email_uniqueness import register_email_uniqueness
 app.config['EMAIL_UNIQUENESS_INTERNAL_TOKEN'] = MASTER_API_TOKEN
 register_email_uniqueness(app, _data_dir, load_subscriptions)
 
+from purchase_code_links import register_purchase_code_links
+from purchase_code_search import make_purchase_code_search
+register_purchase_code_links(app, _data_dir, email_quarantine,
+    make_purchase_code_search(PLATFORM_CONFIG, get_imap_accounts, _batch_search_mailbox,
+        _fetch_and_extract, _get_spam_boxes, _targeted_body_extract))
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(debug=False, host="0.0.0.0", port=port)
