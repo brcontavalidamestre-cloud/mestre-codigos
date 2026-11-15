@@ -5267,9 +5267,12 @@ _BD_CACHE_TTL = 60  # segundos
 def _bd_refresh_background(username):
     """Varredura IMAP em segundo plano — atualiza o cache sem travar a tela."""
     try:
+        linked_emails = tuple(_user_live_inbox_emails(username))
         items, errors = _fetch_user_live_inbox_items(username)
+        if linked_emails != tuple(_user_live_inbox_emails(username)):
+            return
         with _bd_cache_lock:
-            _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors}
+            _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors, "linked_emails": linked_emails}
     except Exception as e:
         print(f"[bandeja] refresh erro ({username}): {e}")
     finally:
@@ -5294,6 +5297,12 @@ def api_user_live_inbox_messages():
     with _bd_cache_lock:
         cached = _bd_cache.get(username)
 
+    # Each worker validates the cache against current bindings. A new email
+    # must not inherit the old empty/stale inbox for another 60 seconds.
+    if cached and tuple(cached.get("linked_emails") or ()) != tuple(emails):
+        cached = None
+        with _bd_cache_lock:
+            _bd_cache.pop(username, None)
     fresh = request.args.get("fresh") == "1"
 
     if cached and (now - cached["ts"] < _BD_CACHE_TTL) and not fresh:
@@ -5322,7 +5331,7 @@ def api_user_live_inbox_messages():
     # Primeira vez de todos (sem cache nenhum): faz a varredura agora.
     items, errors = _fetch_user_live_inbox_items(username)
     with _bd_cache_lock:
-        _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors}
+        _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors, "linked_emails": tuple(emails)}
         _bd_refreshing.discard(username)
     return jsonify({"success": True, "items": items, "emails": emails,
                     "count": len(items), "errors": errors})
@@ -9155,6 +9164,13 @@ from quarantine_registry import search_jmp_registrations
 register_quarantine(app, email_quarantine, _data_dir, _pending_reset_links,
     load_subscriptions=load_subscriptions, save_subscriptions=save_subscriptions, load_users=load_users,
     remote_search=search_jmp_registrations)
+
+def _invalidate_binding_inboxes(usernames):
+    with _bd_cache_lock:
+        for username in usernames:
+            _bd_cache.pop(str(username or '').strip().lower(), None)
+
+app.config['EMAIL_POOL_BINDINGS_CHANGED'] = _invalidate_binding_inboxes
 
 from email_delegation import register_email_delegation
 email_permission_store = register_email_delegation(app, _data_dir, load_subscriptions,

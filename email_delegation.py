@@ -184,7 +184,9 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             can = source_allowed(email,permission['admin_user'],users,subscriptions)
             items.append(dict(email=email,admin_user=permission['admin_user'],created_at=permission['created_at'],
                               assigned_users=assigned,assigned_names=[(users.get(u) or {}).get('name') or u for u in assigned],
-                              can_manage=can,quarantined=quarantine.is_blocked(email)))
+                              can_manage=can,can_assign=can and all(user==permission['admin_user'] for user in assigned),
+                              assignment_state='reserved' if assigned==[permission['admin_user']] else 'unlinked' if not assigned else 'client',
+                              quarantined=quarantine.is_blocked(email)))
         items.sort(key=lambda item:(item['admin_user'],item['email']))
         clients = [dict(username=name,name=(users.get(name) or {}).get('name') or name) for name in sorted(clients_of(selected,users))] if selected else []
         direct_emails = sorted({norm(s.get('email')) for s in subscriptions if isinstance(s,dict) and selected and norm(s.get('assigned_user'))==selected and norm(s.get('email'))}) if principal else []
@@ -266,7 +268,64 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
                 return jsonify(success=False,message='Selecione um cliente criado pelo seu próprio admin.'),403
             if any(quarantine.is_blocked(email) for email in emails):
                 return jsonify(success=False,message='Esse email está na lista que não pode receber códigos.'),403
-            g.email_pool_claims = {'actor':username,'emails':emails,'target':target}
+            # Reservations belong to the subadmin, not to another customer.
+            # Apply the entire validated batch once while the shared registration
+            # lock is held by email_uniqueness. No pre-unlink or duplicate row.
+            subs=load_subscriptions();by_email={}
+            for index,sub in enumerate(subs):
+                if isinstance(sub,dict):by_email.setdefault(norm(sub.get('email')),[]).append(index)
+            conflicts=[]
+            for email in emails:
+                indices=by_email.get(email,[])
+                if len(indices)>1 or any(norm(subs[index].get('assigned_user')) not in ('',username,target) for index in indices):
+                    conflicts.append(email)
+            link_path=os.path.join(data_dir,'netflix_links.sqlite3')
+            if os.path.isfile(link_path):
+                with sqlite3.connect(link_path,timeout=15) as conn:
+                    if conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='links'").fetchone():
+                        for email in emails:
+                            row=conn.execute('SELECT owner FROM links WHERE email=?',(email,)).fetchone()
+                            if row and row[0]!='panel:'+username:conflicts.append(email)
+            if conflicts:
+                return jsonify(success=False,duplicate=True,created=0,updated=0,skipped=0,conflict_emails=sorted(set(conflicts)),
+                    message='Este email já está vinculado a outro cliente ou acesso. Remova o vínculo antigo antes de continuar.'),409
+            now=int(time.time());created=updated=unchanged=0;previous={}
+            for email in emails:
+                indices=by_email.get(email,[])
+                if indices:
+                    sub=subs[indices[0]];prior=norm(sub.get('assigned_user'));previous[email]=prior
+                    if prior==target:unchanged+=1
+                    else:
+                        sub['assigned_user']=target;sub['assigned_user_name']=users[target].get('name') or target
+                        updated+=1
+                else:
+                    days=3650 if kind=='panel-batch' else 30
+                    try:days=max(1,int(data.get('dur_days') or days))
+                    except (ValueError,TypeError):pass
+                    try:value=float(str(data.get('valor') or 0).replace(',','.'))
+                    except (ValueError,TypeError):value=0
+                    sub=dict(email=email,assigned_user=target,assigned_user_name=users[target].get('name') or target,
+                        created_at=now,start_at=now,expires_at=now+days*86400,dur_days=days,show_in_panel=False,
+                        plataforma=str(data.get('plataforma') or 'Conta vinculada')[:40],cliente=str(data.get('cliente') or '')[:80],
+                        telefone=str(data.get('telefone') or '')[:30],senha=str(data.get('senha') or '')[:80],
+                        valor=value,renew_pix_txid=None,renew_count=0)
+                    if kind=='panel-create' and data.get('expires_date'):
+                        try:
+                            from datetime import datetime
+                            sub['expires_at']=int(datetime.strptime(str(data['expires_date']),'%Y-%m-%d').replace(hour=23,minute=59,second=59).timestamp())
+                        except (ValueError,TypeError):
+                            return jsonify(success=False,message='Data de vencimento inválida. Nenhum vínculo foi alterado.'),400
+                    subs.append(sub);created+=1;previous[email]=''
+            if (created or updated) and save_subscriptions(subs) is False:
+                return jsonify(success=False,message='Não foi possível salvar o vínculo. Tente novamente.'),503
+            g.email_pool_claims={'actor':username,'emails':emails,'target':target,'previous_users':previous}
+            invalidate=app.config.get('EMAIL_POOL_BINDINGS_CHANGED')
+            if invalidate:invalidate(set(previous.values())|{username,target})
+            message=f'Emails vinculados com sucesso ao cliente {users[target].get("name") or target}.'
+            payload=dict(success=True,message=message,assigned_user=target,assigned_user_name=users[target].get('name') or target,
+                created=created,updated=updated,unchanged=unchanged,skipped=0,invalid=0,duplicates=0,conflict_emails=[],total=len(emails))
+            if kind=='panel-create':payload['subscription']=next(sub for sub in subs if isinstance(sub,dict) and norm(sub.get('email'))==emails[0])
+            return jsonify(payload)
         if kind=='remove':
             email = emails[0];subs = load_subscriptions();matched = [s for s in subs if isinstance(s,dict) and norm(s.get('email'))==email]
             if not matched:
