@@ -1382,7 +1382,16 @@ def load_orders():
 def save_orders(orders):
     if not isinstance(orders, list):
         orders = []
-    return _write_json_file(ORDERS_FILE, orders)
+    saved = _write_json_file(ORDERS_FILE, orders)
+    if saved:
+        notifier = globals().get('telegram_sales')
+        if notifier:
+            try:
+                notifier.capture(orders)
+            except Exception:
+                # A Telegram/outbox failure must never block a paid delivery.
+                print('[telegram-sales] reconciliação do histórico pendente')
+    return saved
 
 def get_next_stock_item(product_id):
     """Retorna o primeiro acesso não usado do produto e marca como usado."""
@@ -9126,6 +9135,8 @@ def api_keepalive():
     return jsonify({"success": True, "imap_ready": False})
 
 register_store_guest(app, load_orders)
+from telegram_sales import register_telegram_sales
+telegram_sales = register_telegram_sales(app, _data_dir, load_orders)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))

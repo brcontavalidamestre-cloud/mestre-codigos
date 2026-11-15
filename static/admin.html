@@ -1346,7 +1346,8 @@
           return;
         }
         tb.innerHTML = j.orders.map(o => {
-          const dt = o.created_at ? new Date(o.created_at*1000).toLocaleString('pt-BR') : '—';
+          const saleTime = o.status==='paid' ? o.paid_at : o.created_at;
+          const dt = saleTime ? new Date(saleTime*1000).toLocaleString('pt-BR',{timeZone:'America/Sao_Paulo'}) : 'Data não informada';
           const stColor = o.status==='paid'?'#4ade80':(o.status==='pending'?'#fbbf24':'#f87171');
           const stLabel = o.status==='paid'?'✓ Pago':(o.status==='pending'?'⏳ Pendente':o.status);
           const vinc = o.assigned_user
@@ -3275,5 +3276,6 @@
     }
 
   </script>
+<script src="/static/telegram-sales-launcher.js?v=1" defer></script>
 </body>
 </html>
