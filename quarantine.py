@@ -116,7 +116,8 @@ def register_quarantine(app, store, data_dir, pending_resets, load_subscriptions
         received = request.headers.get('X-Quarantine-Token', '')
         if not expected or not hmac.compare_digest(expected, received):
             return jsonify(success=False, message='Acesso não autorizado.'), 403
-        return jsonify(success=True, emails=sorted(store.emails()))
+        reserved = app.config.get('EMAIL_POOL_RESERVED_LIST')
+        return jsonify(success=True, emails=sorted(store.emails()), restricted_emails=reserved() if reserved else [])
 
     @bp.get('/admin/quarentena')
     @admin_only

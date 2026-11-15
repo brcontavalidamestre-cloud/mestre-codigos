@@ -73,6 +73,9 @@ def register_purchase_code_links(app, data_dir, quarantine, search_all, verify=v
         for override in (supplied.get('email'), request.args.get('email')):
             if override is not None and str(override).strip().lower() != email:
                 return None, (jsonify(success=False, message='Este link permite consultar somente o email da conta comprada.'), 403)
+        reserved = app.config.get('EMAIL_POOL_RESERVED_EMAIL')
+        if reserved and reserved(email):
+            return None, (jsonify(success=False, message='Este email é exclusivo do admin responsável. Use o acesso autorizado por ele.'), 403)
         if quarantine.is_blocked(email):
             return None, (jsonify(success=False, quarantined=True, message='Esse email está na lista que não pode receber códigos.'), 403)
         product = (str(row.get('product_id') or '') + ' ' + str(row.get('product_name') or '')).lower()

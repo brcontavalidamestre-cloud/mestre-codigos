@@ -114,6 +114,44 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         row = store.permissions().get(email)
         return bool(row and row['admin_user'] == username and source_allowed(email,username,load_users(),load_subscriptions()))
 
+    def panel_link_actor():
+        username=actor()
+        if username and username!='admin':
+            return dict(principal=False,id='panel:'+username,username=username,
+                        name=(load_users().get(username) or {}).get('name') or username,kind='panel')
+        return None
+
+    def shared_link_allowed(email):
+        permission=store.permissions().get(norm(email));username=actor()
+        if not permission or not username:return False
+        return bool((username=='admin' or permission['admin_user']==username) and
+                    source_allowed(norm(email),permission['admin_user'],load_users(),load_subscriptions()))
+
+    def link_owner(email,current):
+        permission=store.permissions().get(norm(email))
+        return 'panel:'+permission['admin_user'] if permission else current['id']
+
+    def visible_link(email,current):
+        if current['principal']:return True
+        permission=store.permissions().get(norm(email))
+        if current.get('kind')=='panel':
+            return bool(permission and permission['admin_user']==current['username'] and source_allowed(norm(email),current['username'],load_users(),load_subscriptions()))
+        return not permission
+
+    def revoke_link(email):
+        path=os.path.join(data_dir,'netflix_links.sqlite3')
+        if os.path.isfile(path):
+            with sqlite3.connect(path,timeout=15) as conn:
+                exists=conn.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='links'").fetchone()
+                if exists:conn.execute('DELETE FROM links WHERE email=?',(norm(email),));conn.commit()
+
+    app.config['EMAIL_POOL_RESERVED_LIST']=lambda:sorted(store.permissions())
+    app.config['EMAIL_POOL_OWNER_ASSIGNMENT_OK']=lambda email,owner:source_allowed(norm(email),owner,load_users(),load_subscriptions())
+    app.config['EMAIL_POOL_PANEL_LINK_ACTOR']=panel_link_actor
+    app.config['EMAIL_POOL_LINK_CAN_SHARE']=shared_link_allowed
+    app.config['EMAIL_POOL_LINK_OWNER']=link_owner
+    app.config['EMAIL_POOL_VISIBLE_LINK']=visible_link
+
     def parse(raw):
         if isinstance(raw,list):
             raw = '\n'.join(str(v) for v in raw)
@@ -189,13 +227,25 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             deleted = conn.execute('DELETE FROM permissions WHERE email=?',(email,)).rowcount
             conn.commit()
             if deleted:
+                revoke_link(email)
                 store.audit('admin','revoke',{'email':email})
         return jsonify(success=True,message='Permissão removida. O vínculo atual e o cliente foram preservados.')
 
     def mutation_guard(kind, kwargs, data):
-        if kind not in ('panel-batch','panel-create','panel-renew','remove','delete-user'):
+        if kind not in ('panel-batch','panel-create','panel-renew','remove','delete-user','link-create','link-reset'):
             return None
         username = actor()
+        if kind in ('link-create','link-reset'):
+            # Dedicated legacy link sessions never inherit a panel user's identity.
+            if username=='admin':return None
+            if not username:
+                if kind=='link-reset' and not store.permissions().get(norm(data.get('email'))):return None
+                return jsonify(success=False,message='Para gerar links, entre com o subadmin do painel e use somente os emails liberados pelo admin principal.'),403
+            try:emails=parse(data.get('emails',data.get('email')) if kind=='link-create' else data.get('email'))
+            except ValueError as error:return jsonify(success=False,message=str(error)),400
+            if any(not can_manage(email,username) or quarantine.is_blocked(email) for email in emails):
+                return jsonify(success=False,message='Você só pode gerar ou redefinir links dos emails que o admin principal liberou na sua lista.'),403
+            return None
         if not central() or username=='admin':
             return None
         if not username:
@@ -222,6 +272,7 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             if not matched:
                 return jsonify(success=False,message='Email não encontrado.'),404
             previous = [norm(s.get('assigned_user')) for s in matched]
+            revoke_link(email)
             for sub in matched:
                 sub['assigned_user']='';sub['assigned_user_name']=''
             if save_subscriptions(subs) is False:

@@ -991,6 +991,10 @@ def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=N
                         msg = email.message_from_bytes(raw_msg)
                         body = get_html_body(msg) or ""
                         snippet = _admin_inbox_strip_html(body)[:280]
+                        guard = app.config.get("EMAIL_POOL_MESSAGE_ALLOWED")
+                        if guard and not guard(msg, body):
+                            continue
+                        recipients = sorted(delegated_recipients(msg, body))
                         matched_platform = _admin_live_inbox_match_platform(from_value, subject, body, expanded_filters)
                         if not matched_platform:
                             continue
@@ -2428,6 +2432,9 @@ def extract_link(html_body, platform):
         return domain_links[0]
     return None
 def email_matches_user(msg, html_body, user_email):
+    guard = app.config.get("EMAIL_POOL_MESSAGE_ALLOWED")
+    if guard and not guard(msg, html_body):
+        return False
     if email_quarantine.is_blocked(user_email):
         return False
     # If a base email allows aliases, still suppress a quarantined specific alias.
@@ -5178,6 +5185,10 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         msg = email.message_from_bytes(bytes(raw_full))
                         subject = _decode_mime_value(msg.get("Subject", ""))
                         from_v = _decode_mime_value(msg.get("From", ""))
+                        guard = app.config.get("EMAIL_POOL_MESSAGE_ALLOWED")
+                        if guard and not guard(msg, _extract_msg_text(msg)):
+                            continue
+                        actual_recipients = sorted(delegated_recipients(msg, _extract_msg_text(msg)))
                         body_text = _admin_inbox_strip_html(_extract_msg_text(msg))
                         if email_quarantine.is_blocked(matched_email):
                             continue
@@ -5218,6 +5229,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
 
                         items.append({
                             "email": matched_email,
+                            "recipients": actual_recipients,
                             "from": from_v,
                             "subject": subject or "(sem assunto)",
                             "code": code,
@@ -9147,6 +9159,10 @@ register_quarantine(app, email_quarantine, _data_dir, _pending_reset_links,
 from email_delegation import register_email_delegation
 email_permission_store = register_email_delegation(app, _data_dir, load_subscriptions,
     save_subscriptions, load_users, email_quarantine)
+
+from delegated_access import register_delegated_access
+from delegated_recipients import recipients as delegated_recipients
+register_delegated_access(app, email_permission_store, load_users, load_subscriptions, _pending_reset_links)
 
 from email_uniqueness import register_email_uniqueness
 app.config['EMAIL_UNIQUENESS_INTERNAL_TOKEN'] = MASTER_API_TOKEN

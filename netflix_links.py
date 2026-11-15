@@ -130,6 +130,11 @@ def register_netflix_links(app, data_dir, search, search_all=None):
     def actor():
         if principal():
             return {'principal': True, 'id': '', 'username': 'admin', 'name': 'Administrador principal'}
+        panel_actor = app.config.get('EMAIL_POOL_PANEL_LINK_ACTOR')
+        if panel_actor:
+            current = panel_actor()
+            if current:
+                return current
         account_id = session.get('netflix_admin_id')
         if not account_id or int(session.get('netflix_admin_expires') or 0) <= int(time.time()):
             return None
@@ -173,7 +178,9 @@ def register_netflix_links(app, data_dir, search, search_all=None):
         token = auth[7:] if auth.startswith('Bearer ') else ''
         if not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
             return None
-        return conn.execute('SELECT * FROM links WHERE digest=?', (digest(token),)).fetchone()
+        row = conn.execute('SELECT * FROM links WHERE digest=?', (digest(token),)).fetchone()
+        access_guard = app.config.get('EMAIL_POOL_LINK_ACCESS')
+        return row if row and (not access_guard or access_guard(row)) else None
 
     @bp.after_request
     def private_response(response):
@@ -190,7 +197,7 @@ def register_netflix_links(app, data_dir, search, search_all=None):
             response.headers['Cache-Control'] = 'no-store, max-age=0'
             response.headers.pop('ETag', None)
             response.headers.pop('Last-Modified', None)
-            if response.status_code == 200 and session.get('logged_in') and session.get('role') == 'admin' and session.get('username') == 'admin':
+            if response.status_code == 200 and session.get('logged_in') and session.get('role') == 'admin' and actor():
                 response.direct_passthrough = False
                 page = response.get_data(as_text=True)
                 entry = '<a id="nfl-nav-link" href="/admin/netflix-links" style="display:block;margin:16px 0;padding:22px;border:2px solid #ed4168;border-radius:16px;color:#ffd3de;background:#291327;text-decoration:none;font-size:1.15rem;font-weight:800;">🔗 Links Netflix — criar e gerenciar</a>'
@@ -314,9 +321,12 @@ def register_netflix_links(app, data_dir, search, search_all=None):
         if request.method == 'GET':
             with db() as conn:
                 if g.netflix_manager['principal']:
-                    rows = conn.execute("SELECT l.*,coalesce(a.username,'admin') AS manager FROM links l LEFT JOIN netflix_admins a ON a.id=l.owner ORDER BY l.updated_at DESC,l.email").fetchall()
+                    rows = conn.execute("SELECT l.*,CASE WHEN l.owner LIKE 'panel:%' THEN substr(l.owner,7) ELSE coalesce(a.username,'admin') END AS manager FROM links l LEFT JOIN netflix_admins a ON a.id=l.owner ORDER BY l.updated_at DESC,l.email").fetchall()
                 else:
                     rows = conn.execute('SELECT l.*,? AS manager FROM links l WHERE owner=? ORDER BY updated_at DESC,email', (g.netflix_manager['username'], g.netflix_manager['id'])).fetchall()
+            visible = app.config.get('EMAIL_POOL_VISIBLE_LINK')
+            if visible:
+                rows = [row for row in rows if visible(row['email'], g.netflix_manager)]
             return jsonify(success=True, items=[row_payload(r) for r in rows])
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
@@ -356,8 +366,10 @@ def register_netflix_links(app, data_dir, search, search_all=None):
                     result['created'] = False
                 else:
                     token = secrets.token_urlsafe(32)
+                    owner_picker = app.config.get('EMAIL_POOL_LINK_OWNER')
+                    owner = owner_picker(email, g.netflix_manager) if owner_picker else g.netflix_manager['id']
                     conn.execute('INSERT INTO links(email,token,digest,created_at,updated_at,owner) VALUES(?,?,?,?,?,?)',
-                                 (email, token, digest(token), now, now, g.netflix_manager['id']))
+                                 (email, token, digest(token), now, now, owner))
                     row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
                     result = row_payload(row)
                     result['created'] = True
@@ -377,8 +389,11 @@ def register_netflix_links(app, data_dir, search, search_all=None):
             if not owns(current):
                 return jsonify(success=False, message='Email não cadastrado neste acesso.'), 404
             token = secrets.token_urlsafe(32)
-            result = conn.execute('UPDATE links SET token=?,digest=?,updated_at=?,last_query=0 WHERE email=?',
-                                  (token, digest(token), int(time.time()), email))
+            owner_picker = app.config.get('EMAIL_POOL_LINK_OWNER')
+            reserved = app.config.get('EMAIL_POOL_RESERVED_EMAIL')
+            owner = owner_picker(email, g.netflix_manager) if owner_picker and reserved and reserved(email) else current['owner']
+            result = conn.execute('UPDATE links SET token=?,digest=?,updated_at=?,last_query=0,owner=? WHERE email=?',
+                                  (token, digest(token), int(time.time()), owner, email))
             if not result.rowcount:
                 return jsonify(success=False, message='Email não cadastrado.'), 404
             row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()

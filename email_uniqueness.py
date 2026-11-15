@@ -30,6 +30,9 @@ def register_email_uniqueness(app, data_dir, load_subscriptions):
     def link_manager():
         if principal():
             return True
+        panel_actor = app.config.get('EMAIL_POOL_PANEL_LINK_ACTOR')
+        if panel_actor and panel_actor():
+            return True
         if not session.get('netflix_admin_id') or int(session.get('netflix_admin_expires') or 0) <= int(time.time()):
             return False
         if not os.path.isfile(links_path):
@@ -106,7 +109,8 @@ def register_email_uniqueness(app, data_dir, load_subscriptions):
                             return jsonify(success=False, message='Informe uma lista válida de emails.'), 400
                         candidates = [s.lower().strip() for s in re.split(r'[\s,;]+', raw) if s.strip()]
                         if kind == 'link-create':
-                            repeated = [email for email in candidates if email in panel_emails or email in all_links]
+                            share = app.config.get('EMAIL_POOL_LINK_CAN_SHARE')
+                            repeated = [email for email in candidates if email in all_links or (email in panel_emails and not (share and share(email)))]
                         elif kind == 'internal':
                             # Paid-delivery retries are idempotent for the same
                             # already-bound customer, but can never steal a link.
