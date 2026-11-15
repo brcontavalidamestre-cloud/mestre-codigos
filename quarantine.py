@@ -1,5 +1,6 @@
 """Central-only email quarantine. Persistent, shared by all worker processes."""
 import hashlib
+import hmac
 import os
 import re
 import sqlite3
@@ -106,6 +107,14 @@ def register_quarantine(app, store, data_dir, pending_resets):
         response.headers['Referrer-Policy'] = 'no-referrer'
         response.headers['Content-Security-Policy'] = "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; base-uri 'none'"
         return response
+
+    @bp.get('/api/internal/quarantine')
+    def shared_quarantine():
+        expected = os.environ.get('QUARANTINE_SYNC_TOKEN', '')
+        received = request.headers.get('X-Quarantine-Token', '')
+        if not expected or not hmac.compare_digest(expected, received):
+            return jsonify(success=False, message='Acesso não autorizado.'), 403
+        return jsonify(success=True, emails=sorted(store.emails()))
 
     @bp.get('/admin/quarentena')
     @admin_only
