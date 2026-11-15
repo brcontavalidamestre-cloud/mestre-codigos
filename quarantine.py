@@ -73,7 +73,9 @@ class QuarantineStore:
             conn.close()
 
 
-def register_quarantine(app, store, data_dir, pending_resets):
+def register_quarantine(app, store, data_dir, pending_resets, load_subscriptions=None, save_subscriptions=None, load_users=None):
+    from quarantine_registry import QuarantineRegistry
+    registry = QuarantineRegistry(store, data_dir, load_subscriptions, save_subscriptions, load_users)
     bp = Blueprint('quarantine', __name__)
 
     def host_allowed():
@@ -121,6 +123,13 @@ def register_quarantine(app, store, data_dir, pending_resets):
     def page():
         return send_from_directory(app.static_folder, 'quarantine.html')
 
+    @bp.get('/api/admin/quarantine/search')
+    @admin_only
+    def search_registrations():
+        query = str(request.args.get('q') or '').strip()[:254]
+        items, total = registry.search(query)
+        return jsonify(success=True, items=items, total=total, limited=total > len(items))
+
     @bp.route('/api/admin/quarantine', methods=['GET', 'POST'])
     @admin_only
     def entries():
@@ -139,9 +148,18 @@ def register_quarantine(app, store, data_dir, pending_resets):
         invalid = [em for em in emails if len(em) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', em)]
         if invalid:
             return jsonify(success=False, message='Corrija os emails inválidos antes de adicionar: ' + ', '.join(invalid[:10])), 400
-        count = store.add(emails, 'admin')
-        return jsonify(success=True, added=count, existing=len(emails)-count,
-                       message=f'{count} email(s) adicionado(s) à quarentena. {len(emails)-count} já estava(m) na lista.')
+        try:
+            result = registry.quarantine(emails)
+        except Exception:
+            app.logger.exception('Quarantine registration cleanup failed')
+            return jsonify(success=False, quarantined=True,
+                           message='O bloqueio foi solicitado, mas não foi possível concluir a remoção dos vínculos e links. Atualize a lista e tente adicionar novamente para concluir.'), 503
+        for key, value in list(pending_resets.items()):
+            if isinstance(value, dict) and store.matches(value.get('email'), set(emails)):
+                pending_resets.pop(key, None)
+        return jsonify(success=True, **result,
+                       message=f"{result['added']} email(s) adicionado(s) à quarentena. {result['existing']} já estava(m) na lista. "
+                               f"{result['removed_bindings']} vínculo(s) removido(s) e {result['removed_links']} link(s) excluído(s).")
 
     @bp.post('/api/admin/quarantine/remove')
     @admin_only
@@ -150,7 +168,7 @@ def register_quarantine(app, store, data_dir, pending_resets):
         email = str(data.get('email', '')).strip().lower() if isinstance(data, dict) else ''
         if not store.remove(email):
             return jsonify(success=False, message='Email não encontrado na quarentena.'), 404
-        return jsonify(success=True, message='Email retirado da quarentena. As demais regras de vínculo e acesso continuam valendo.')
+        return jsonify(success=True, message='Email retirado da quarentena. Vínculos e links excluídos não são restaurados automaticamente.')
 
     def request_email():
         path = request.path
