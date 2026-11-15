@@ -73,9 +73,9 @@ class QuarantineStore:
             conn.close()
 
 
-def register_quarantine(app, store, data_dir, pending_resets, load_subscriptions=None, save_subscriptions=None, load_users=None):
+def register_quarantine(app, store, data_dir, pending_resets, load_subscriptions=None, save_subscriptions=None, load_users=None, remote_search=None):
     from quarantine_registry import QuarantineRegistry
-    registry = QuarantineRegistry(store, data_dir, load_subscriptions, save_subscriptions, load_users)
+    registry = QuarantineRegistry(store, data_dir, load_subscriptions, save_subscriptions, load_users, remote_search)
     bp = Blueprint('quarantine', __name__)
 
     def host_allowed():
@@ -127,8 +127,7 @@ def register_quarantine(app, store, data_dir, pending_resets, load_subscriptions
     @admin_only
     def search_registrations():
         query = str(request.args.get('q') or '').strip()[:254]
-        items, total = registry.search(query)
-        return jsonify(success=True, items=items, total=total, limited=total > len(items))
+        return jsonify(success=True, **registry.search_all(query))
 
     @bp.route('/api/admin/quarantine', methods=['GET', 'POST'])
     @admin_only

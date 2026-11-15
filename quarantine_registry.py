@@ -7,12 +7,28 @@ import os
 import sqlite3
 import threading
 import time
+import urllib.parse
+import urllib.request
 from contextlib import contextmanager
 
 
+def search_jmp_registrations(query):
+    token = os.environ.get('QUARANTINE_SYNC_TOKEN', '')
+    if not token:
+        raise RuntimeError('JMP registry authentication unavailable')
+    url = 'https://jmp-codigos.onrender.com/api/internal/quarantine/registrations?' + urllib.parse.urlencode({'q': query})
+    req = urllib.request.Request(url, headers={'X-Quarantine-Token': token, 'Accept': 'application/json'})
+    with urllib.request.urlopen(req, timeout=8) as response:
+        data = json.loads(response.read(1048577))
+    if not isinstance(data, dict) or not data.get('success') or not isinstance(data.get('items'), list):
+        raise RuntimeError('Invalid JMP registry response')
+    return data
+
+
 class QuarantineRegistry:
-    def __init__(self, store, data_dir, load_subscriptions, save_subscriptions, load_users):
+    def __init__(self, store, data_dir, load_subscriptions, save_subscriptions, load_users, remote_search=None):
         self.store = store
+        self.remote_search = remote_search
         self.data_dir = data_dir
         self.load_subscriptions = load_subscriptions or (lambda: [])
         self.save_subscriptions = save_subscriptions
@@ -86,6 +102,32 @@ class QuarantineRegistry:
                                    manager=link['manager'], quarantined=self.store.matches(email, blocked)))
         result.sort(key=lambda item: (item['email'] != query, item['email'], item['source'], item['client']))
         return result[:200], len(result)
+
+    def search_all(self, query):
+        query = str(query or '').strip().lower()[:254]
+        local, total = self.search(query)
+        warnings = []
+        if self.remote_search and len(query) >= 2:
+            try:
+                remote = self.remote_search(query)
+                blocked = self.store.emails()
+                remote_items = []
+                for row in remote['items'][:200]:
+                    email = str(row.get('email') or '').strip().lower()
+                    if query not in email or '@' not in email:
+                        continue
+                    remote_items.append(dict(email=email, source='jmp', source_label='JMP — Painel de consulta',
+                                             client=str(row.get('client') or 'Sem cliente vinculado'),
+                                             client_name=str(row.get('client_name') or row.get('client') or ''),
+                                             manager=str(row.get('manager') or ''),
+                                             quarantined=self.store.matches(email, blocked)))
+                remote_total = max(len(remote_items), int(remote.get('total') or 0))
+                local.extend(remote_items)
+                total += remote_total
+            except Exception:
+                warnings.append('Não foi possível pesquisar os emails do JMP agora. Os resultados abaixo podem estar incompletos. Tente pesquisar novamente.')
+        local.sort(key=lambda item: (item['email'] != query, item['email'], item['source'], item['client']))
+        return dict(items=local[:200], total=total, limited=total > len(local[:200]), partial=bool(warnings), warnings=warnings)
 
     def quarantine(self, emails):
         with self.serialized():

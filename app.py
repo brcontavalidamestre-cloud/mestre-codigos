@@ -9135,8 +9135,10 @@ register_netflix_links(app, _data_dir, search_code_unified,
 # Central stock report reads the store's authoritative sales without altering delivery.
 from stock_ledger import register_stock_ledger
 register_stock_ledger(app, _data_dir, load_stock, load_products, _LOJAMESTRE_ADMIN_URL)
+from quarantine_registry import search_jmp_registrations
 register_quarantine(app, email_quarantine, _data_dir, _pending_reset_links,
-    load_subscriptions=load_subscriptions, save_subscriptions=save_subscriptions, load_users=load_users)
+    load_subscriptions=load_subscriptions, save_subscriptions=save_subscriptions, load_users=load_users,
+    remote_search=search_jmp_registrations)
 
 from email_uniqueness import register_email_uniqueness
 app.config['EMAIL_UNIQUENESS_INTERNAL_TOKEN'] = MASTER_API_TOKEN
