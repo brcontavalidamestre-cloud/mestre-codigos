@@ -3116,7 +3116,7 @@
       const list = document.getElementById('bd-list');
       const items = j.items || [];
       if (!items.length) {
-        list.innerHTML = '<div style="padding:22px;text-align:center;color:var(--text-muted,#9ca3af);border:1px dashed #4c1d95;border-radius:12px">Nenhum código recebido nos últimos 2 dias nos seus emails vinculados.</div>';
+        list.innerHTML = '<div style="padding:22px;text-align:center;color:var(--text-muted,#9ca3af);border:1px dashed #4c1d95;border-radius:12px">' + _esc(j.quarantine_message || 'Nenhum código recebido nos últimos 2 dias nos seus emails vinculados.') + '</div>';
         return;
       }
       list.innerHTML = items.map(it => {
@@ -3148,6 +3148,7 @@
         const r = await fetch('/api/live-inbox/messages' + (manual ? '?fresh=1' : ''));
         const j = await r.json();
         if (!j.success) {
+          if (j.quarantined && list) list.textContent = j.message || 'Esse email está na lista que não pode receber códigos.';
           if (status) status.textContent = j.message || 'Erro ao carregar.';
           return;
         }
@@ -3163,7 +3164,7 @@
         }
         _bdLast = j;
         renderBandeja(j);
-        if (status) status.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR') + ' · automático a cada 12s';
+        if (status) status.textContent = (j.quarantine_message ? j.quarantine_message + ' · ' : '') + 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR') + ' · automático a cada 12s';
       } catch (e) {
         if (status) status.textContent = 'Erro de conexão. Tentando novamente...';
       } finally {

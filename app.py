@@ -40,6 +40,7 @@ AUTO_LOGIN_TTL = int(os.environ.get("AUTO_LOGIN_TTL", "600"))  # segundos
 def _set_pending_reset_link(username, link):
     _pending_reset_links[username] = {
         "link": link,
+        "email": str((request.get_json(silent=True) or {}).get("email") or "").strip().lower() if has_request_context() else "",
         "expires_at": time.time() + _PENDING_RESET_TTL
     }
 
@@ -893,7 +894,8 @@ def _admin_live_inbox_match_platform(from_value, subject, body, selected_platfor
 
 
 def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=None):
-    visible_entries = _admin_live_inbox_visible_user_entries(selected_user=selected_user)
+    visible_entries = [entry for entry in _admin_live_inbox_visible_user_entries(selected_user=selected_user)
+                       if not email_quarantine.is_blocked(entry.get('email'))]
     allowed = sorted({str(item.get('email') or '').strip().lower() for item in visible_entries if str(item.get('email') or '').strip()})
     if not allowed:
         return [], []
@@ -2426,6 +2428,13 @@ def extract_link(html_body, platform):
         return domain_links[0]
     return None
 def email_matches_user(msg, html_body, user_email):
+    if email_quarantine.is_blocked(user_email):
+        return False
+    # If a base email allows aliases, still suppress a quarantined specific alias.
+    if has_request_context() and request.host.lower().split(':', 1)[0] == QUARANTINE_HOST:
+        for blocked in email_quarantine.emails():
+            if exact_email_match(msg, html_body, blocked):
+                return False
     # Exact recipient matching only for the new isolated bearer-link flow.
     if strict_email_context.get() is not None:
         return exact_email_match(msg, html_body, strict_email_context.get())
@@ -3684,6 +3693,8 @@ def _search_kuku_webhook(user_email, platform):
 
 
 def search_code_unified(user_email, platform_list):
+    if email_quarantine.is_blocked(user_email):
+        return None, None, None, QUARANTINE_MESSAGE
     """
     Busca múltiplas plataformas do mesmo remetente em UMA ÚNICA passagem IMAP.
     Agora consulta também uma segunda caixa IMAP, se configurada.
@@ -5082,7 +5093,7 @@ def _extract_msg_text(msg):
 def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48):
     """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
     vinculados do usuário (INBOX + Spam), extraindo código/link."""
-    emails = _user_live_inbox_emails(username)
+    emails = [email for email in _user_live_inbox_emails(username) if not email_quarantine.is_blocked(email)]
     if not emails:
         return [], []
     # REGRA: bandeja so mostra emails que batem com os FILTROS cadastrados
@@ -5164,6 +5175,11 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         subject = _decode_mime_value(msg.get("Subject", ""))
                         from_v = _decode_mime_value(msg.get("From", ""))
                         body_text = _admin_inbox_strip_html(_extract_msg_text(msg))
+                        if email_quarantine.is_blocked(matched_email):
+                            continue
+                        if has_request_context() and request.host.lower().split(':', 1)[0] == QUARANTINE_HOST:
+                            if any(exact_email_match(msg, _extract_msg_text(msg), blocked) for blocked in email_quarantine.emails()):
+                                continue
 
                         plat = None
                         try:
@@ -9107,6 +9123,9 @@ def api_keepalive():
     return jsonify({"success": True, "imap_ready": False})
 
 # Isolated Netflix access links: central host only; no changes to existing flows.
+from flask import has_request_context
+from quarantine import QuarantineStore, register_quarantine, HOST as QUARANTINE_HOST, MESSAGE as QUARANTINE_MESSAGE
+email_quarantine = QuarantineStore(_data_dir)
 from netflix_links import register_netflix_links, strict_email_context, exact_email_match
 from netflix_search import make_netflix_batch_search
 register_netflix_links(app, _data_dir, search_code_unified,
@@ -9116,6 +9135,7 @@ register_netflix_links(app, _data_dir, search_code_unified,
 # Central stock report reads the store's authoritative sales without altering delivery.
 from stock_ledger import register_stock_ledger
 register_stock_ledger(app, _data_dir, load_stock, load_products, _LOJAMESTRE_ADMIN_URL)
+register_quarantine(app, email_quarantine, _data_dir, _pending_reset_links)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
