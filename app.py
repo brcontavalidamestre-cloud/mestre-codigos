@@ -40,6 +40,7 @@ AUTO_LOGIN_TTL = int(os.environ.get("AUTO_LOGIN_TTL", "600"))  # segundos
 def _set_pending_reset_link(username, link):
     _pending_reset_links[username] = {
         "link": link,
+        "email": str((request.get_json(silent=True) or {}).get("email") or "").strip().lower(),
         "expires_at": time.time() + _PENDING_RESET_TTL
     }
 
@@ -9119,6 +9120,9 @@ def api_keepalive():
     except Exception as e:
         return jsonify({"success": False, "error": str(e)[:200]})
     return jsonify({"success": True, "imap_ready": False})
+
+from jmp_quarantine import register_jmp_quarantine
+register_jmp_quarantine(app, _pending_reset_links)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
