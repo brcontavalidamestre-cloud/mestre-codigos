@@ -9123,6 +9123,8 @@ def api_keepalive():
 
 from jmp_quarantine import register_jmp_quarantine
 register_jmp_quarantine(app, _pending_reset_links)
+from jmp_registry import register_jmp_registry
+register_jmp_registry(app, load_subscriptions, load_users)
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
