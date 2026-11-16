@@ -568,7 +568,7 @@
       <div style="font-size:2.4rem;">🛡️</div>
       <div style="flex:1;">
         <div style="font-weight:800;font-size:1.15rem;color:#f9a8d4;">Consulta Livre de Códigos</div>
-        <div style="font-size:.9rem;color:#fbcfe8;opacity:.9;">Somente admin: consultar código de qualquer email sem depender de vínculo — clique para abrir</div>
+        <div style="font-size:.9rem;color:#fbcfe8;opacity:.9;">Admin principal: qualquer email permitido. Subadmin: somente emails liberados pelo principal — clique para abrir</div>
       </div>
       <div style="font-size:1.6rem;color:#f9a8d4;">→</div>
     </div>
@@ -592,9 +592,9 @@
 
         <div class="panel" style="margin-bottom:24px;border:2px solid #f472b6;">
           <div class="phdr">
-            <div class="ptit">📬 Consultar qualquer email</div>
+            <div class="ptit">📬 Consultar códigos de email</div>
           </div>
-          <div class="sinfo" style="margin-bottom:10px;">Esta área existe somente no painel admin. Aqui o administrador pode consultar códigos de qualquer email. A consulta normal dos clientes continua exigindo vínculo.</div>
+          <div class="sinfo" style="margin-bottom:10px;">O admin principal pode consultar qualquer email fora da quarentena. Subadmins consultam somente os emails exatos liberados pelo principal na sua lista, mesmo quando atribuídos aos seus clientes. A consulta normal dos clientes continua exigindo vínculo.</div>
           <form id="admin-code-form" onsubmit="buscarCodigoAdminLivre(event)" style="margin-bottom:16px;background:rgba(244,114,182,0.08);padding:14px;border-radius:10px;">
             <div class="fgrid">
               <div class="fgrp">
@@ -1617,10 +1617,10 @@
       }
       html += `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">`;
       if (data.code) {
-        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.code || '').replace(/'/g, "\'")}').then(()=>showToast('📋 Código copiado')).catch(()=>showToast('✗ Falha ao copiar'))">📋 Copiar código</button>`;
+        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.code || '').replace(/'/g, "\'")}').then(()=>toast('📋 Código copiado')).catch(()=>toast('✗ Falha ao copiar'))">📋 Copiar código</button>`;
       }
       if (data.link) {
-        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.link || '').replace(/'/g, "\'")}').then(()=>showToast('📋 Link copiado')).catch(()=>showToast('✗ Falha ao copiar'))">📋 Copiar link</button>`;
+        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.link || '').replace(/'/g, "\'")}').then(()=>toast('📋 Link copiado')).catch(()=>toast('✗ Falha ao copiar'))">📋 Copiar link</button>`;
       }
       html += `</div>`;
       box.innerHTML = html;
@@ -1634,7 +1634,7 @@
       const st = document.getElementById('admin-code-status');
       const box = document.getElementById('admin-code-result');
       if (!email) {
-        showToast('✗ Informe o email');
+        toast('✗ Informe o email');
         return;
       }
       if (st) st.textContent = 'Consultando...';
@@ -1652,10 +1652,10 @@
           return;
         }
         if (st) st.textContent = j.message || 'Nada encontrado.';
-        showToast('✗ ' + (j.message || 'Nada encontrado'));
+        toast('✗ ' + (j.message || 'Nada encontrado'));
       } catch(e) {
         if (st) st.textContent = 'Erro de conexão.';
-        showToast('Erro de conexão');
+        toast('Erro de conexão');
       }
     }
 

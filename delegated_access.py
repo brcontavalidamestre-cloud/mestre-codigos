@@ -22,9 +22,14 @@ def register_delegated_access(app,pool_store,load_users,load_subscriptions,pendi
         return g.delegated_users
     def consult_allowed(email,username=None):
         email=str(email or '').strip().lower();permission=permissions().get(email)
-        if not permission:return True
         username=str(username or session.get('username') or '').strip().lower()
-        account=users().get(username) or {};owner=permission['admin_user']
+        account=users().get(username) or {}
+        # Free admin consultation is unrestricted only for the principal.
+        # Other admins require an exact, principal-defined pool permission.
+        if central() and request.path=='/api/admin/get-code' and account.get('role')=='admin' and username!='admin':
+            return bool(permission and permission['admin_user']==username)
+        if not permission:return True
+        owner=permission['admin_user']
         if username=='admin' and account.get('role')=='admin':return True
         if username==owner and account.get('role')=='admin':return True
         if account.get('role')!='client' or account.get('created_by')!=owner:return False
@@ -72,6 +77,17 @@ def register_delegated_access(app,pool_store,load_users,load_subscriptions,pendi
         if not central() or request.path not in QUERY_PATHS:return None
         g.delegated_query_email=query_email()
         if not consult_allowed(g.delegated_query_email):return denied()
+        if request.path=='/api/admin/get-code' and session.get('role')=='admin' and session.get('username')!='admin':
+            from netflix_links import strict_email_context
+            g.delegated_admin_exact_token=strict_email_context.set(g.delegated_query_email)
+
+    @app.teardown_request
+    def clear_admin_exact_context(error=None):
+        token=getattr(g,'delegated_admin_exact_token',None)
+        if token is not None:
+            from netflix_links import strict_email_context
+            strict_email_context.reset(token)
+            del g.delegated_admin_exact_token
 
     @app.after_request
     def exclusive_responses(response):
