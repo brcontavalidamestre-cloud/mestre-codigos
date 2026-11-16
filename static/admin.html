@@ -448,10 +448,6 @@
                 <label class="flbl">🔑 Senha</label>
                 <input class="fi" id="stk-pass" placeholder="senha de acesso" required/>
               </div>
-              <div class="fgrp">
-                <label class="flbl">🧑 Usuário vinculado</label>
-                <select class="fi" id="stk-user"><option value="">Sem vínculo específico</option></select>
-              </div>
               <div class="fgrp" style="grid-column:1/-1;">
                 <label class="flbl">📝 Observação (opcional)</label>
                 <input class="fi" id="stk-note" placeholder="perfil 1 / pin 0000 / etc."/>
@@ -1208,8 +1204,6 @@
             <div>
               <label class="flbl">Preço R$</label>
               <input class="fi" type="number" step="0.01" value="${Number(p.price).toFixed(2)}" id="pp-${p.id}"/>
-              <label class="flbl" style="margin-top:6px">🧑 Usuário vinculado</label>
-              <select class="fi" id="pu-${p.id}">${getUsersSelectOptions(p.assigned_user || '', 'Sem vínculo específico')}</select>
               <div style="margin-top:8px;font-size:0.75rem;color:var(--tm)">
                 Estoque: <b style="color:${p.available>0?'#4ade80':'#f87171'}">${p.available||0}</b> / ${p.total||0}
               </div>
@@ -1229,16 +1223,15 @@
       const name  = document.getElementById('pn-'+pid).value.trim();
       const desc  = document.getElementById('pd-'+pid).value.trim();
       const price = document.getElementById('pp-'+pid).value;
-      const assigned_user = document.getElementById('pu-'+pid)?.value || '';
       try {
         const r = await fetch('/api/admin/loja/produtos/'+pid, {
           method:'PUT',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ name, description:desc, price, assigned_user })
+          body: JSON.stringify({ name, description:desc, price })
         });
         const j = await r.json();
-        if (j.success) showToast('✓ Produto atualizado'); else showToast(j.message||'Erro');
-      } catch(e){ showToast('Erro de conexão'); }
+        if (j.success) toast('✓ Produto atualizado'); else toast(j.message||'Erro');
+      } catch(e){ toast('Erro de conexão'); }
     }
 
     /* ============ LOJA: ESTOQUE ============ */
@@ -1318,24 +1311,23 @@
       const email = document.getElementById('stk-email').value.trim();
       const password = document.getElementById('stk-pass').value.trim();
       const note = document.getElementById('stk-note').value.trim();
-      const assigned_user = document.getElementById('stk-user').value;
       try {
         const r = await fetch('/api/admin/loja/estoque/'+pid, {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email, password, note, assigned_user })
+          body: JSON.stringify({ email, password, note })
         });
         const j = await r.json();
         if (j.success) {
           document.getElementById('stk-email').value = '';
           document.getElementById('stk-pass').value = '';
           document.getElementById('stk-note').value = '';
-          showToast('✓ Acesso adicionado');
+          toast('✓ Acesso adicionado');
           await loadLojaProdutos();
           await loadStock();
           scrollToText('stk-tbody', email);
-        } else { showToast(j.message||'Erro'); }
-      } catch(e){ showToast('Erro de conexão'); }
+        } else { toast(j.message||'Erro'); }
+      } catch(e){ toast('Erro de conexão'); }
     }
 
     async function deleteStock(pid, iid) {
@@ -2237,7 +2229,6 @@
 
     function renderAssinUsuarios() {
       renderUserSelect('as-user');
-      renderUserSelect('stk-user');
       renderUserSelect('lic-assigned-user');
       renderUserSelect('ve-user', 'Todos os usuários');
     }
