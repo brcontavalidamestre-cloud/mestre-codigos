@@ -720,6 +720,7 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
               <button type="submit" class="btn-p">✅ Vincular Emails</button>
               <button type="button" class="btn-ref" onclick="document.getElementById('ve-bulk-list').value=''">🧹 Limpar lista</button>
+              <div id="ve-import-status" role="status" aria-live="polite" style="width:100%;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;"></div>
             </div>
           </form>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px 0;align-items:center;">
@@ -2118,38 +2119,48 @@
       }
     }
 
+    function vinculosImportFeedback(message, failed=false) {
+      const status = document.getElementById('ve-import-status');
+      if (status) { status.textContent = message; status.style.color = failed ? '#ffb4ab' : '#86efac'; }
+      toast(failed ? '✗ Confira o aviso abaixo de Vincular Emails.' : '✓ Vínculos atualizados.', failed ? '#b91c1c' : '#15803d');
+    }
+
     async function importVinculosEmails(ev) {
       if (ev) ev.preventDefault();
       const assignedUser = (document.getElementById('ve-user')?.value || '').trim();
-      const txt = (document.getElementById('ve-bulk-list')?.value || '').trim();
-      if (!assignedUser) {
-        showToast('✗ Selecione o usuário para vincular');
-        return;
-      }
-      if (!txt) {
-        showToast('✗ Cole a lista de emails');
-        return;
-      }
+      const field = document.getElementById('ve-bulk-list');
+      const txt = (field?.value || '').trim();
+      if (!assignedUser) { vinculosImportFeedback('Selecione o usuário para vincular.', true); return; }
+      if (!txt) { vinculosImportFeedback('Cole a lista de emails.', true); return; }
       const linhas = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      if (!linhas.length) {
-        showToast('✗ Nenhum email válido na lista');
-        return;
+      const button = document.querySelector('#vinculos-form button[type="submit"]');
+      if (button?.disabled) return;
+      if (button) { button.disabled = true; button.textContent = 'Vinculando…'; }
+      try {
+        const r = await fetch('/api/admin/vinculos-emails/import', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas })
+        });
+        let j;
+        try { j = await r.json(); } catch (_) { throw new Error('O servidor não respondeu corretamente. Sua lista foi mantida; tente novamente.'); }
+        if (!r.ok || !j.success) {
+          const details = Array.isArray(j.conflicts) ? j.conflicts : [];
+          const emails = [...new Set([...(j.duplicate_emails || []), ...(j.conflict_emails || [])])];
+          const lines = details.length ? details.map(item => item.email + ' — ' + (item.assigned_users?.length ? 'vinculado a: ' + item.assigned_users.join(', ') : item.has_link ? 'já possui link individual' : 'cadastro existente')) : emails;
+          vinculosImportFeedback((j.message || 'Não foi possível vincular os emails.') + (lines.length ? '\n\nEmails que precisam de revisão:\n' + lines.join('\n') : '') + '\n\nNenhum vínculo desta tentativa foi criado. Sua lista foi mantida.', true);
+          return;
+        }
+        const pending = (j.invalid || 0) + (j.skipped || 0);
+        if (!pending) field.value = '';
+        vinculosImportFeedback((j.message || 'Emails vinculados com sucesso.') + '\n' + (j.created || 0) + ' criado(s), ' + (j.updated || 0) + ' atualizado(s), ' + (j.invalid || 0) + ' inválido(s), ' + (j.skipped || 0) + ' não vinculado(s).' + (pending ? '\nSua lista foi mantida para revisão.' : ''), !!pending);
+        await loadVinculosEmails();
+        try { await loadComprasPorData(); } catch (_) { /* Saving has already succeeded. */ }
+        scrollToText('ve-tbody', linhas[0] || assignedUser);
+      } catch (error) {
+        vinculosImportFeedback(error.message || 'Erro de conexão. Sua lista foi mantida; confira a tabela antes de tentar novamente.', true);
+      } finally {
+        if (button) { button.disabled = false; button.textContent = '✅ Vincular Emails'; }
       }
-      const r = await fetch('/api/admin/vinculos-emails/import', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ assigned_user: assignedUser, emails: linhas })
-      });
-      const j = await r.json();
-      if (!j.success) {
-        showToast('✗ ' + (j.message || 'Erro ao vincular emails'));
-        return;
-      }
-      document.getElementById('ve-bulk-list').value = '';
-      showToast(`✓ ${j.created || 0} criado(s), ${j.updated || 0} atualizado(s), ${j.invalid || 0} inválido(s)`);
-      await loadVinculosEmails();
-      await loadComprasPorData();
-      scrollToText('ve-tbody', linhas[0] || assignedUser);
     }
 
     async function deleteVinculoEmail(email) {
@@ -2161,7 +2172,7 @@
         if (j.success) {
           _vinculosSelecionados.delete(String(email || '').trim().toLowerCase());
           updateVinculosSelectionInfo();
-          showToast('✓ Email removido');
+          toast('✓ Email removido');
           await loadVinculosEmails();
           await loadComprasPorData();
           const liveModal = document.getElementById('admin-live-inbox-modal');
@@ -2170,10 +2181,10 @@
             await loadAdminLiveInboxMessages();
           }
         } else {
-          showToast('✗ ' + (j.message || 'Erro ao remover email'));
+          toast('✗ ' + (j.message || 'Erro ao remover email'));
         }
       } catch(e) {
-        showToast('Erro de conexão');
+        toast('Erro de conexão');
       }
     }
 

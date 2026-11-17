@@ -58,8 +58,17 @@ def register_email_uniqueness(app, data_dir, load_subscriptions):
         message = DUPLICATE_MESSAGE
         if app.config.get('EMAIL_POOL_MUTATION_GUARD') and panel_admin() and not principal():
             message = 'Este email já está cadastrado nos links ou no painel. Remova o vínculo antigo antes de vincular a outro cliente. Você só pode remover vínculos dos emails da sua lista permitida; links individuais só podem ser excluídos pelo admin principal.'
+        # Only the principal may see who currently owns a conflicting email.
+        details = []
+        if principal():
+            subscriptions = [s for s in load_subscriptions() if isinstance(s, dict)]
+            existing_links = links()
+            for email in emails:
+                owners = sorted({str(s.get('assigned_user') or '').strip().lower() for s in subscriptions
+                                 if str(s.get('email') or '').strip().lower()==email and s.get('assigned_user')})
+                details.append(dict(email=email, assigned_users=owners, has_link=email in existing_links))
         return jsonify(success=False, duplicate=True, message=message,
-                       duplicate_emails=emails, created=0, updated=0, items=[]), 409
+                       duplicate_emails=emails, conflicts=details, created=0, updated=0, items=[]), 409
 
     def wrap_endpoint(endpoint, kind):
         original = app.view_functions.get(endpoint)
