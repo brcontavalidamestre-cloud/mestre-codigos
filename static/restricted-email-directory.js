@@ -33,15 +33,36 @@
         };
         li.append(' ',button);
       }
-      if (restricted) {
+      function showLink(url) {
+        const input=document.createElement('input'); input.readOnly=true;input.value=url;input.setAttribute('aria-label','Link de status de '+row.email);
+        li.querySelector('input')?.remove();li.append(input);input.select();
+        status.textContent='Copie o link agora. Ele não tem prazo de validade.';
+      }
+      if (principal && row.has_status_link) {
+        for (const [action,label] of [['reset','Redefinir link de status'],['delete','Apagar link de status']]) {
+          const button=document.createElement('button');button.type='button';button.className='nfl-secondary';button.textContent=label;
+          button.onclick=async()=>{
+            if(!confirm(label+' para '+row.email+'? O link anterior deixará de funcionar.'))return;
+            button.disabled=true;
+            try {
+              const r=await fetch('/api/netflix-admin/status-link/manage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:row.email,action})});
+              const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Não foi possível alterar o link.');
+              if(d.url)showLink(d.url);else{await load();status.textContent='Link apagado. O email continua vinculado.';}
+            }catch(e){status.textContent=e.message;}
+            finally{button.disabled=false;}
+          };
+          li.append(' ',button);
+        }
+      }
+      if (restricted && row.has_status_link) li.append(' — Link já gerado.');
+      if (restricted && !row.has_status_link) {
         const button=document.createElement('button'); button.type='button'; button.className='nfl-secondary'; button.textContent='Gerar link de status';
         button.onclick=async()=>{
           button.disabled=true;
           try {
             const r=await fetch('/api/netflix-admin/status-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:row.email})});
             const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.message||'Não foi possível gerar o link.');
-            const input=document.createElement('input');input.readOnly=true;input.value=d.url;input.setAttribute('aria-label','Link de status de '+row.email);
-            li.querySelector('input')?.remove();li.append(input);input.select();status.textContent='Link gerado. Copie e compartilhe apenas com o destinatário. Validade: 7 dias.';
+            row.has_status_link=1;button.remove();showLink(d.url);
           } catch(e) {status.textContent=e.message;}
           finally {button.disabled=false;}
         };
