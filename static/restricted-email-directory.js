@@ -17,11 +17,14 @@
     const q=filter.value.trim().toLowerCase();
     const rows=items.filter(row=>!q||row.email.includes(q)||(principal&&row.username.includes(q)));
     list.replaceChildren();
-    if (!rows.length) { const li=document.createElement('li'); li.textContent='Nenhum email encontrado.'; list.append(li); }
+    if (!rows.length) {
+      const empty=list.insertRow().insertCell();empty.colSpan=4;empty.textContent='Nenhum email encontrado.';
+    }
     for (const row of rows) {
-      const li=document.createElement('li');
-      li.style.overflowWrap='anywhere';
-      li.textContent=row.email+(principal?' — '+row.username:'');
+      const tr=list.insertRow();tr.insertCell().textContent=row.email;
+      tr.insertCell().textContent=row.username;
+      tr.insertCell().textContent=row.has_status_link?'Link já gerado':'Sem link';
+      const li=tr.insertCell();
       if (principal) {
         const button=document.createElement('button');
         button.type='button'; button.className='nfl-secondary'; button.textContent='Remover'; button.setAttribute('aria-label','Remover '+row.email);
@@ -46,9 +49,10 @@
         status.textContent='Clique em Copiar endereço exibido ou copie o texto selecionado.';
       }
       if ((principal || restricted) && row.has_status_link) {
-        for (const [action,label] of [['copy','Copiar link'],['reset','Redefinir link de status'],['delete','Apagar link de status']]) {
-          const button=document.createElement('button');button.type='button';button.className='nfl-secondary';button.textContent=label;
+        for (const [action,label] of [['copy','Copiar link'],['reset','Redefinir link'],['delete','Excluir link']]) {
+          const button=document.createElement('button');button.type='button';button.className=action==='copy'?'':'nfl-secondary';button.textContent=label;
           button.onclick=async()=>{
+            li.querySelector('.red-row-feedback')?.remove();
             if(action!=='copy'&&!confirm(label+' para '+row.email+'? O link anterior deixará de funcionar.'))return;
             button.disabled=true;
             try {
@@ -71,7 +75,6 @@
           li.append(' ',button);
         }
       }
-      if (restricted && row.has_status_link) li.append(' — Link já gerado.');
       if (restricted && !row.has_status_link) {
         const button=document.createElement('button'); button.type='button'; button.className='nfl-secondary'; button.textContent='Gerar link de status';
         button.onclick=async()=>{
@@ -80,7 +83,8 @@
             const r=await fetch('/api/netflix-admin/status-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:row.email})});
             const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.message||'Não foi possível gerar o link.');
             row.has_status_link=1;recentLinks.set(row.email,d.url);render();
-            list.querySelectorAll('input').forEach(input=>{if(input.value===d.url)input.select();});
+            const target=[...list.rows].find(item=>item.cells[0]?.textContent===row.email);
+            target?.querySelector('button')?.focus();
             status.textContent='Copie o link agora. Ele não tem prazo de validade.';
           } catch(e) {status.textContent=e.message;}
           finally {button.disabled=false;}
@@ -90,7 +94,6 @@
       if (row.has_status_link && recentLinks.has(row.email)) {
         const input=document.createElement('input');input.readOnly=true;input.value=recentLinks.get(row.email);input.setAttribute('aria-label','Link de status de '+row.email);li.append(input);
       }
-      list.append(li);
     }
   }
   async function load() {
