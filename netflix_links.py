@@ -91,6 +91,10 @@ def register_netflix_links(app, data_dir, search, search_all=None):
                                 name TEXT NOT NULL, password_hash TEXT NOT NULL,
                                 created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1,
                                 active INTEGER NOT NULL DEFAULT 1)''')
+                            conn.execute('''CREATE TABLE IF NOT EXISTS restricted_email_directory (
+                                email TEXT PRIMARY KEY, account_id TEXT NOT NULL,
+                                FOREIGN KEY(account_id) REFERENCES netflix_admins(id))''')
+                            conn.execute('CREATE INDEX IF NOT EXISTS restricted_directory_owner ON restricted_email_directory(account_id)')
                             conn.execute('CREATE INDEX IF NOT EXISTS links_owner_idx ON links(owner)')
                             conn.execute('''CREATE TABLE IF NOT EXISTS netflix_login_attempts (
                                 key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires INTEGER NOT NULL)''')
@@ -309,6 +313,52 @@ def register_netflix_links(app, data_dir, search, search_all=None):
                 conn.execute('UPDATE netflix_admins SET active=? WHERE id=?', (int(active), account_id))
             conn.execute('UPDATE netflix_admins SET version=version+1 WHERE id=?', (account_id,))
         return jsonify(success=True, message='Acesso atualizado. As sessões anteriores foram encerradas.')
+
+    @bp.get('/api/netflix-admin/email-directory')
+    @manager_only
+    def directory_list():
+        current = g.netflix_manager
+        with db() as conn:
+            if current['principal']:
+                rows = conn.execute('SELECT d.email,a.username FROM restricted_email_directory d JOIN netflix_admins a ON a.id=d.account_id ORDER BY d.email').fetchall()
+                accounts = conn.execute('SELECT username FROM netflix_admins ORDER BY username').fetchall()
+            else:
+                rows = conn.execute('SELECT d.email,a.username FROM restricted_email_directory d JOIN netflix_admins a ON a.id=d.account_id WHERE d.account_id=? AND a.active=1 ORDER BY d.email', (current['id'],)).fetchall()
+                accounts = []
+        return jsonify(success=True, principal=current['principal'], items=[dict(r) for r in rows], accounts=[r['username'] for r in accounts]), 200, {'Cache-Control':'no-store'}
+
+    @bp.post('/api/netflix-admin/email-directory')
+    @admin_only
+    def directory_change():
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(success=False,message='Dados inválidos.'),400
+        username = data.get('username')
+        raw = data.get('emails')
+        action = data.get('action')
+        if not isinstance(username,str) or not isinstance(raw,str) or len(raw)>55000 or action not in ('assign','remove'):
+            return jsonify(success=False,message='Dados inválidos.'),400
+        emails = sorted(set(re.split(r'[\s,;]+',raw.strip().lower())))
+        if not 1<=len(emails)<=200 or any(len(e)>254 or not re.fullmatch(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+",e) for e in emails):
+            return jsonify(success=False,message='Informe de 1 a 200 emails válidos.'),400
+        with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            account = conn.execute('SELECT id FROM netflix_admins WHERE username=?',(username,)).fetchone()
+            if not account:
+                return jsonify(success=False,message='Acesso restrito não encontrado.'),404
+            owner = account['id']
+            if action=='assign':
+                conflicts=[]
+                for addr in emails:
+                    existing=conn.execute('SELECT a.username,d.account_id FROM restricted_email_directory d JOIN netflix_admins a ON a.id=d.account_id WHERE d.email=?',(addr,)).fetchone()
+                    if existing and existing['account_id']!=owner:
+                        conflicts.append(addr+' — '+existing['username'])
+                if conflicts:
+                    return jsonify(success=False,message='Remova os vínculos anteriores antes de transferir:\n'+'\n'.join(conflicts)),409
+                conn.executemany('INSERT OR IGNORE INTO restricted_email_directory(email,account_id) VALUES(?,?)',[(e,owner) for e in emails])
+            else:
+                conn.executemany('DELETE FROM restricted_email_directory WHERE email=? AND account_id=?',[(e,owner) for e in emails])
+        return jsonify(success=True)
 
     @bp.get('/admin/netflix-links')
     @manager_only
