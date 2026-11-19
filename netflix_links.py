@@ -445,7 +445,7 @@ def register_netflix_links(app, data_dir, search, search_all=None):
     def status_link_page():
         return send_from_directory(app.static_folder,'restricted-status.html')
 
-    @bp.post('/api/message-status')
+    @bp.route('/api/message-status', methods=['GET','POST'])
     def read_status_link():
         if request.headers.get('Origin') not in (None,'https://'+HOST): abort(403)
         auth = request.headers.get('Authorization','')
@@ -458,12 +458,18 @@ def register_netflix_links(app, data_dir, search, search_all=None):
         def valid(conn):
             row=conn.execute('SELECT l.email,l.checked FROM restricted_status_links l JOIN restricted_email_directory d ON d.email=l.email AND d.account_id=l.owner JOIN netflix_admins a ON a.id=l.owner AND a.version=l.version WHERE l.digest=? AND a.active=1',(key,)).fetchone()
             return row if row and not blocked(row['email']) else None
+        if request.method == 'GET':
+            with db() as conn:
+                row=valid(conn)
+            if not row: return jsonify(status='blocked'),404
+            return jsonify(email=row['email'])
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
             row=valid(conn)
             if not row: return jsonify(status='blocked',received_at=None),404
             now=int(time.time())
-            if now-row['checked']<20: return jsonify(status='retry',received_at=None),429
+            remaining=20-(now-row['checked'])
+            if remaining>0: return jsonify(status='retry',received_at=None),429,{'Retry-After':str(min(20,remaining))}
             conn.execute('UPDATE restricted_status_links SET checked=? WHERE digest=?',(now,key))
         result=lookup(row['email'])
         with db() as conn:
