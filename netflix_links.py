@@ -384,12 +384,15 @@ def register_netflix_links(app, data_dir, search, search_all=None):
                 return jsonify(message='Email não autorizado ou em quarentena.'),403
             inserted=conn.execute('INSERT OR IGNORE INTO restricted_status_links VALUES (?,?,?,?,?,0)',(addr,current['id'],digest(token),0,row['version'])).rowcount
             if not inserted:
-                return jsonify(message='Já existe um link. Apenas o administrador principal pode redefinir ou apagar.'),409
+                return jsonify(message='Já existe um link. Use Redefinir ou Apagar na sua lista.'),409
         return jsonify(success=True,url='https://'+HOST+'/status-mensagem#'+token)
 
     @bp.post('/api/netflix-admin/status-link/manage')
-    @admin_only
+    @manager_only
     def manage_status_link():
+        current = g.netflix_manager
+        if current.get('kind') == 'panel':
+            return jsonify(message='Sem permissão para gerenciar este link.'),403
         data=request.get_json(silent=True)
         if not isinstance(data,dict) or data.get('action') not in ('reset','delete') or not isinstance(data.get('email'),str) or len(data['email'])>254:
             return jsonify(message='Dados inválidos.'),400
@@ -398,7 +401,7 @@ def register_netflix_links(app, data_dir, search, search_all=None):
         token=secrets.token_urlsafe(32) if reset else None
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
-            row=conn.execute('SELECT l.owner,a.version,a.active FROM restricted_status_links l JOIN restricted_email_directory d ON d.email=l.email AND d.account_id=l.owner JOIN netflix_admins a ON a.id=l.owner WHERE l.email=?',(addr,)).fetchone()
+            row=conn.execute('SELECT l.owner,a.version,a.active FROM restricted_status_links l JOIN restricted_email_directory d ON d.email=l.email AND d.account_id=l.owner JOIN netflix_admins a ON a.id=l.owner WHERE l.email=? AND (?=1 OR (l.owner=? AND a.active=1 AND a.version=?))',(addr,int(current['principal']),current['id'],session.get('netflix_admin_version'))).fetchone()
             if not row: return jsonify(message='Link não encontrado.'),404
             if reset:
                 blocked=app.config.get('RESTRICTED_STATUS_BLOCKED')
