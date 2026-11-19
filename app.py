@@ -9151,6 +9151,9 @@ def api_keepalive():
 from flask import has_request_context
 from quarantine import QuarantineStore, register_quarantine, HOST as QUARANTINE_HOST, MESSAGE as QUARANTINE_MESSAGE
 email_quarantine = QuarantineStore(_data_dir)
+from restricted_message_status import lookup as lookup_restricted_message_status
+app.config['RESTRICTED_STATUS_BLOCKED'] = email_quarantine.is_blocked
+app.config['RESTRICTED_STATUS_LOOKUP'] = lambda address: lookup_restricted_message_status(get_imap_accounts(), address)
 from netflix_links import register_netflix_links, strict_email_context, exact_email_match
 from netflix_search import make_netflix_batch_search
 register_netflix_links(app, _data_dir, search_code_unified,

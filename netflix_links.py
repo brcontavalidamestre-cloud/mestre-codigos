@@ -95,6 +95,7 @@ def register_netflix_links(app, data_dir, search, search_all=None):
                                 email TEXT PRIMARY KEY, account_id TEXT NOT NULL,
                                 FOREIGN KEY(account_id) REFERENCES netflix_admins(id))''')
                             conn.execute('CREATE INDEX IF NOT EXISTS restricted_directory_owner ON restricted_email_directory(account_id)')
+                            conn.execute('''CREATE TABLE IF NOT EXISTS restricted_status_links (email TEXT PRIMARY KEY, owner TEXT NOT NULL, digest TEXT UNIQUE NOT NULL, expires INTEGER NOT NULL, version INTEGER NOT NULL, checked INTEGER NOT NULL DEFAULT 0)''')
                             conn.execute('CREATE INDEX IF NOT EXISTS links_owner_idx ON links(owner)')
                             conn.execute('''CREATE TABLE IF NOT EXISTS netflix_login_attempts (
                                 key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires INTEGER NOT NULL)''')
@@ -358,7 +359,60 @@ def register_netflix_links(app, data_dir, search, search_all=None):
                 conn.executemany('INSERT OR IGNORE INTO restricted_email_directory(email,account_id) VALUES(?,?)',[(e,owner) for e in emails])
             else:
                 conn.executemany('DELETE FROM restricted_email_directory WHERE email=? AND account_id=?',[(e,owner) for e in emails])
+                conn.executemany('DELETE FROM restricted_status_links WHERE email=? AND owner=?',[(e,owner) for e in emails])
         return jsonify(success=True)
+
+    @bp.post('/api/netflix-admin/status-link')
+    @manager_only
+    def create_status_link():
+        current = g.netflix_manager
+        if current['principal'] or current.get('kind') == 'panel':
+            return jsonify(message='Use o acesso restrito.'),403
+        data = request.get_json(silent=True) or {}
+        addr = data.get('email') if isinstance(data,dict) else None
+        if not isinstance(addr,str) or len(addr)>254:
+            return jsonify(message='Informe um email válido.'),400
+        addr = addr.strip().lower()
+        blocked = app.config.get('RESTRICTED_STATUS_BLOCKED')
+        if not blocked:
+            return jsonify(message='Serviço indisponível.'),503
+        token = secrets.token_urlsafe(32)
+        with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row = conn.execute('SELECT a.version FROM restricted_email_directory d JOIN netflix_admins a ON a.id=d.account_id WHERE d.email=? AND d.account_id=? AND a.active=1',(addr,current['id'])).fetchone()
+            if not row or row['version']!=session.get('netflix_admin_version') or blocked(addr):
+                return jsonify(message='Email não autorizado ou em quarentena.'),403
+            conn.execute('INSERT OR REPLACE INTO restricted_status_links VALUES (?,?,?,?,?,0)',(addr,current['id'],digest(token),int(time.time())+7*86400,row['version']))
+        return jsonify(success=True,url='https://'+HOST+'/status-mensagem#'+token)
+
+    @bp.get('/status-mensagem')
+    def status_link_page():
+        return send_from_directory(app.static_folder,'restricted-status.html')
+
+    @bp.post('/api/message-status')
+    def read_status_link():
+        if request.headers.get('Origin') not in (None,'https://'+HOST): abort(403)
+        auth = request.headers.get('Authorization','')
+        if not re.fullmatch(r'Bearer [A-Za-z0-9_-]{43}',auth): abort(404)
+        blocked = app.config.get('RESTRICTED_STATUS_BLOCKED')
+        lookup = app.config.get('RESTRICTED_STATUS_LOOKUP')
+        if not blocked or not lookup:
+            return jsonify(status='unavailable',received_at=None),503
+        key=digest(auth[7:])
+        def valid(conn):
+            row=conn.execute('SELECT l.email,l.checked FROM restricted_status_links l JOIN restricted_email_directory d ON d.email=l.email AND d.account_id=l.owner JOIN netflix_admins a ON a.id=l.owner AND a.version=l.version WHERE l.digest=? AND l.expires>? AND a.active=1',(key,int(time.time()))).fetchone()
+            return row if row and not blocked(row['email']) else None
+        with db() as conn:
+            conn.execute('BEGIN IMMEDIATE')
+            row=valid(conn)
+            if not row: return jsonify(status='blocked',received_at=None),404
+            now=int(time.time())
+            if now-row['checked']<20: return jsonify(status='retry',received_at=None),429
+            conn.execute('UPDATE restricted_status_links SET checked=? WHERE digest=?',(now,key))
+        result=lookup(row['email'])
+        with db() as conn:
+            if not valid(conn): return jsonify(status='blocked',received_at=None),404
+        return jsonify(status=result['status'],received_at=result['received_at'])
 
     @bp.get('/admin/netflix-links')
     @manager_only

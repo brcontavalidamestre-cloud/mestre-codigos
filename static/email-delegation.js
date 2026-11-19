@@ -41,7 +41,7 @@
   selected=new Set();
   el('ep-copy-direct').hidden=directoryMode||!data.principal||!(data.direct_emails||[]).length;
   el('ep-principal').hidden=!data.principal;el('ep-transfer').hidden=data.principal;
-  el('ep-grant-help').textContent=directoryMode?'Até 200 por vez. O acesso restrito vê somente a própria lista. Esta lista não gera links, não exibe códigos nem altera os vínculos do painel.':initialHelp;
+  el('ep-grant-help').textContent=directoryMode?'Até 200 por vez. O acesso restrito vê somente a própria lista. No painel do acesso restrito, os endereços desta lista podem gerar links de status, sem códigos. A lista não altera os vínculos do painel.':initialHelp;
   el('ep-owner').textContent=directoryMode?'Lista do acesso restrito: '+restricted:data.principal?'Você define a lista permitida de cada responsável.':'Você só pode alterar os emails liberados nesta lista.';
   if(data.principal){
    const select=el('ep-admin');options(select,[],'Selecione um responsável');

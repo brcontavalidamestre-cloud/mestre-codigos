@@ -5,7 +5,7 @@
   const el=id=>box.querySelector('#red-'+id);
   const form=el('form'), owner=el('owner'), field=el('emails'), filter=el('filter'), list=el('list'), status=el('status');
   form.style.display='none';
-  let items=[], principal=false;
+  let items=[], principal=false, restricted=false;
   async function api(body) {
     const r=await fetch('/api/netflix-admin/email-directory', { cache:'no-store', method:body?'POST':'GET', headers:body?{'Content-Type':'application/json'}:{}, body:body?JSON.stringify(body):undefined });
     const d=await r.json();
@@ -33,12 +33,27 @@
         };
         li.append(' ',button);
       }
+      if (restricted) {
+        const button=document.createElement('button'); button.type='button'; button.className='nfl-secondary'; button.textContent='Gerar link de status';
+        button.onclick=async()=>{
+          button.disabled=true;
+          try {
+            const r=await fetch('/api/netflix-admin/status-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:row.email})});
+            const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.message||'Não foi possível gerar o link.');
+            const input=document.createElement('input');input.readOnly=true;input.value=d.url;input.setAttribute('aria-label','Link de status de '+row.email);
+            li.querySelector('input')?.remove();li.append(input);input.select();status.textContent='Link gerado. Copie e compartilhe apenas com o destinatário. Validade: 7 dias.';
+          } catch(e) {status.textContent=e.message;}
+          finally {button.disabled=false;}
+        };
+        li.append(' ',button);
+      }
       list.append(li);
     }
   }
   async function load() {
     const d=await api(); const current=owner.value;
     items=d.items; principal=d.principal===true;
+    if(!principal){ const r=await fetch('/api/netflix-admin/me',{cache:'no-store'});const me=await r.json();restricted=me.success===true && me.kind!=='panel'; }
     owner.replaceChildren(new Option('Selecione um acesso restrito',''), ...d.accounts.map(name=>new Option(name,name)));
     if (d.accounts.includes(current)) owner.value=current;
     form.hidden=!principal; form.style.display=principal?'block':'none';
