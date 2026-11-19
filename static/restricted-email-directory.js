@@ -40,14 +40,19 @@
         status.textContent='Copie o link agora. Ele não tem prazo de validade.';
       }
       if ((principal || restricted) && row.has_status_link) {
-        for (const [action,label] of [['reset','Redefinir link de status'],['delete','Apagar link de status']]) {
+        for (const [action,label] of [['copy','Copiar link'],['reset','Redefinir link de status'],['delete','Apagar link de status']]) {
           const button=document.createElement('button');button.type='button';button.className='nfl-secondary';button.textContent=label;
           button.onclick=async()=>{
-            if(!confirm(label+' para '+row.email+'? O link anterior deixará de funcionar.'))return;
+            if(action!=='copy'&&!confirm(label+' para '+row.email+'? O link anterior deixará de funcionar.'))return;
             button.disabled=true;
             try {
               const r=await fetch('/api/netflix-admin/status-link/manage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:row.email,action})});
               const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Não foi possível alterar o link.');
+              if(action==='copy'){
+                try { await navigator.clipboard.writeText(d.url);status.textContent='Link copiado.'; }
+                catch { showLink(d.url);status.textContent='Selecione e copie o link exibido.'; }
+                return;
+              }
               if(d.url){recentLinks.set(row.email,d.url);showLink(d.url);}else{recentLinks.delete(row.email);await load();status.textContent='Link apagado. O email continua vinculado.';}
             }catch(e){status.textContent=e.message;}
             finally{button.disabled=false;}
