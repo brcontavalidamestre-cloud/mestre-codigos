@@ -36,8 +36,14 @@
       }
       function showLink(url) {
         const input=document.createElement('input'); input.readOnly=true;input.value=url;input.setAttribute('aria-label','Link de status de '+row.email);
-        li.querySelector('input')?.remove();li.append(input);input.select();
-        status.textContent='Copie o link agora. Ele não tem prazo de validade.';
+        li.querySelector('input')?.remove();li.querySelector('.red-copy-confirm')?.remove();
+        const copy=document.createElement('button');copy.type='button';copy.className='nfl-secondary red-copy-confirm';copy.textContent='Copiar endereço exibido';
+        copy.onclick=async()=>{
+          try { await navigator.clipboard.writeText(input.value);status.textContent='Link copiado. Agora você pode colar.'; }
+          catch { input.focus();input.select();input.setSelectionRange(0,input.value.length);status.textContent='O navegador bloqueou a cópia automática. Pressione Ctrl+C (ou ⌘C) ou toque e segure no endereço e escolha Copiar.'; }
+        };
+        li.append(input,copy);input.focus();input.select();input.setSelectionRange(0,input.value.length);
+        status.textContent='Clique em Copiar endereço exibido ou copie o texto selecionado.';
       }
       if ((principal || restricted) && row.has_status_link) {
         for (const [action,label] of [['copy','Copiar link'],['reset','Redefinir link de status'],['delete','Apagar link de status']]) {
@@ -49,12 +55,17 @@
               const r=await fetch('/api/netflix-admin/status-link/manage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:row.email,action})});
               const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Não foi possível alterar o link.');
               if(action==='copy'){
-                try { await navigator.clipboard.writeText(d.url);status.textContent='Link copiado.'; }
-                catch { showLink(d.url);status.textContent='Selecione e copie o link exibido.'; }
+                showLink(d.url);
+                try { await navigator.clipboard.writeText(d.url);status.textContent='Link copiado. Agora você pode colar.'; }
+                catch { /* The visible second button starts a fresh user gesture. */ }
                 return;
               }
               if(d.url){recentLinks.set(row.email,d.url);showLink(d.url);}else{recentLinks.delete(row.email);await load();status.textContent='Link apagado. O email continua vinculado.';}
-            }catch(e){status.textContent=e.message;}
+            }catch(e){
+              li.querySelector('.red-row-feedback')?.remove();
+              const feedback=document.createElement('p');feedback.className='red-row-feedback';feedback.setAttribute('role','status');feedback.textContent=e.message;li.append(feedback);
+              status.textContent=e.message;
+            }
             finally{button.disabled=false;}
           };
           li.append(' ',button);
