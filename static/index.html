@@ -1185,6 +1185,7 @@
       .code-display { font-size: 2rem; letter-spacing: 5px; }
     }
   </style>
+  <link rel="stylesheet" href="/static/lojamestre-vitrine.css?v=1">
 </head>
 <body>
 
@@ -1361,13 +1362,13 @@
 
     <!-- LISTA DE PRODUTOS -->
     <div id="loja-content" style="display:none">
-      <section class="platforms-section" style="text-align:center">
-        <div class="section-title">✦ Loja com Pix Automático ✦</div>
+      <section class="platforms-section store-hero" style="text-align:center">
+        <div class="section-title">Escolha seu acesso e pague com Pix</div>
         <p class="section-subtitle">Compre seu acesso — entrega automática após confirmação do pagamento</p>
       </section>
 
       <!-- Sub-menu interno da loja -->
-      <div style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:12px 0 18px;">
+      <div class="store-nav" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:12px 0 18px;">
         <button id="btn-loja-produtos" class="loja-subtab active" onclick="showLojaTab('produtos')">🛍️ Produtos</button>
         <button id="btn-loja-historico" class="loja-subtab" onclick="showLojaTab('historico')">📜 Minhas Compras</button>
       </div>
@@ -3789,7 +3790,7 @@
       // 5) Atualiza título, header e tab do navegador
       document.title = 'Loja com Pix — Códigos Premium';
       const headerTitle = document.querySelector('header h1, .site-title-h1, #site-title');
-      if (headerTitle) headerTitle.textContent = '🛒 LOJA COM PIX';
+      if (headerTitle) headerTitle.textContent = 'Loja Mestre';
       const headerSub = document.querySelector('header p, .site-subtitle');
       if (headerSub) headerSub.textContent = 'Compre códigos premium com pagamento instantâneo via Pix';
 
