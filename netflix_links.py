@@ -468,7 +468,9 @@ def register_netflix_links(app, data_dir, search, search_all=None):
         result=lookup(row['email'])
         with db() as conn:
             if not valid(conn): return jsonify(status='blocked',received_at=None),404
-        return jsonify(status=result['status'],received_at=result['received_at'])
+        from restricted_message_status import STATUS_FILTERS
+        filters={key:result.get('filters',{})[key] for key in STATUS_FILTERS if key in result.get('filters',{})}
+        return jsonify(status=result['status'],received_at=result['received_at'], **({'filters':filters} if filters else {}))
 
     @bp.get('/admin/netflix-links')
     @manager_only
