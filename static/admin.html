@@ -2104,6 +2104,7 @@
               <td>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                   <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(it.assigned_user || '')}'; loadVinculosEmails();">🎯 Ver só este</button>
+                  ${location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin' && it.assigned_user && normalizedEmail ? `<button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="copyInboxShortcut(this)">📥 Copiar atalho da caixa</button>` : ''}
                   <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
                 </div>
               </td>
@@ -2119,6 +2120,13 @@
         tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff8a80;">Erro ao carregar emails vinculados.</td></tr>';
         updateVinculosSelectionInfo();
       }
+    }
+
+    async function copyInboxShortcut(button) {
+      const url = new URL('/', location.origin);
+      url.hash = new URLSearchParams({ bandeja: button.dataset.inboxEmail }).toString();
+      try { await navigator.clipboard.writeText(url.href); toast('Atalho copiado. O cliente precisa entrar na conta.', '#15803d'); }
+      catch { window.prompt('Copie o atalho da caixa. O cliente precisa entrar na conta.', url.href); }
     }
 
     function vinculosImportFeedback(message, failed=false) {

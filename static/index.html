@@ -3113,12 +3113,13 @@
     let _bdLast = null;
     let _bdEmailFilter = '';
     const _bdCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com';
+    const _bdShortcutEmail = _bdCentral ? (new URLSearchParams(location.hash.slice(1)).get('bandeja') || '').trim().toLowerCase() : '';
     function filterBandejaEmail(email) {
       _bdEmailFilter = email || '';
       if (_bdLast) renderBandeja(_bdLast);
     }
     if (_bdCentral) {
-      document.querySelector('#view-bandeja .section-subtitle').textContent = 'Mensagens dos e-mails vinculados, conforme os filtros ativos · até 30 dias';
+      document.querySelector('#view-bandeja .section-subtitle').textContent = 'Mensagens dos e-mails vinculados, conforme os filtros ativos · últimas 2 horas';
       document.getElementById('bd-list').addEventListener('click', event => {
         const button = event.target.closest('button[data-bd-email]');
         if (button) filterBandejaEmail(button.dataset.bdEmail);
@@ -3128,6 +3129,14 @@
     function renderBandeja(j) {
       const list = document.getElementById('bd-list');
       const all = j.items || [];
+      if (_bdShortcutEmail) {
+        const allowed = (j.emails || []).includes(_bdShortcutEmail);
+        const title = allowed ? 'Mensagens de ' + _bdShortcutEmail : 'Este endereço não está vinculado a esta conta.';
+        list.innerHTML = '<div style="overflow-wrap:anywhere;font-weight:700">' + _esc(title) + '</div>' + (allowed && all.length
+          ? all.map(it => '<div style="padding:12px;border:1px solid #4c1d95;border-radius:12px">Mensagem recebida · ' + _esc(it.platform) + ' · ' + _esc(_fmtDate(it.date_ts)) + '</div>').join('')
+          : (allowed ? '<div>' + _esc(j.quarantine_message || 'Nenhuma mensagem nos filtros ativos nas últimas 2 horas.') + '</div>' : ''));
+        return;
+      }
       const items = _bdCentral && _bdEmailFilter ? all.filter(it => it.email === _bdEmailFilter) : all;
       const filterBar = _bdCentral && _bdEmailFilter
         ? '<div style="overflow-wrap:anywhere">Mensagens de <strong>' + _esc(_bdEmailFilter) + '</strong> · <button type="button" class="btn-primary" data-bd-email="">Ver todos</button></div>' : '';
@@ -3166,7 +3175,10 @@
       const status = document.getElementById('bd-status');
       try {
         if (manual && status) status.textContent = 'Atualizando...';
-        const r = await fetch('/api/live-inbox/messages' + (manual ? '?fresh=1' : ''));
+        const params = new URLSearchParams();
+        if (manual) params.set('fresh','1');
+        if (_bdShortcutEmail) params.set('inbox_email',_bdShortcutEmail);
+        const r = await fetch('/api/live-inbox/messages' + (params.size ? '?' + params : ''));
         const j = await r.json();
         if (!j.success) {
           if (j.quarantined && list) list.textContent = j.message || 'Esse email está na lista que não pode receber códigos.';
@@ -3735,6 +3747,7 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
 
     // Iniciação do hash (#loja abre direto a loja)
     if (window.location.hash === '#loja') switchView('loja');
+    else if (_bdShortcutEmail) switchView('bandeja');
 
     // KEEP-ALIVE: aquece a conexão IMAP em background ao carregar a página
     // Isso faz a primeira busca ser quase instantânea (sem cold-start)

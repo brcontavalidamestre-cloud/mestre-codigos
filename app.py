@@ -5145,7 +5145,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     seen = set()
     accounts = get_imap_accounts()
     now = time.time()
-    cutoff = now - (720 if central else lookback_hours) * 3600
+    cutoff = now - (2 if central else lookback_hours) * 3600
     since_date = time.strftime("%d-%b-%Y", time.gmtime(cutoff))
 
     for account_cfg in accounts:
@@ -5337,15 +5337,23 @@ def scope_central_inbox_to_current_filters(response):
         enabled = set(_expand_admin_live_inbox_filters(load_admin_live_inbox_filters('admin')))
         owned = set(_user_live_inbox_emails(session.get('username')))
         items = []
+        cutoff = time.time() - 7200
+        selected = request.args.get('inbox_email', '').strip().lower()
         for item in data.get('items', []):
+            if not cutoff <= (item.get('date_ts') or 0) <= time.time():
+                continue
             address = item.get('email')
+            if selected and address != selected:
+                continue
             if address not in owned or item.get('platform') not in enabled or email_quarantine.is_blocked(address):
                 continue
             row = {key: value for key, value in item.items() if key != 'link'}
             recipients = row.get('recipients') or []
             if not recipients or not set(recipients).issubset(owned) or any(email_quarantine.is_blocked(e) for e in recipients):
                 continue
-            if recipients != [address]:
+            if selected:
+                row = {key: row[key] for key in ('email', 'recipients', 'platform', 'date_ts')}
+            elif recipients != [address]:
                 row.pop('message_preview', None)
             items.append(row)
         data['items'] = items
