@@ -198,6 +198,34 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         direct_emails = sorted({norm(s.get('email')) for s in subscriptions if isinstance(s,dict) and selected and norm(s.get('assigned_user'))==selected and norm(s.get('email'))}) if principal else []
         return jsonify(success=True,principal=principal,admin_user=selected,admins=admins,items=items,clients=clients,direct_emails=direct_emails)
 
+    @bp.post('/api/admin/email-pool/unlink-client')
+    @admin_only
+    def unlink_client():
+        if actor() != 'admin':
+            return jsonify(success=False, message='Apenas o administrador principal pode usar esta ação.'), 403
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(success=False, message='Dados inválidos.'), 400
+        email, client = norm(data.get('email')), norm(data.get('client'))
+        if not client or len(email) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
+            return jsonify(success=False, message='Informe o e-mail e o cliente.'), 400
+        with store.serialized():
+            subs = load_subscriptions()
+            rows = [row for row in subs if isinstance(row, dict) and norm(row.get('email')) == email
+                    and norm(row.get('assigned_user')) == client]
+            if not rows:
+                return jsonify(success=False, message='O vínculo mudou. Pesquise novamente.'), 409
+            for row in rows:
+                row['assigned_user'] = ''
+                row['assigned_user_name'] = ''
+            if save_subscriptions(subs) is False:
+                return jsonify(success=False, message='Não foi possível salvar a remoção.'), 503
+            store.audit('admin', 'unlink', {'email': email, 'previous_users': [client]})
+        invalidate = app.config.get('EMAIL_POOL_BINDINGS_CHANGED')
+        if invalidate:
+            invalidate({client})
+        return jsonify(success=True, message='Vínculo removido. O cadastro do e-mail e as permissões foram mantidos.')
+
     @bp.get('/api/admin/email-pool/search')
     @admin_only
     def search_addresses():

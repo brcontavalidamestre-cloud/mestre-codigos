@@ -94,6 +94,22 @@
       }catch(error){note.textContent=error.message;button.disabled=false;targets.disabled=false;}
      };
     }
+    for(const client of row.clients){
+     const unlink=document.createElement('button');unlink.type='button';unlink.className='nfl-secondary';
+     unlink.textContent='Remover vínculo de @'+client.username;
+     controls.append(' ',unlink);
+     unlink.onclick=async()=>{
+      if(!confirm('Remover o vínculo de '+row.email+' com @'+client.username+'? O cadastro e a lista permitida serão mantidos.'))return;
+      unlink.disabled=true;note.textContent='Removendo vínculo…';
+      try{
+       const data=await api('/api/admin/email-pool/unlink-client',{email:row.email,client:client.username});
+       if(id!==searchVersion)return;
+       status(data.message);
+       el('ep-global-search').requestSubmit();
+       load().catch(()=>{});
+      }catch(error){note.textContent=error.message;unlink.disabled=false;}
+     };
+    }
     item.append(controls);
     results.append(item);
    }
