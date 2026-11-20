@@ -3205,7 +3205,7 @@
         const params = new URLSearchParams();
         if (manual) params.set('fresh','1');
         if (_bdShortcutEmail) params.set('inbox_email',_bdShortcutEmail);
-        const r = await fetch('/api/live-inbox/messages' + (params.size ? '?' + params : ''));
+        const r = await fetch('/api/live-inbox/messages' + (params.size ? '?' + params : ''), { cache: 'no-store' });
         const j = await r.json();
         if (!j.success) {
           if (j.quarantined && list) list.textContent = j.message || 'Esse email está na lista que não pode receber códigos.';
@@ -3224,7 +3224,7 @@
         }
         _bdLast = j;
         renderBandeja(j);
-        if (status) status.textContent = (j.quarantine_message ? j.quarantine_message + ' · ' : '') + (_bdCentral && j.errors?.length ? 'Uma ou mais caixas não responderam · ' : '') + (j.refreshing ? 'Consultando caixas…' : 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR')) + ' · automático a cada 12s';
+        if (status) status.textContent = (j.quarantine_message ? j.quarantine_message + ' · ' : '') + (_bdCentral && j.errors?.length ? 'Uma ou mais caixas não responderam · ' : '') + (j.refreshing ? 'Consultando caixas…' : 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR')) + (_bdCentral ? ' · automático a cada 5s' : ' · automático a cada 12s');
       } catch (e) {
         if (status) status.textContent = 'Erro de conexão. Tentando novamente...';
       } finally {
@@ -3236,7 +3236,7 @@
       stopBandeja();
       if (_bdLast) { renderBandeja(_bdLast); }
       loadBandeja(true);
-      _bdTimer = setInterval(() => loadBandeja(false), 12000);
+      _bdTimer = setInterval(() => loadBandeja(false), _bdCentral ? 5000 : 12000);
     }
 
     function stopBandeja() {

@@ -5438,7 +5438,8 @@ def api_user_live_inbox_messages():
             _bd_cache.pop(username, None)
     fresh = request.args.get("fresh") == "1"
 
-    if cached and (now - cached["ts"] < _BD_CACHE_TTL) and not fresh:
+    ttl = 10 if central else _BD_CACHE_TTL
+    if cached and (now - cached["ts"] < ttl) and not fresh:
         return jsonify({"success": True, "items": cached["items"], "emails": emails,
                         "count": len(cached["items"]), "cached": True,
                         "errors": cached.get("errors") or []})
@@ -5464,8 +5465,11 @@ def api_user_live_inbox_messages():
                 _bd_refreshing.discard(username)
 
     if cached:
+        with _bd_cache_lock:
+            cached = _bd_cache.get(username) or cached
+            pending = username in _bd_refreshing
         return jsonify({"success": True, "items": cached["items"], "emails": emails,
-                        "count": len(cached["items"]), "cached": True, "refreshing": True,
+                        "count": len(cached["items"]), "cached": True, "refreshing": pending,
                         "errors": cached.get("errors") or []})
 
     # Central already started the background scan; do not open a second IMAP
