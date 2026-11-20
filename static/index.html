@@ -3128,7 +3128,7 @@
       heading.before(header); header.append(heading);
       const live = document.createElement('span'); live.className = 'bd-live'; live.textContent = 'AUTOATUALIZAÇÃO'; header.append(live);
       document.getElementById('bd-status').parentElement.classList.add('bd-toolbar');
-      document.querySelector('#view-bandeja .section-subtitle').textContent = 'Mensagens dos e-mails vinculados, conforme os filtros ativos · últimas 2 horas';
+      document.querySelector('#view-bandeja .section-subtitle').textContent = 'Mensagens dos e-mails vinculados, conforme os filtros ativos · últimos 15 minutos';
       document.getElementById('bd-list').addEventListener('click', async event => {
         const change = event.target.closest('button[data-bd-switch-account]');
         if (change) {
@@ -3161,7 +3161,7 @@
         const title = allowed ? 'Mensagens de ' + _bdShortcutEmail : (j.quarantine_message || 'O vínculo existe, mas a consulta está bloqueada pelas permissões atuais.');
         list.innerHTML = '<div class="bd-context">' + _esc(title) + '</div>' + (allowed && all.length
           ? all.map(it => '<article class="bd-record"><div class="bd-record-mark" aria-hidden="true">✉</div><div class="bd-record-main"><div class="bd-subject">Mensagem recebida</div><div class="bd-meta">' + _esc(it.platform) + ' · ' + _esc(_fmtDate(it.date_ts)) + '</div></div></article>').join('')
-          : (allowed ? '<div>' + _esc(j.quarantine_message || 'Nenhuma mensagem nos filtros ativos nas últimas 2 horas.') + '</div>' : ''));
+          : (allowed ? '<div>' + _esc(j.quarantine_message || 'Nenhuma mensagem nos filtros ativos nos últimos 15 minutos.') + '</div>' : ''));
         return;
       }
       const items = _bdCentral && _bdEmailFilter ? all.filter(it => it.email === _bdEmailFilter) : all;

@@ -5132,6 +5132,9 @@ def _central_inbox_route_recipients(msg, found, allowed, mailbox_user):
     return found
 
 
+_CENTRAL_INBOX_WINDOW_SECONDS = 15 * 60
+
+
 def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48, central=False):
     """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
     vinculados do usuário (INBOX + Spam), extraindo código/link."""
@@ -5159,7 +5162,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     seen = set()
     accounts = get_imap_accounts()
     now = time.time()
-    cutoff = now - (2 if central else lookback_hours) * 3600
+    cutoff = now - (_CENTRAL_INBOX_WINDOW_SECONDS if central else lookback_hours * 3600)
     since_date = time.strftime("%d-%b-%Y", time.gmtime(cutoff))
 
     for account_cfg in accounts:
@@ -5209,6 +5212,8 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         if not raw_h:
                             continue
                         head = email.message_from_bytes(bytes(raw_h))
+                        if central and not cutoff <= _admin_inbox_date_ts(head) <= now:
+                            continue
                         recipients = _admin_inbox_extract_recipients(head)
                         if central:
                             recipients = sorted(_central_inbox_route_recipients(head, recipients, allowed_set, account_cfg.get('user')))
@@ -5363,10 +5368,11 @@ def scope_central_inbox_to_current_filters(response):
         enabled = set(_expand_admin_live_inbox_filters(load_admin_live_inbox_filters('admin')))
         owned = set(_user_live_inbox_emails(session.get('username')))
         items = []
-        cutoff = time.time() - 7200
+        now = time.time()
+        cutoff = now - _CENTRAL_INBOX_WINDOW_SECONDS
         selected = request.args.get('inbox_email', '').strip().lower()
         for item in data.get('items', []):
-            if not cutoff <= (item.get('date_ts') or 0) <= time.time():
+            if not cutoff <= (item.get('date_ts') or 0) <= now:
                 continue
             address = item.get('email')
             if selected and address != selected:
