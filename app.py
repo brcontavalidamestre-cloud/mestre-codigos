@@ -2449,6 +2449,11 @@ def extract_link(html_body, platform):
         return domain_links[0]
     return None
 def email_matches_user(msg, html_body, user_email):
+    # A delegated search can scan messages for other recipients. Discard
+    # nonmatching messages before registering recipient permission checks.
+    exact_target = strict_email_context.get()
+    if exact_target is not None and not exact_email_match(msg, html_body, exact_target):
+        return False
     guard = app.config.get("EMAIL_POOL_MESSAGE_ALLOWED")
     if guard and not guard(msg, html_body):
         return False
@@ -2459,9 +2464,8 @@ def email_matches_user(msg, html_body, user_email):
         for blocked in email_quarantine.emails():
             if exact_email_match(msg, html_body, blocked):
                 return False
-    # Exact recipient matching only for the new isolated bearer-link flow.
-    if strict_email_context.get() is not None:
-        return exact_email_match(msg, html_body, strict_email_context.get())
+    if exact_target is not None:
+        return True
     user_lower = user_email.lower()
     user_lower = user_lower.strip()
 
