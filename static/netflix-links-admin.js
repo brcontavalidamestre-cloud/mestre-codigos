@@ -31,10 +31,7 @@
   launcher.textContent = '🔗 Links Netflix — criar e gerenciar';
   launcher.style.cssText = 'display:block;width:100%;margin:16px 0;padding:20px;border-color:#e24b68;color:#ffc1cc;font-size:1.05rem';
   section.hidden = !directPanel;
-  if (directPanel) {
-    const statusOption=document.getElementById('nfl-status-option');
-    if(statusOption) statusOption.before(section); else main.append(section);
-  }
+  if (directPanel) main.append(section);
   else main.prepend(launcher, section);
   const welcome = document.createElement('p'); welcome.textContent = 'Acesso: ' + identity.username + (identity.principal ? ' — administrador principal' : ' — somente seus emails'); section.prepend(welcome);
   if (!identity.principal && identity.kind !== 'panel') {

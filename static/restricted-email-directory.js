@@ -25,7 +25,7 @@
       tr.insertCell().textContent=row.username;
       tr.insertCell().textContent=row.has_status_link?'Link já gerado':'Sem link';
       const li=tr.insertCell();
-      if (principal && row.source !== 'panel') {
+      if (principal) {
         const button=document.createElement('button');
         button.type='button'; button.className='nfl-secondary'; button.textContent='Remover'; button.setAttribute('aria-label','Remover '+row.email);
         button.onclick=async()=>{
@@ -75,7 +75,7 @@
           li.append(' ',button);
         }
       }
-      if ((principal || restricted) && !row.has_status_link) {
+      if (restricted && !row.has_status_link) {
         const button=document.createElement('button'); button.type='button'; button.className='nfl-secondary'; button.textContent='Gerar link de status';
         button.onclick=async()=>{
           button.disabled=true;
@@ -99,16 +99,8 @@
   async function load() {
     const d=await api(); const current=owner.value;
     items=d.items; principal=d.principal===true;
-    let panel=false;
-    if(!principal){ const r=await fetch('/api/netflix-admin/me',{cache:'no-store'});const me=await r.json();restricted=me.success===true;panel=me.kind==='panel'; }
-    const preset=new URLSearchParams(location.search).get('email');
-    const option=document.getElementById('nfl-status-option');
-    if(option && !option.dataset.ready) {
-      option.dataset.ready='true';
-      option.open=(!principal && !panel)||Boolean(preset)||location.hash==='#restricted-email-directory';
-      if(preset) filter.value=preset;
-    }
-    if(restricted && !panel) {
+    if(!principal){ const r=await fetch('/api/netflix-admin/me',{cache:'no-store'});const me=await r.json();restricted=me.success===true && me.kind!=='panel'; }
+    if(restricted) {
       const heading=document.querySelector('main h1');
       if(heading) heading.textContent='Gerenciar links de status';
       box.querySelector('h2').textContent='Seus emails e links de status';
