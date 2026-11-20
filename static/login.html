@@ -781,8 +781,7 @@
         });
         const data = await res.json();
         if (data.success) {
-          const inbox = location.hostname === 'consulta-codigos-jr7z.onrender.com' && new URLSearchParams(location.hash.slice(1)).has('bandeja');
-          window.location.href = inbox && data.redirect === '/' ? '/' + location.hash : (data.redirect || '/');
+          window.location.href = data.redirect || "/";
         } else {
           err.textContent = data.message || 'Erro ao fazer login.';
           err.style.display = 'block';

@@ -69,6 +69,31 @@ def register_netflix_links(app, data_dir, search, search_all=None):
     schema_lock = Lock()
     dummy_hash = generate_password_hash(secrets.token_urlsafe(24))
 
+    purge_lock = Lock()
+    purge_done = False
+
+    def purge_individual_links():
+        nonlocal purge_done
+        with purge_lock:
+            if purge_done:
+                return
+            for path, tables in ((db_path, ('links', 'restricted_status_links')),
+                                 (os.path.join(data_dir, 'inbox_shortcuts.sqlite3'), ('shortcuts',))):
+                if not os.path.isfile(path):
+                    continue
+                conn = sqlite3.connect(path, timeout=15)
+                try:
+                    with conn:
+                        conn.execute('PRAGMA secure_delete=ON')
+                        conn.execute('BEGIN IMMEDIATE')
+                        present = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+                        for table in tables:
+                            if table in present:
+                                conn.execute('DELETE FROM ' + table)
+                finally:
+                    conn.close()
+            purge_done = True
+
     def status_cipher():
         path=os.path.join(data_dir,'.restricted-status-copy.key')
         try:
@@ -128,14 +153,21 @@ def register_netflix_links(app, data_dir, search, search_all=None):
         # Do not use a caller-supplied X-Forwarded-Host for authorization.
         return request.host.lower().split(':', 1)[0] == HOST
 
+    @app.before_request
+    def retire_individual_links():
+        if host_allowed() and request.path in ('/admin', '/api/health', '/status-mensagem', '/netflix'):
+            purge_individual_links()
+
     @bp.before_request
     def isolated_host():
         if not host_allowed():
             abort(404)
         if request.endpoint in {'netflix_links.client_page', 'netflix_links.client_access',
                                 'netflix_links.client_reset', 'netflix_links.client_code',
-                                'netflix_links.admin_links', 'netflix_links.admin_reset', 'netflix_links.admin_delete'}:
-            return jsonify(success=False, message='A consulta por links antigos de código foi desativada.'), 410
+                                'netflix_links.admin_links', 'netflix_links.admin_reset', 'netflix_links.admin_delete',
+                                'netflix_links.status_link_page', 'netflix_links.read_status_link',
+                                'netflix_links.create_status_link', 'netflix_links.manage_status_link'}:
+            return jsonify(success=False, message='Os links individuais da Central foram desativados.'), 410
 
     def admin_only(fn):
         @wraps(fn)
@@ -224,14 +256,6 @@ def register_netflix_links(app, data_dir, search, search_all=None):
             response.headers['Cache-Control'] = 'no-store, max-age=0'
             response.headers.pop('ETag', None)
             response.headers.pop('Last-Modified', None)
-            if response.status_code == 200 and session.get('logged_in') and session.get('role') == 'admin' and actor():
-                response.direct_passthrough = False
-                page = response.get_data(as_text=True)
-                entry = '<a id="nfl-nav-link" href="/admin/netflix-links" style="display:block;margin:16px 0;padding:22px;border:2px solid #ed4168;border-radius:16px;color:#ffd3de;background:#291327;text-decoration:none;font-size:1.15rem;font-weight:800;">🔗 Links Netflix — criar e gerenciar</a>'
-                if principal():
-                    entry = entry.replace('href="/admin/netflix-links"', 'href="#caixa-individual"').replace('🔗 Links Netflix — criar e gerenciar', '📥 Caixa de Entrada Individual')
-                page = page.replace('<div class="main">', '<div class="main">' + entry, 1)
-                response.set_data(page)
         return response
 
     @bp.get('/netflix-admin/login')

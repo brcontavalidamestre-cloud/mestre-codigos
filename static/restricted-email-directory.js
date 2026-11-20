@@ -6,7 +6,6 @@
   const form=el('form'), owner=el('owner'), field=el('emails'), filter=el('filter'), list=el('list'), status=el('status');
   form.style.display='none';
   let items=[], principal=false, restricted=false;
-  const recentLinks=new Map();
   async function api(body) {
     const r=await fetch('/api/netflix-admin/email-directory', { cache:'no-store', method:body?'POST':'GET', headers:body?{'Content-Type':'application/json'}:{}, body:body?JSON.stringify(body):undefined });
     const d=await r.json();
@@ -18,12 +17,11 @@
     const rows=items.filter(row=>!q||row.email.includes(q)||(principal&&row.username.includes(q)));
     list.replaceChildren();
     if (!rows.length) {
-      const empty=list.insertRow().insertCell();empty.colSpan=4;empty.textContent='Nenhum email encontrado.';
+      const empty=list.insertRow().insertCell();empty.colSpan=3;empty.textContent='Nenhum email encontrado.';
     }
     for (const row of rows) {
       const tr=list.insertRow();tr.insertCell().textContent=row.email;
       tr.insertCell().textContent=row.username;
-      tr.insertCell().textContent=row.has_status_link?'Link já gerado':'Sem link';
       const li=tr.insertCell();
       if (principal) {
         const button=document.createElement('button');
@@ -37,63 +35,6 @@
         };
         li.append(' ',button);
       }
-      function showLink(url) {
-        const input=document.createElement('input'); input.readOnly=true;input.value=url;input.setAttribute('aria-label','Link de status de '+row.email);
-        li.querySelector('input')?.remove();li.querySelector('.red-copy-confirm')?.remove();
-        const copy=document.createElement('button');copy.type='button';copy.className='nfl-secondary red-copy-confirm';copy.textContent='Copiar endereço exibido';
-        copy.onclick=async()=>{
-          try { await navigator.clipboard.writeText(input.value);status.textContent='Link copiado. Agora você pode colar.'; }
-          catch { input.focus();input.select();input.setSelectionRange(0,input.value.length);status.textContent='O navegador bloqueou a cópia automática. Pressione Ctrl+C (ou ⌘C) ou toque e segure no endereço e escolha Copiar.'; }
-        };
-        li.append(input,copy);input.focus();input.select();input.setSelectionRange(0,input.value.length);
-        status.textContent='Clique em Copiar endereço exibido ou copie o texto selecionado.';
-      }
-      if ((principal || restricted) && row.has_status_link) {
-        for (const [action,label] of [['copy','Copiar link'],['reset','Redefinir link'],['delete','Excluir link']]) {
-          const button=document.createElement('button');button.type='button';button.className=action==='copy'?'':'nfl-secondary';button.textContent=label;
-          button.onclick=async()=>{
-            li.querySelector('.red-row-feedback')?.remove();
-            if(action!=='copy'&&!confirm(label+' para '+row.email+'? O link anterior deixará de funcionar.'))return;
-            button.disabled=true;
-            try {
-              const r=await fetch('/api/netflix-admin/status-link/manage',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:row.email,action})});
-              const d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Não foi possível alterar o link.');
-              if(action==='copy'){
-                showLink(d.url);
-                try { await navigator.clipboard.writeText(d.url);status.textContent='Link copiado. Agora você pode colar.'; }
-                catch { /* The visible second button starts a fresh user gesture. */ }
-                return;
-              }
-              if(d.url){recentLinks.set(row.email,d.url);showLink(d.url);}else{recentLinks.delete(row.email);await load();status.textContent='Link apagado. O email continua vinculado.';}
-            }catch(e){
-              li.querySelector('.red-row-feedback')?.remove();
-              const feedback=document.createElement('p');feedback.className='red-row-feedback';feedback.setAttribute('role','status');feedback.textContent=e.message;li.append(feedback);
-              status.textContent=e.message;
-            }
-            finally{button.disabled=false;}
-          };
-          li.append(' ',button);
-        }
-      }
-      if (restricted && !row.has_status_link) {
-        const button=document.createElement('button'); button.type='button'; button.className='nfl-secondary'; button.textContent='Gerar link de status';
-        button.onclick=async()=>{
-          button.disabled=true;
-          try {
-            const r=await fetch('/api/netflix-admin/status-link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({email:row.email})});
-            const d=await r.json(); if(!r.ok||!d.success) throw new Error(d.message||'Não foi possível gerar o link.');
-            row.has_status_link=1;recentLinks.set(row.email,d.url);render();
-            const target=[...list.rows].find(item=>item.cells[0]?.textContent===row.email);
-            target?.querySelector('button')?.focus();
-            status.textContent='Copie o link agora. Ele não tem prazo de validade.';
-          } catch(e) {status.textContent=e.message;}
-          finally {button.disabled=false;}
-        };
-        li.append(' ',button);
-      }
-      if (row.has_status_link && recentLinks.has(row.email)) {
-        const input=document.createElement('input');input.readOnly=true;input.value=recentLinks.get(row.email);input.setAttribute('aria-label','Link de status de '+row.email);li.append(input);
-      }
     }
   }
   async function load() {
@@ -102,8 +43,8 @@
     if(!principal){ const r=await fetch('/api/netflix-admin/me',{cache:'no-store'});const me=await r.json();restricted=me.success===true && me.kind!=='panel'; }
     if(restricted) {
       const heading=document.querySelector('main h1');
-      if(heading) heading.textContent='Gerenciar links de status';
-      box.querySelector('h2').textContent='Seus emails e links de status';
+      if(heading) heading.textContent='Acesso restrito';
+      box.querySelector('h2').textContent='Seus emails permitidos';
     }
     owner.replaceChildren(new Option('Selecione um acesso restrito',''), ...d.accounts.map(name=>new Option(name,name)));
     if (d.accounts.includes(current)) owner.value=current;

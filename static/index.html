@@ -3113,7 +3113,7 @@
     let _bdLast = null;
     let _bdEmailFilter = '';
     const _bdCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com';
-    const _bdShortcutEmail = _bdCentral ? (new URLSearchParams(location.hash.slice(1)).get('bandeja') || '').trim().toLowerCase() : '';
+    if (_bdCentral && /(?:^|[&])(?:bandeja|caixa)=/.test(location.hash.slice(1))) history.replaceState(null, "", location.pathname + location.search);
     function filterBandejaEmail(email) {
       _bdEmailFilter = email || '';
       if (_bdLast) renderBandeja(_bdLast);
@@ -3130,16 +3130,6 @@
       document.getElementById('bd-status').parentElement.classList.add('bd-toolbar');
       document.querySelector('#view-bandeja .section-subtitle').textContent = 'Mensagens dos e-mails vinculados, conforme os filtros ativos · últimos 15 minutos';
       document.getElementById('bd-list').addEventListener('click', async event => {
-        const change = event.target.closest('button[data-bd-switch-account]');
-        if (change) {
-          change.disabled = true;
-          try {
-            const response = await fetch('/api/auth/logout', {method:'POST'});
-            if (!response.ok) throw new Error();
-            location.assign('/login' + location.hash);
-          } catch { change.disabled = false; change.textContent = 'Tentar trocar de conta novamente'; }
-          return;
-        }
         const button = event.target.closest('button[data-bd-email]');
         if (button) filterBandejaEmail(button.dataset.bdEmail);
       });
@@ -3150,18 +3140,6 @@
       const all = j.items || [];
       if (_bdCentral && !all.length && (j.refreshing || j.errors?.length) && !j.inbox_issue) {
         list.innerHTML = '<div class="bd-empty" role="status">' + (j.refreshing ? 'Consultando as caixas de e-mail…' : 'Não foi possível consultar todas as caixas. Aguarde a próxima atualização ou clique em Atualizar agora.') + '</div>';
-        return;
-      }
-      if (_bdShortcutEmail) {
-        const allowed = (j.emails || []).includes(_bdShortcutEmail);
-        if (j.inbox_issue === 'wrong_account') {
-          list.innerHTML = '<div>Este e-mail não está vinculado à conta atual' + (j.inbox_username ? ' (@' + _esc(j.inbox_username) + ')' : '') + '. Entre com a conta do cliente a quem o e-mail foi vinculado.</div><button type="button" class="btn-primary" data-bd-switch-account>Trocar de conta</button>';
-          return;
-        }
-        const title = allowed ? 'Mensagens de ' + _bdShortcutEmail : (j.quarantine_message || 'O vínculo existe, mas a consulta está bloqueada pelas permissões atuais.');
-        list.innerHTML = '<div class="bd-context">' + _esc(title) + '</div>' + (allowed && all.length
-          ? all.map(it => '<article class="bd-record"><div class="bd-record-mark" aria-hidden="true">✉</div><div class="bd-record-main"><div class="bd-subject">Mensagem recebida</div><div class="bd-meta">' + _esc(it.platform) + ' · ' + _esc(_fmtDate(it.date_ts)) + '</div></div></article>').join('')
-          : (allowed ? '<div>' + _esc(j.quarantine_message || 'Nenhuma mensagem nos filtros ativos nos últimos 15 minutos.') + '</div>' : ''));
         return;
       }
       const items = _bdCentral && _bdEmailFilter ? all.filter(it => it.email === _bdEmailFilter) : all;
@@ -3204,7 +3182,6 @@
         if (manual && status) status.textContent = 'Atualizando...';
         const params = new URLSearchParams();
         if (manual) params.set('fresh','1');
-        if (_bdShortcutEmail) params.set('inbox_email',_bdShortcutEmail);
         const r = await fetch('/api/live-inbox/messages' + (params.size ? '?' + params : ''));
         const j = await r.json();
         if (!j.success) {
@@ -3774,7 +3751,6 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
 
     // Iniciação do hash (#loja abre direto a loja)
     if (window.location.hash === '#loja') switchView('loja');
-    else if (_bdShortcutEmail) switchView('bandeja');
 
     // KEEP-ALIVE: aquece a conexão IMAP em background ao carregar a página
     // Isso faz a primeira busca ser quase instantânea (sem cold-start)

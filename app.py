@@ -5405,9 +5405,8 @@ def api_user_live_inbox_messages():
     username = str(session.get("username") or "").strip().lower()
     emails = _user_live_inbox_emails(username)
     central = request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
-    selected = request.args.get('inbox_email', '').strip().lower() if central else ''
-    if selected and selected not in emails:
-        return jsonify(success=True, items=[], emails=[], count=0, inbox_issue='wrong_account', inbox_username=username)
+    if central and ('inbox_email' in request.args or 'inbox_shortcut' in request.args):
+        return jsonify(success=False, message='Os atalhos individuais da bandeja foram desativados.'), 410, {'Cache-Control': 'no-store'}
     if not emails:
         return jsonify({"success": True, "items": [], "emails": [], "count": 0,
                         "message": "Nenhum email vinculado a este usuário."})
