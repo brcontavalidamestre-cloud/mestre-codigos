@@ -5135,6 +5135,20 @@ def _central_inbox_route_recipients(msg, found, allowed, mailbox_user):
 _CENTRAL_INBOX_WINDOW_SECONDS = 15 * 60
 
 
+def _connect_central_inbox(account):
+    # IMAP SELECT changes connection state. A shared connection may be
+    # switched to another folder or closed by a concurrent request.
+    import ssl
+    mail = imaplib.IMAP4_SSL(account['server'], int(account['port']),
+                            ssl_context=ssl.create_default_context(), timeout=8)
+    try:
+        mail.login(account['user'], account['password'])
+        return mail
+    except Exception:
+        mail.shutdown()
+        raise
+
+
 def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48, central=False):
     """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
     vinculados do usuário (INBOX + Spam), extraindo código/link."""
@@ -5168,7 +5182,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     for account_cfg in accounts:
         mail = None
         try:
-            mail = connect_imap(account_cfg)
+            mail = _connect_central_inbox(account_cfg) if central else connect_imap(account_cfg)
             spam_boxes = _get_spam_boxes(mail, account_cfg)
             boxes = ["INBOX"] + [b for b in spam_boxes if b and b.upper() != "INBOX"]
             for mailbox in boxes:
