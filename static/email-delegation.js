@@ -125,7 +125,13 @@
  if(el('ep-admin').value!==value)return;
  const groups=[['Adicionados à lista',result.added_emails],['Já liberados para este responsável',result.already_allowed],['Em outra lista ou vinculados a outro responsável',result.conflict_emails],['Bloqueados pela quarentena',result.blocked_emails],['Endereços inválidos',result.invalid_emails]];
  if(field.value===submitted)field.value=[...result.conflict_emails,...result.blocked_emails,...result.invalid_emails].join('\n');
- const feedback=groups.filter(([,items])=>items.length).map(([label,items])=>`${label} (${items.length}):\n${items.join('\n')}`).join('\n\n');
+ const describe=email=>{
+  const details=Object.hasOwn(result.details||{},email)?result.details[email]:null;
+  const notes=(details?.clients||[]).map(client=>`${client.prevents_grant?'Vínculo com outro responsável':'Vínculo atual'}: ${client.name} (@${client.username})`);
+  if(details?.other_list)notes.push('Já está na lista de @'+details.other_list);
+  return notes.length?email+' — '+notes.join(' · '):email;
+ };
+ const feedback=groups.filter(([,items])=>items.length).map(([label,items])=>`${label} (${items.length}):\n${items.map(describe).join('\n')}`).join('\n\n');
  if(result.added_emails.length){try{await load();}catch{if(el('ep-admin').value===value)status(feedback+'\n\nOs dados foram salvos. Clique em Atualizar lista para recarregar a tabela.');return;}}
  if(el('ep-admin').value===value)status(feedback||result.message);}catch(error){status(error.message);}finally{button.disabled=false;}};
  el('ep-bind').onclick=async()=>{if(!selected.size||!el('ep-client').value){status('Selecione os emails disponíveis e um cliente.');return;}const button=el('ep-bind');button.disabled=true;try{const data=await api('/api/admin/vinculos-emails/import',{assigned_user:el('ep-client').value,emails:[...selected]});await load();status(data.message||'Emails vinculados.');}catch(error){status(error.message);}finally{button.disabled=false;}};

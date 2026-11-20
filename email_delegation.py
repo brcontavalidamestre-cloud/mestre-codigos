@@ -281,10 +281,16 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         with store.serialized():
             existing = store.permissions();subscriptions = load_subscriptions()
             quarantined = quarantine.emails()
+            requested = set(emails)
+            assignments = {}
+            for row in subscriptions:
+                if isinstance(row, dict) and norm(row.get('email')) in requested and norm(row.get('assigned_user')):
+                    assignments.setdefault(norm(row['email']), set()).add(norm(row['assigned_user']))
+            target_accounts = clients_of(target, users) | {target}
             for email in emails:
                 if quarantine.matches(email, quarantined):
                     blocked.append(email)
-                elif (email in existing and existing[email]['admin_user']!=target) or not source_allowed(email,target,users,subscriptions):
+                elif (email in existing and existing[email]['admin_user']!=target) or assignments.get(email, set()) - target_accounts:
                     conflicts.append(email)
                 elif email in existing:
                     already.append(email)
@@ -296,9 +302,16 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
                                      [(email,target,int(time.time()),'admin') for email in added])
                     conn.commit()
                 store.audit('admin','grant',{'admin_user':target,'emails':added})
+        details = {}
+        for email in set(assignments) | set(conflicts) | set(blocked):
+            owner = existing.get(email, {}).get('admin_user')
+            details[email] = dict(other_list=owner if owner and owner != target else None,
+                                  clients=[dict(username=name, name=(users.get(name) or {}).get('name') or name,
+                                                prevents_grant=name not in target_accounts)
+                                           for name in sorted(assignments.get(email, ()))])
         ok = bool(added or already)
         return jsonify(success=ok, message=f'{len(added)} email(s) adicionado(s) à lista de {target}.',
-                       added_emails=added, already_allowed=already, conflict_emails=conflicts,
+                       added_emails=added, already_allowed=already, conflict_emails=conflicts, details=details,
                        blocked_emails=blocked, invalid_emails=invalid), (200 if ok else 409 if conflicts or blocked else 400)
 
     @bp.post('/api/admin/email-pool/revoke')
