@@ -1877,7 +1877,9 @@
           const result = (code || linkOpen || linkCopy)
             ? `${code}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:${code ? '6px' : '0'};">${linkOpen}${linkCopy}</div>`
             : '<span style="color:#888;">—</span>';
-          const snippet = it.snippet ? `<div style="font-size:.73rem;color:var(--tm);margin-top:4px;max-width:420px;">${escapeHtml(it.snippet)}</div>` : '';
+          const snippet = it.message_preview
+            ? `<details style="margin-top:8px;max-width:420px;"><summary style="cursor:pointer;color:#93c5fd;">Ver mensagem</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.82rem;margin-top:6px;">${escapeHtml(it.message_preview)}</div></details>`
+            : (it.snippet ? `<div style="font-size:.73rem;color:var(--tm);margin-top:4px;max-width:420px;">${escapeHtml(it.snippet)}</div>` : '');
           const cx = `<div style="font-size:.78rem;color:#bfdbfe;">${escapeHtml(it.account_name || '')}</div><div style="font-size:.72rem;color:var(--tm);">${escapeHtml(it.mailbox || '')}</div>`;
           const platform = `<div style="font-weight:700;color:#dbeafe;">${escapeHtml(it.matched_platform_name || it.matched_platform || '—')}</div><div style="font-size:.72rem;color:var(--tm);">${escapeHtml(it.matched_platform || '')}</div>`;
           const owner = it.assigned_users_label ? `<div style="font-size:.72rem;color:#93c5fd;margin-top:4px;">${escapeHtml(it.assigned_users_label)}</div>` : '';

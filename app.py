@@ -832,6 +832,20 @@ def _admin_inbox_strip_html(text):
     return text
 
 
+def _admin_inbox_message_preview(body, code=None):
+    from html import unescape
+    text = re.sub(r"(?is)<(script|style|head)\b[^>]*>.*?</\1\s*>", "", str(body or ""))
+    text = re.sub(r"(?i)<br\b[^>]*>|</(?:div|p|li|tr|h[1-6])\s*>", "\n", text)
+    text = unescape(re.sub(r"(?s)<[^>]+>", " ", text))
+    text = re.sub(r"(?i)(?:https?://|www\.)\S+", "[link ocultado]", text)
+    if code:
+        text = re.sub(r"(?<!\w)" + re.escape(str(code).strip()) + r"(?!\w)", "[código ocultado]", text, flags=re.I)
+    text = re.sub(r"(?<!\w)\d(?:[ -]?\d){3,9}(?!\w)", "[número ocultado]", text)
+    lines = [re.sub(r"[^\S\n]+", " ", line).strip() for line in text.splitlines()]
+    text = "\n".join(line for line in lines if line)
+    return text[:3000] + ("…" if len(text) > 3000 else "")
+
+
 def _admin_inbox_date_ts(msg):
     try:
         from email.utils import parsedate_to_datetime
@@ -1036,6 +1050,9 @@ def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=N
                             "date": msg.get("Date", "") or "",
                             "date_ts": msg_ts,
                             "snippet": snippet,
+                            **({"message_preview": _admin_inbox_message_preview(body, code)}
+                               if request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
+                               and session.get('role') == 'admin' and session.get('username') == 'admin' else {}),
                             "code": code,
                             "link": link,
                             "mailbox": mailbox,
