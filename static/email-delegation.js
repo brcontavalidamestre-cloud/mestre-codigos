@@ -18,7 +18,6 @@
    else if(item.assignment_state==='reserved'){actions.textContent='Selecione este email e escolha seu cliente para vincular.';}
    else if(item.assigned_users.length){button.textContent='Remover vínculo';button.onclick=async()=>{if(!confirm('Remover o vínculo de '+item.email+'? O cliente não será excluído e o email continuará na sua lista.'))return;button.disabled=true;try{const data=await api('/api/admin/vinculos-emails/'+encodeURIComponent(item.email),null,'DELETE');await load();status(data.message);}catch(error){status(error.message);button.disabled=false;}};actions.append(button);}
    else{actions.textContent=item.quarantined?'Em quarentena — consulta e novo vínculo bloqueados':'Disponível';}
-   if(item.can_manage&&!item.quarantined){const link=document.createElement('a');link.href='/admin/netflix-links?email='+encodeURIComponent(item.email);link.textContent='🔗 Gerar / gerenciar link individual';link.style.cssText='display:block;color:#a5e3ff;margin:10px 0';actions.append(link);}
    tr.append(actions);rows.append(tr);
   });
  }

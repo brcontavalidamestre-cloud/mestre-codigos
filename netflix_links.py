@@ -132,6 +132,8 @@ def register_netflix_links(app, data_dir, search, search_all=None):
     def isolated_host():
         if not host_allowed():
             abort(404)
+        if app.config.get('NETFLIX_INDIVIDUAL_LINKS_DISABLED'):
+            return jsonify(success=False, message='Os links individuais foram desativados.'), 410
 
     def admin_only(fn):
         @wraps(fn)
@@ -220,7 +222,8 @@ def register_netflix_links(app, data_dir, search, search_all=None):
             response.headers['Cache-Control'] = 'no-store, max-age=0'
             response.headers.pop('ETag', None)
             response.headers.pop('Last-Modified', None)
-            if response.status_code == 200 and session.get('logged_in') and session.get('role') == 'admin' and actor():
+            if (not app.config.get('NETFLIX_INDIVIDUAL_LINKS_DISABLED') and response.status_code == 200
+                    and session.get('logged_in') and session.get('role') == 'admin' and actor()):
                 response.direct_passthrough = False
                 page = response.get_data(as_text=True)
                 entry = '<a id="nfl-nav-link" href="/admin/netflix-links" style="display:block;margin:16px 0;padding:22px;border:2px solid #ed4168;border-radius:16px;color:#ffd3de;background:#291327;text-decoration:none;font-size:1.15rem;font-weight:800;">🔗 Links Netflix — criar e gerenciar</a>'
