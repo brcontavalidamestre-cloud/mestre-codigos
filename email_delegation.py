@@ -97,6 +97,10 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             return fn(*args,**kwargs)
         return wrapped
 
+    def manages_bindings():
+        return central() and actor() in ('admin', 'carlosadm')
+
+
     def clients_of(username, users):
         return {name for name,user in users.items() if norm(user.get('created_by')) == username and user.get('role','client') == 'client'}
 
@@ -176,7 +180,7 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
     @bp.get('/api/admin/email-pool')
     @admin_only
     def listing():
-        username = actor();principal = username == 'admin';users = load_users()
+        username = actor();principal = manages_bindings();users = load_users()
         selected = norm(request.args.get('admin_user')) if principal else username
         admins = [dict(username=name,name=user.get('name') or name) for name,user in users.items() if name!='admin' and user.get('role')=='admin'] if principal else []
         if principal and selected and selected not in {r['username'] for r in admins}:
@@ -196,13 +200,63 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         items.sort(key=lambda item:(item['admin_user'],item['email']))
         clients = [dict(username=name,name=(users.get(name) or {}).get('name') or name) for name in sorted(clients_of(selected,users))] if selected else []
         direct_emails = sorted({norm(s.get('email')) for s in subscriptions if isinstance(s,dict) and selected and norm(s.get('assigned_user'))==selected and norm(s.get('email'))}) if principal else []
-        return jsonify(success=True,principal=principal,admin_user=selected,admins=admins,items=items,clients=clients,direct_emails=direct_emails)
+        targets = [dict(username=name,name=user.get('name') or name, role=user.get('role','client'))
+                   for name,user in sorted(users.items()) if name != 'carlosadm'
+                   and user.get('role','client') in ('admin','client')] if username == 'carlosadm' else []
+        return jsonify(success=True,principal=principal, can_assign_globally=username=='carlosadm',
+                       binding_targets=targets, admin_user=selected,admins=admins,items=items,clients=clients,direct_emails=direct_emails)
+
+    @bp.post('/api/admin/email-pool/assign-authorized')
+    @admin_only
+    def assign_authorized():
+        if actor() != 'carlosadm':
+            return jsonify(success=False, message='Esta ação é restrita ao gestor de vínculos.'), 403
+        data = request.get_json(silent=True)
+        if not isinstance(data, dict):
+            return jsonify(success=False, message='Dados inválidos.'), 400
+        email, target = norm(data.get('email')), norm(data.get('target'))
+        with store.serialized():
+            users = load_users()
+            account = users.get(target) or {}
+            role = account.get('role', 'client')
+            owner = target if role == 'admin' else norm(account.get('created_by'))
+            if not account or target == 'carlosadm' or role not in ('admin','client') or (users.get(owner) or {}).get('role') != 'admin':
+                return jsonify(success=False, message='Escolha um cliente ou outro administrador elegível.'), 400
+            subs = load_subscriptions()
+            rows = [row for row in subs if isinstance(row, dict) and norm(row.get('email')) == email]
+            permission = store.permissions().get(email)
+            if (not permission or quarantine.is_blocked(email)
+                    or ((owner == 'carlosadm' or norm(users[owner].get('created_by')) == 'carlosadm')
+                        and permission['admin_user'] != owner)):
+                return jsonify(success=False, message='O e-mail precisa estar autorizado para esta operação e fora da quarentena.'), 409
+            if len(rows) > 1 or any(norm(row.get('assigned_user')) for row in rows):
+                return jsonify(success=False, message='Remova primeiro o vínculo atual com o cliente.'), 409
+            with store.connect() as conn:
+                conn.execute('UPDATE permissions SET admin_user=? WHERE email=?', (owner,email))
+                if role == 'client':
+                    now = int(time.time())
+                    if rows:
+                        row = rows[0]
+                    else:
+                        row = dict(email=email, created_at=now, start_at=now, expires_at=now+3650*86400,
+                                   dur_days=3650, plataforma='Conta vinculada', valor=0, show_in_panel=False)
+                        subs.append(row)
+                    row.update(assigned_user=target, assigned_user_name=account.get('name') or target)
+                    if save_subscriptions(subs) is False:
+                        conn.rollback()
+                        return jsonify(success=False, message='Não foi possível salvar o vínculo.'), 503
+                conn.commit()
+            store.audit(actor(), 'assign_authorized', {'email':email,'target':target,'previous_admin':permission['admin_user']})
+        invalidate = app.config.get('EMAIL_POOL_BINDINGS_CHANGED')
+        if invalidate:
+            invalidate({owner, target, permission['admin_user']})
+        return jsonify(success=True, message='Vínculo salvo.' if role == 'client' else 'Endereço atribuído à lista do administrador.')
 
     @bp.post('/api/admin/email-pool/unlink-client')
     @admin_only
     def unlink_client():
-        if actor() != 'admin':
-            return jsonify(success=False, message='Apenas o administrador principal pode usar esta ação.'), 403
+        if not manages_bindings():
+            return jsonify(success=False, message='Sem permissão para gerenciar todos os vínculos.'), 403
         data = request.get_json(silent=True)
         if not isinstance(data, dict):
             return jsonify(success=False, message='Dados inválidos.'), 400
@@ -220,7 +274,7 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
                 row['assigned_user_name'] = ''
             if save_subscriptions(subs) is False:
                 return jsonify(success=False, message='Não foi possível salvar a remoção.'), 503
-            store.audit('admin', 'unlink', {'email': email, 'previous_users': [client]})
+            store.audit(actor(), 'unlink', {'email': email, 'previous_users': [client]})
         invalidate = app.config.get('EMAIL_POOL_BINDINGS_CHANGED')
         if invalidate:
             invalidate({client})
@@ -229,8 +283,8 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
     @bp.get('/api/admin/email-pool/search')
     @admin_only
     def search_addresses():
-        if actor() != 'admin':
-            return jsonify(success=False, message='Busca disponível somente para o administrador principal.'), 403
+        if not manages_bindings():
+            return jsonify(success=False, message='Busca restrita à gestão global de vínculos.'), 403
         query = norm(request.args.get('q'))
         if not 3 <= len(query) <= 254:
             return jsonify(success=False, message='Digite pelo menos 3 caracteres do e-mail.'), 400
@@ -265,14 +319,17 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
     @bp.post('/api/admin/email-pool/grant')
     @admin_only
     def grant():
-        if actor()!='admin':
-            return jsonify(success=False,message='Somente o admin principal pode alterar a lista permitida.'),403
+        if not manages_bindings():
+            return jsonify(success=False,message='Sem permissão para gerenciar as listas de outros administradores.'),403
         data = request.get_json(silent=True) or {}
         if not isinstance(data,dict):
             return jsonify(success=False,message='Dados inválidos.'),400
         target = norm(data.get('admin_user'));users = load_users()
         if target=='admin' or (users.get(target) or {}).get('role')!='admin':
             return jsonify(success=False,message='Selecione um subadmin válido.'),400
+        username = actor()
+        if username == 'carlosadm' and target == username:
+            return jsonify(success=False, message='Somente o admin principal pode liberar e-mails para a lista do próprio Carlos.'), 403
         try:
             emails, invalid = parse(data.get('emails'), allow_invalid=True)
         except ValueError as error:
@@ -290,7 +347,7 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             for email in emails:
                 if quarantine.matches(email, quarantined):
                     blocked.append(email)
-                elif (email in existing and existing[email]['admin_user']!=target) or assignments.get(email, set()) - target_accounts:
+                elif (username == 'carlosadm' and email not in existing) or (email in existing and existing[email]['admin_user']!=target) or assignments.get(email, set()) - target_accounts:
                     conflicts.append(email)
                 elif email in existing:
                     already.append(email)
@@ -299,13 +356,14 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             if added:
                 with store.connect() as conn:
                     conn.executemany('INSERT INTO permissions VALUES(?,?,?,?)',
-                                     [(email,target,int(time.time()),'admin') for email in added])
+                                     [(email,target,int(time.time()),username) for email in added])
                     conn.commit()
-                store.audit('admin','grant',{'admin_user':target,'emails':added})
+                store.audit(username,'grant',{'admin_user':target,'emails':added})
         details = {}
         for email in set(assignments) | set(conflicts) | set(blocked):
             owner = existing.get(email, {}).get('admin_user')
-            details[email] = dict(other_list=owner if owner and owner != target else None,
+            details[email] = dict(needs_authorization=username=='carlosadm' and email not in existing,
+                                  other_list=owner if owner and owner != target else None,
                                   clients=[dict(username=name, name=(users.get(name) or {}).get('name') or name,
                                                 prevents_grant=name not in target_accounts)
                                            for name in sorted(assignments.get(email, ()))])
@@ -317,15 +375,15 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
     @bp.post('/api/admin/email-pool/revoke')
     @admin_only
     def revoke():
-        if actor()!='admin':
-            return jsonify(success=False,message='Somente o admin principal pode alterar a lista permitida.'),403
+        if not manages_bindings():
+            return jsonify(success=False,message='Sem permissão para gerenciar as listas de outros administradores.'),403
         data = request.get_json(silent=True) or {};email = norm(data.get('email')) if isinstance(data,dict) else ''
         with store.serialized(), store.connect() as conn:
             deleted = conn.execute('DELETE FROM permissions WHERE email=?',(email,)).rowcount
             conn.commit()
             if deleted:
                 revoke_link(email)
-                store.audit('admin','revoke',{'email':email})
+                store.audit(actor(),'revoke',{'email':email})
         return jsonify(success=True,message='Permissão removida. O vínculo atual e o cliente foram preservados.')
 
     def mutation_guard(kind, kwargs, data):

@@ -30,7 +30,7 @@
   const filter=params.get('admin_user')||'';
   const data=await api('/api/admin/email-pool?admin_user='+encodeURIComponent(filter));
   let directory=null;
-  if(data.principal){
+  if(data.principal&&!data.can_assign_globally){
    try{directory=await api('/api/netflix-admin/email-directory');}
    catch(error){if(id===version)status('Não foi possível carregar os acessos restritos: '+error.message);}
   }
@@ -92,6 +92,22 @@
        row.list_owner=target;showDetails();
        if(el('ep-admin').value===target||!el('ep-admin').value)await load().catch(()=>{});
       }catch(error){note.textContent=error.message;button.disabled=false;targets.disabled=false;}
+     };
+    }
+    if(state.can_assign_globally){
+     button.hidden=true;targets.hidden=true;note.textContent='';
+     const assign=document.createElement('button');assign.type='button';assign.textContent='Atribuir e-mail';
+     const destination=document.createElement('select');destination.setAttribute('aria-label','Destino para '+row.email);
+     options(destination,(state.binding_targets||[]).map(u=>({...u,name:(u.role==='admin'?'Admin: ':'Cliente: ')+u.name})),'Selecione um cliente ou admin');
+     const reason=row.quarantined?'Endereço em quarentena.':row.clients.length?'Remova primeiro o vínculo atual.':!row.list_owner?'Endereço ainda não autorizado.':'';
+     assign.disabled=Boolean(reason);destination.disabled=Boolean(reason);note.textContent=reason;
+     controls.prepend(destination,' ',assign,' ');
+     assign.onclick=async()=>{
+      const target=destination.value;if(!target){destination.focus();return;}
+      if(!confirm('Atribuir '+row.email+' a @'+target+'?'))return;
+      assign.disabled=true;destination.disabled=true;note.textContent='Salvando…';
+      try{const data=await api('/api/admin/email-pool/assign-authorized',{email:row.email,target});if(id===searchVersion){status(data.message);el('ep-global-search').requestSubmit();load().catch(()=>{});}}
+      catch(error){note.textContent=error.message;assign.disabled=false;destination.disabled=false;}
      };
     }
     for(const client of row.clients){
