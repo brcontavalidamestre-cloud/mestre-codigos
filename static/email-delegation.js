@@ -37,14 +37,14 @@
   }
   if(id!==version)return;
   directoryMode=!!(data.principal&&restricted&&directory?.accounts.includes(restricted));
-  state=directoryMode?{...data,items:directory.items.filter(row=>row.username===restricted).map(row=>({email:row.email,admin_user:row.username,assigned_names:['—']}))}:data;
+  state=directoryMode?{...data,items:directory.items.filter(row=>row.username===restricted&&row.source!=='panel').map(row=>({email:row.email,admin_user:row.username,assigned_names:['—']}))}:data;
   selected=new Set();
   el('ep-copy-direct').hidden=directoryMode||!data.principal||!(data.direct_emails||[]).length;
   el('ep-principal').hidden=!data.principal;el('ep-transfer').hidden=data.principal;
   el('ep-grant-help').textContent=directoryMode?'Até 200 por vez. O acesso restrito vê somente a própria lista. No painel do acesso restrito, os endereços desta lista podem gerar links de status, sem códigos. A lista não altera os vínculos do painel.':initialHelp;
   el('ep-owner').textContent=directoryMode?'Lista do acesso restrito: '+restricted:data.principal?'Você define a lista permitida de cada responsável.':'Você só pode alterar os emails liberados nesta lista.';
   if(data.principal){
-   const select=el('ep-admin');options(select,[],'Selecione um responsável');
+   const select=el('ep-admin');options(select,[],'Selecione um subadmin ou acesso restrito');
    const group=(label,entries,prefix)=>{const node=document.createElement('optgroup');node.label=label;entries.forEach(({username,name})=>node.append(new Option(name&&name!==username?name+' ('+username+')':username,prefix+username)));select.append(node);};
    group('Subadmins do painel',data.admins,'');
    if(directory?.accounts.length)group('Acessos restritos',directory.accounts.map(username=>({username})),'restricted:');
