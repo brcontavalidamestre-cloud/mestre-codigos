@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
+from flask import Flask, g, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import imaplib
@@ -5384,7 +5384,12 @@ def scope_central_inbox_to_current_filters(response):
         items = []
         now = time.time()
         cutoff = now - _CENTRAL_INBOX_WINDOW_SECONDS
-        selected = request.args.get('inbox_email', '').strip().lower()
+        shortcut_email = getattr(g, 'inbox_shortcut_email', '')
+        selected = shortcut_email or request.args.get('inbox_email', '').strip().lower()
+        if shortcut_email and app.config['INBOX_SHORTCUT_RESOLVE'](g.inbox_shortcut_slug, session.get('username')) != shortcut_email:
+            revoked = jsonify(success=False, message='Este atalho não está disponível para esta conta.'); revoked.status_code = 404
+            revoked.headers['Cache-Control'] = 'no-store'
+            return revoked
         for item in data.get('items', []):
             if not cutoff <= (item.get('date_ts') or 0) <= now:
                 continue
@@ -5397,11 +5402,18 @@ def scope_central_inbox_to_current_filters(response):
             recipients = row.get('recipients') or []
             if not recipients or not set(recipients).issubset(owned) or any(email_quarantine.is_blocked(e) for e in recipients):
                 continue
+            if shortcut_email and set(recipients) != {shortcut_email}:
+                continue
             if selected:
                 row = {key: row[key] for key in ('email', 'recipients', 'platform', 'date_ts')}
             elif recipients != [address]:
                 row.pop('message_preview', None)
             items.append(row)
+        if shortcut_email:
+            items = sorted(items, key=lambda item: item['date_ts'], reverse=True)[:3]
+            data['emails'] = [shortcut_email] if shortcut_email in data.get('emails', []) else []
+            data['shortcut_email'] = shortcut_email
+            data['errors'] = ['Uma ou mais caixas não responderam.'] if data.get('errors') else []
         data['items'] = items
     data['count'] = len(data['items'])
     response.set_data(app.json.dumps(data))
@@ -5420,6 +5432,13 @@ def api_user_live_inbox_messages():
     emails = _user_live_inbox_emails(username)
     central = request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
     selected = request.args.get('inbox_email', '').strip().lower() if central else ''
+    if central and 'inbox_shortcut' in request.args:
+        g.inbox_shortcut_slug = request.args.get('inbox_shortcut', '')
+        selected = app.config['INBOX_SHORTCUT_RESOLVE'](g.inbox_shortcut_slug, username)
+        allowed = app.config.get('EMAIL_POOL_CONSULT_ALLOWED')
+        if not selected or selected not in emails or (allowed and not allowed(selected, username)):
+            return jsonify(success=False, message='Este atalho não está disponível para esta conta.'), 404, {'Cache-Control': 'no-store'}
+        g.inbox_shortcut_email = selected
     if selected and selected not in emails:
         return jsonify(success=True, items=[], emails=[], count=0, inbox_issue='wrong_account', inbox_username=username)
     if not emails:
@@ -9346,6 +9365,9 @@ register_delegated_access(app, email_permission_store, load_users, load_subscrip
 from email_uniqueness import register_email_uniqueness
 app.config['EMAIL_UNIQUENESS_INTERNAL_TOKEN'] = MASTER_API_TOKEN
 register_email_uniqueness(app, _data_dir, load_subscriptions)
+
+from inbox_shortcuts import register_inbox_shortcuts
+register_inbox_shortcuts(app, _data_dir, load_users, load_subscriptions, email_quarantine)
 
 from purchase_code_links import register_purchase_code_links
 from purchase_code_search import make_purchase_code_search

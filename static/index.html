@@ -3114,6 +3114,7 @@
     let _bdEmailFilter = '';
     const _bdCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com';
     const _bdShortcutEmail = _bdCentral ? (new URLSearchParams(location.hash.slice(1)).get('bandeja') || '').trim().toLowerCase() : '';
+    const _bdShortcutSlug = _bdCentral ? new URLSearchParams(location.hash.slice(1)).get('caixa') : null;
     function filterBandejaEmail(email) {
       _bdEmailFilter = email || '';
       if (_bdLast) renderBandeja(_bdLast);
@@ -3152,13 +3153,14 @@
         list.innerHTML = '<div class="bd-empty" role="status">' + (j.refreshing ? 'Consultando as caixas de e-mail…' : 'Não foi possível consultar todas as caixas. Aguarde a próxima atualização ou clique em Atualizar agora.') + '</div>';
         return;
       }
-      if (_bdShortcutEmail) {
-        const allowed = (j.emails || []).includes(_bdShortcutEmail);
+      if (_bdShortcutEmail || _bdShortcutSlug !== null) {
+        const address = j.shortcut_email || _bdShortcutEmail;
+        const allowed = (j.emails || []).includes(address);
         if (j.inbox_issue === 'wrong_account') {
           list.innerHTML = '<div>Este e-mail não está vinculado à conta atual' + (j.inbox_username ? ' (@' + _esc(j.inbox_username) + ')' : '') + '. Entre com a conta do cliente a quem o e-mail foi vinculado.</div><button type="button" class="btn-primary" data-bd-switch-account>Trocar de conta</button>';
           return;
         }
-        const title = allowed ? 'Mensagens de ' + _bdShortcutEmail : (j.quarantine_message || 'O vínculo existe, mas a consulta está bloqueada pelas permissões atuais.');
+        const title = allowed ? 'Mensagens de ' + address : (j.quarantine_message || 'O vínculo existe, mas a consulta está bloqueada pelas permissões atuais.');
         list.innerHTML = '<div class="bd-context">' + _esc(title) + '</div>' + (allowed && all.length
           ? all.map(it => '<article class="bd-record"><div class="bd-record-mark" aria-hidden="true">✉</div><div class="bd-record-main"><div class="bd-subject">Mensagem recebida</div><div class="bd-meta">' + _esc(it.platform) + ' · ' + _esc(_fmtDate(it.date_ts)) + '</div></div></article>').join('')
           : (allowed ? '<div>' + _esc(j.quarantine_message || 'Nenhuma mensagem nos filtros ativos nos últimos 15 minutos.') + '</div>' : ''));
@@ -3204,11 +3206,16 @@
         if (manual && status) status.textContent = 'Atualizando...';
         const params = new URLSearchParams();
         if (manual) params.set('fresh','1');
-        if (_bdShortcutEmail) params.set('inbox_email',_bdShortcutEmail);
+        if (_bdShortcutSlug !== null) params.set('inbox_shortcut', _bdShortcutSlug);
+        else if (_bdShortcutEmail) params.set('inbox_email',_bdShortcutEmail);
         const r = await fetch('/api/live-inbox/messages' + (params.size ? '?' + params : ''), { cache: 'no-store' });
         const j = await r.json();
         if (!j.success) {
-          if (j.quarantined && list) list.textContent = j.message || 'Esse email está na lista que não pode receber códigos.';
+          if (_bdShortcutSlug !== null && list) {
+            _bdLast = null;
+            list.textContent = j.message || 'Este atalho não está disponível para esta conta.';
+            if (r.status === 401) location.assign('/login' + location.hash);
+          } else if (j.quarantined && list) list.textContent = j.message || 'Esse email está na lista que não pode receber códigos.';
           if (status) status.textContent = j.message || 'Erro ao carregar.';
           return;
         }
@@ -3774,7 +3781,7 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
 
     // Iniciação do hash (#loja abre direto a loja)
     if (window.location.hash === '#loja') switchView('loja');
-    else if (_bdShortcutEmail) switchView('bandeja');
+    else if (_bdShortcutEmail || _bdShortcutSlug !== null) switchView('bandeja');
 
     // KEEP-ALIVE: aquece a conexão IMAP em background ao carregar a página
     // Isso faz a primeira busca ser quase instantânea (sem cold-start)

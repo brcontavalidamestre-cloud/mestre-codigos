@@ -2112,7 +2112,7 @@
               <td>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                   <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(it.assigned_user || '')}'; loadVinculosEmails();">🎯 Ver só este</button>
-                  ${location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin' && it.assigned_user && normalizedEmail ? `<button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="copyInboxShortcut(this)">📥 Copiar atalho da caixa</button>` : ''}
+                  ${location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin' && it.assigned_user && normalizedEmail ? `<button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'copy')">📥 Gerar / copiar link</button><button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'rotate')">Atualizar link</button><button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'remove')">Excluir link</button>` : ''}
                   <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
                 </div>
               </td>
@@ -2130,11 +2130,24 @@
       }
     }
 
-    async function copyInboxShortcut(button) {
-      const url = new URL('/', location.origin);
-      url.hash = new URLSearchParams({ bandeja: button.dataset.inboxEmail }).toString();
-      try { await navigator.clipboard.writeText(url.href); toast('Atalho copiado. O cliente precisa entrar na conta.', '#15803d'); }
-      catch { window.prompt('Copie o atalho da caixa. O cliente precisa entrar na conta.', url.href); }
+    async function manageInboxShortcut(button, action) {
+      if (action !== 'copy' && !window.confirm((action === 'rotate' ? 'Atualizar' : 'Excluir') + ' o link de ' + button.dataset.inboxEmail + '? O link antigo deixará de funcionar.')) return;
+      const controls = Array.from(button.parentElement.querySelectorAll('[data-inbox-email]'));
+      controls.forEach(el => el.disabled = true);
+      try {
+        const response = await fetch('/api/admin/inbox-shortcuts', {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({email: button.dataset.inboxEmail, action})
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || 'Não foi possível gerenciar o link.');
+        if (action === 'remove') { toast('Link excluído. O vínculo foi mantido.', '#15803d'); return; }
+        const url = new URL('/', location.origin);
+        url.hash = new URLSearchParams({caixa: result.slug}).toString();
+        try { await navigator.clipboard.writeText(url.href); toast('Link da caixa copiado.', '#15803d'); }
+        catch { window.prompt('Copie o link da caixa de entrada:', url.href); }
+      } catch (error) { toast(error.message || 'Não foi possível gerenciar o link.', '#b91c1c'); }
+      finally { controls.forEach(el => el.disabled = false); }
     }
 
     function vinculosImportFeedback(message, failed=false) {

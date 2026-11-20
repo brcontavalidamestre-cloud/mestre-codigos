@@ -787,7 +787,7 @@
           if (central && /^[A-Za-z0-9_-]{43}$/.test(confirmation) && data.role === 'client') {
             window.location.href = '/confirmar-email#' + confirmation;
           } else {
-            window.location.href = central && fragment.has('bandeja') && data.redirect === '/' ? '/' + location.hash : (data.redirect || '/');
+            window.location.href = central && (fragment.has('bandeja') || fragment.has('caixa')) && data.redirect === '/' ? '/' + location.hash : (data.redirect || '/');
           }
         } else {
           err.textContent = data.message || 'Erro ao fazer login.';
