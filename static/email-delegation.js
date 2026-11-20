@@ -1,7 +1,7 @@
 'use strict';
 (()=>{
  const el=id=>document.getElementById(id);let state=null;let selected=new Set();let version=0;let directoryMode=false;
- const status=text=>{el('ep-status').textContent=text;};
+ const status=text=>{const node=el('ep-status');node.style.whiteSpace='pre-wrap';node.style.overflowWrap='anywhere';node.textContent=text;};
  async function api(path,body,method){const response=await fetch(path,{method:method||(body?'POST':'GET'),cache:'no-store',headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});const data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Não foi possível concluir.');return data;}
  function options(select,items,placeholder){select.replaceChildren();const first=document.createElement('option');first.value='';first.textContent=placeholder;select.append(first);items.forEach(item=>{const option=document.createElement('option');option.value=item.username;option.textContent=(item.name||item.username)+' ('+item.username+')';select.append(option);});}
  function render(){
@@ -54,7 +54,16 @@
  el('ep-copy-direct').onclick=()=>{el('ep-emails').value=(state.direct_emails||[]).join('\n');status('Confira os emails e clique em Adicionar à lista permitida para aprovar.');};
  el('ep-admin').onchange=()=>{const value=el('ep-admin').value;const param=value.startsWith('restricted:')?'acesso_restrito':'admin_user';const next=value.startsWith('restricted:')?value.slice(11):value;history.replaceState(null,'','/admin/emails-subadmins'+(next?'?'+param+'='+encodeURIComponent(next):''));status('');load().catch(error=>status(error.message));};
  el('ep-search').oninput=()=>{if(state)render();};el('ep-refresh').onclick=()=>load().catch(error=>status(error.message));
- el('ep-grant').onsubmit=async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');if(!el('ep-admin').value){status('Selecione um responsável.');return;}button.disabled=true;try{const value=el('ep-admin').value;const result=await (value.startsWith('restricted:')?api('/api/netflix-admin/email-directory',{action:'assign',username:value.slice(11),emails:el('ep-emails').value}):api('/api/admin/email-pool/grant',{admin_user:value,emails:el('ep-emails').value}));el('ep-emails').value='';await load();status(result.message||'Lista permitida atualizada.');}catch(error){status(error.message);}finally{button.disabled=false;}};
+ el('ep-grant').onsubmit=async event=>{event.preventDefault();const button=event.currentTarget.querySelector('button');if(!el('ep-admin').value){status('Selecione um responsável.');return;}button.disabled=true;try{const value=el('ep-admin').value;const field=el('ep-emails');const submitted=field.value;
+ if(value.startsWith('restricted:')){const result=await api('/api/netflix-admin/email-directory',{action:'assign',username:value.slice(11),emails:submitted});if(field.value===submitted)field.value='';await load();status(result.message||'Lista permitida atualizada.');return;}
+ const response=await fetch('/api/admin/email-pool/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin_user:value,emails:submitted})});
+ const result=await response.json();if(!Array.isArray(result.added_emails))throw new Error(result.message||'Não foi possível atualizar a lista.');
+ if(el('ep-admin').value!==value)return;
+ const groups=[['Adicionados à lista',result.added_emails],['Já liberados para este responsável',result.already_allowed],['Em outra lista ou vinculados a outro responsável',result.conflict_emails],['Bloqueados pela quarentena',result.blocked_emails],['Endereços inválidos',result.invalid_emails]];
+ if(field.value===submitted)field.value=[...result.conflict_emails,...result.blocked_emails,...result.invalid_emails].join('\n');
+ const feedback=groups.filter(([,items])=>items.length).map(([label,items])=>`${label} (${items.length}):\n${items.join('\n')}`).join('\n\n');
+ if(result.added_emails.length){try{await load();}catch{if(el('ep-admin').value===value)status(feedback+'\n\nOs dados foram salvos. Clique em Atualizar lista para recarregar a tabela.');return;}}
+ if(el('ep-admin').value===value)status(feedback||result.message);}catch(error){status(error.message);}finally{button.disabled=false;}};
  el('ep-bind').onclick=async()=>{if(!selected.size||!el('ep-client').value){status('Selecione os emails disponíveis e um cliente.');return;}const button=el('ep-bind');button.disabled=true;try{const data=await api('/api/admin/vinculos-emails/import',{assigned_user:el('ep-client').value,emails:[...selected]});await load();status(data.message||'Emails vinculados.');}catch(error){status(error.message);}finally{button.disabled=false;}};
  load().catch(error=>status(error.message));
 })();

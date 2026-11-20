@@ -152,13 +152,19 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
     app.config['EMAIL_POOL_LINK_OWNER']=link_owner
     app.config['EMAIL_POOL_VISIBLE_LINK']=visible_link
 
-    def parse(raw):
+    def parse(raw, allow_invalid=False):
         if isinstance(raw,list):
             raw = '\n'.join(str(v) for v in raw)
         if not isinstance(raw,str) or len(raw)>60000:
             raise ValueError('Informe uma lista de até 200 emails.')
         emails = list(dict.fromkeys(norm(v) for v in re.split(r'[\s,;]+',raw) if v.strip()))
-        if not emails or len(emails)>200 or any(len(e)>254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',e) for e in emails):
+        if not emails or len(emails)>200:
+            raise ValueError('Informe de 1 a 200 emails. Nenhuma alteração foi aplicada.')
+        invalid = [e for e in emails if len(e)>254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+',e)]
+        if allow_invalid:
+            invalid_set = set(invalid)
+            return [e for e in emails if e not in invalid_set], invalid
+        if invalid:
             raise ValueError('Informe de 1 a 200 emails válidos. Nenhuma alteração foi aplicada.')
         return emails
 
@@ -204,20 +210,32 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         if target=='admin' or (users.get(target) or {}).get('role')!='admin':
             return jsonify(success=False,message='Selecione um subadmin válido.'),400
         try:
-            emails = parse(data.get('emails'))
+            emails, invalid = parse(data.get('emails'), allow_invalid=True)
         except ValueError as error:
             return jsonify(success=False,message=str(error)),400
+        added, already, conflicts, blocked = [], [], [], []
         with store.serialized():
             existing = store.permissions();subscriptions = load_subscriptions()
-            conflicts = [email for email in emails if (email in existing and existing[email]['admin_user']!=target) or not source_allowed(email,target,users,subscriptions)]
-            if conflicts:
-                return jsonify(success=False,message='Há emails de outra lista ou vinculados a outro responsável. Remova a permissão ou o vínculo anterior antes de liberar.',conflict_emails=conflicts),409
-            with store.connect() as conn:
-                for email in emails:
-                    conn.execute('INSERT OR IGNORE INTO permissions VALUES(?,?,?,?)',(email,target,int(time.time()),'admin'))
-                conn.commit()
-            store.audit('admin','grant',{'admin_user':target,'emails':emails})
-        return jsonify(success=True,message=f'{len(emails)} email(s) na lista permitida de {target}.')
+            quarantined = quarantine.emails()
+            for email in emails:
+                if quarantine.matches(email, quarantined):
+                    blocked.append(email)
+                elif (email in existing and existing[email]['admin_user']!=target) or not source_allowed(email,target,users,subscriptions):
+                    conflicts.append(email)
+                elif email in existing:
+                    already.append(email)
+                else:
+                    added.append(email)
+            if added:
+                with store.connect() as conn:
+                    conn.executemany('INSERT INTO permissions VALUES(?,?,?,?)',
+                                     [(email,target,int(time.time()),'admin') for email in added])
+                    conn.commit()
+                store.audit('admin','grant',{'admin_user':target,'emails':added})
+        ok = bool(added or already)
+        return jsonify(success=ok, message=f'{len(added)} email(s) adicionado(s) à lista de {target}.',
+                       added_emails=added, already_allowed=already, conflict_emails=conflicts,
+                       blocked_emails=blocked, invalid_emails=invalid), (200 if ok else 409 if conflicts or blocked else 400)
 
     @bp.post('/api/admin/email-pool/revoke')
     @admin_only
