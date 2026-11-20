@@ -132,8 +132,10 @@ def register_netflix_links(app, data_dir, search, search_all=None):
     def isolated_host():
         if not host_allowed():
             abort(404)
-        if app.config.get('NETFLIX_INDIVIDUAL_LINKS_DISABLED'):
-            return jsonify(success=False, message='Os links individuais foram desativados.'), 410
+        if request.endpoint in {'netflix_links.client_page', 'netflix_links.client_access',
+                                'netflix_links.client_reset', 'netflix_links.client_code',
+                                'netflix_links.admin_links', 'netflix_links.admin_reset', 'netflix_links.admin_delete'}:
+            return jsonify(success=False, message='A consulta por links antigos de código foi desativada.'), 410
 
     def admin_only(fn):
         @wraps(fn)
@@ -222,8 +224,7 @@ def register_netflix_links(app, data_dir, search, search_all=None):
             response.headers['Cache-Control'] = 'no-store, max-age=0'
             response.headers.pop('ETag', None)
             response.headers.pop('Last-Modified', None)
-            if (not app.config.get('NETFLIX_INDIVIDUAL_LINKS_DISABLED') and response.status_code == 200
-                    and session.get('logged_in') and session.get('role') == 'admin' and actor()):
+            if response.status_code == 200 and session.get('logged_in') and session.get('role') == 'admin' and actor():
                 response.direct_passthrough = False
                 page = response.get_data(as_text=True)
                 entry = '<a id="nfl-nav-link" href="/admin/netflix-links" style="display:block;margin:16px 0;padding:22px;border:2px solid #ed4168;border-radius:16px;color:#ffd3de;background:#291327;text-decoration:none;font-size:1.15rem;font-weight:800;">🔗 Links Netflix — criar e gerenciar</a>'
@@ -484,15 +485,7 @@ def register_netflix_links(app, data_dir, search, search_all=None):
     @bp.get('/admin/netflix-links')
     @manager_only
     def admin_panel():
-        manager = g.netflix_manager
-        if not manager['principal'] and manager.get('kind') != 'panel':
-            return send_from_directory(app.static_folder, 'netflix-status-admin.html')
         return send_from_directory(app.static_folder, 'netflix-links-panel.html')
-
-    @bp.get('/admin/netflix-links/status')
-    @manager_only
-    def admin_status_panel():
-        return send_from_directory(app.static_folder, 'netflix-status-admin.html')
 
     @bp.route('/api/admin/netflix-links', methods=['GET', 'POST'])
     @manager_only

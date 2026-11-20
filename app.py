@@ -9147,8 +9147,7 @@ def api_keepalive():
         return jsonify({"success": False, "error": str(e)[:200]})
     return jsonify({"success": True, "imap_ready": False})
 
-# Individual shared links are retired; purchase links use a separate blueprint.
-app.config['NETFLIX_INDIVIDUAL_LINKS_DISABLED'] = True
+# Isolated Netflix access links: central host only; no changes to existing flows.
 from flask import has_request_context
 from quarantine import QuarantineStore, register_quarantine, HOST as QUARANTINE_HOST, MESSAGE as QUARANTINE_MESSAGE
 email_quarantine = QuarantineStore(_data_dir)

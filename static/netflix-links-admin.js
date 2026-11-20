@@ -2,8 +2,7 @@
 (async () => {
   if (location.hostname !== 'consulta-codigos-jr7z.onrender.com') return;
   if (location.pathname === '/admin' && document.getElementById('nfl-nav-link')) return;
-  const statusPanel = location.pathname === '/admin/netflix-links/status';
-  const directPanel = statusPanel || location.pathname === '/admin/netflix-links';
+  const directPanel = location.pathname === '/admin/netflix-links';
   let identity;
   try {
     identity = await (await fetch('/api/netflix-admin/me', {cache:'no-store'})).json();
@@ -22,107 +21,5 @@
       directory.prepend(logout);
     }
     return;
-  }
-  if (statusPanel) {
-    document.querySelector('main h1').textContent = 'Gerenciar links de status';
-    document.getElementById('restricted-email-directory').removeAttribute('hidden');
-    return;
-  }
-  const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/static/netflix-links.css?v=7'; document.head.append(css);
-  const section = document.createElement('section'); section.className = 'nfl-admin';
-  section.innerHTML = `<h2>🔗 Links Netflix</h2><p>Um link exclusivo por email, somente para códigos Netflix. Apenas o administrador pode redefinir os links. Compartilhe cada endereço somente com o respectivo cliente.</p><form id="nfl-create"><label for="nfl-add-email">Adicionar vários emails de uma vez</label><textarea id="nfl-add-email" rows="6" maxlength="60000" required placeholder="cliente1@exemplo.com&#10;cliente2@exemplo.com&#10;cliente3@exemplo.com" aria-label="Emails dos clientes"></textarea><small>Até 200 emails por vez. Use um por linha ou separe por vírgula ou ponto e vírgula. Não é permitido gerar dois links para o mesmo email. Subadmins só podem usar os emails que o admin principal liberou na lista deles. Para esses emails, o link usa o mesmo cadastro já vinculado, sem duplicar o cliente. O subadmin pode excluir seus links e remover os emails dos clientes dele. Somente o admin principal pode retirar emails da lista permitida.</small><button type="submit">Gerar links para os emails</button></form><label for="nfl-search">Pesquisar email</label><input id="nfl-search" type="search" placeholder="Digite parte do email…"><div id="nfl-admin-status" role="status" aria-live="polite"></div><div id="nfl-generated" hidden><label for="nfl-generated-url">Emails e links gerados</label><textarea id="nfl-generated-url" rows="8" readonly></textarea><button id="nfl-generated-copy" type="button">Copiar todos os links gerados</button></div><div class="nfl-scroll"><table><thead><tr><th>Email</th><th>Criado em</th><th>Última redefinição</th><th>Responsável</th><th>Ações</th></tr></thead><tbody id="nfl-rows"></tbody></table></div><button id="nfl-refresh" type="button" class="nfl-secondary">Atualizar lista</button>`;
-  const main = document.querySelector('.main'); if (!main) return;
-  const launcher = document.createElement('button');
-  launcher.type = 'button'; launcher.className = 'btn-ref';
-  launcher.textContent = '🔗 Links Netflix — criar e gerenciar';
-  launcher.style.cssText = 'display:block;width:100%;margin:16px 0;padding:20px;border-color:#e24b68;color:#ffc1cc;font-size:1.05rem';
-  section.hidden = !directPanel;
-  if (directPanel) main.append(section);
-  else main.prepend(launcher, section);
-  const welcome = document.createElement('p'); welcome.textContent = 'Acesso: ' + identity.username + (identity.principal ? ' — administrador principal' : ' — somente seus emails'); section.prepend(welcome);
-  if (!identity.principal && identity.kind !== 'panel') {
-    const logout=document.createElement('button'); logout.type='button'; logout.className='nfl-secondary'; logout.textContent='Sair deste acesso';
-    logout.onclick=async()=>{await fetch('/api/netflix-admin/logout',{method:'POST'});location.replace('/netflix-admin/login');};
-    section.prepend(logout);
-  }
-  const el = id => section.querySelector('#' + id);
-  const message = text => { el('nfl-admin-status').textContent = text; };
-  const preset=new URLSearchParams(location.search).get('email');if(preset){el('nfl-add-email').value=preset;el('nfl-search').value=preset;}
-  let items = [];
-  let generatedItems = [];
-  async function api(path = '', body) {
-    const response = await fetch('/api/admin/netflix-links' + path, {method: body ? 'POST':'GET', cache:'no-store', headers:body ? {'Content-Type':'application/json'} : {}, body:body ? JSON.stringify(body):undefined});
-    const data = await response.json();
-    if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível concluir.');
-    return data;
-  }
-  async function copy(text) {
-    try { await navigator.clipboard.writeText(text); message('Copiado.'); }
-    catch { el('nfl-generated').hidden=false; el('nfl-generated-url').value=text; el('nfl-generated-url').select(); message('Selecione e copie o texto no campo acima.'); }
-  }
-  function showLinks(generated) {
-    generatedItems = generated.slice();
-    el('nfl-generated').hidden = generatedItems.length === 0;
-    el('nfl-generated-url').value = generatedItems.map(item => item.email + '\n' + item.url).join('\n\n');
-  }
-  function render() {
-    const query = el('nfl-search').value.trim().toLowerCase();
-    const rows = el('nfl-rows'); rows.replaceChildren();
-    const visible = items.filter(item => item.email.includes(query));
-    if (!visible.length) {
-      const tr = document.createElement('tr'); const td = document.createElement('td'); td.colSpan=5; td.textContent='Nenhum email encontrado.'; tr.append(td); rows.append(tr);
-    }
-    visible.forEach(item => {
-      const tr = document.createElement('tr');
-      [item.email, new Date(item.created_at * 1000).toLocaleString('pt-BR'), new Date(item.updated_at * 1000).toLocaleString('pt-BR'), item.manager || identity.username].forEach(text => {const td=document.createElement('td'); td.textContent=text; tr.append(td);});
-      const actions = document.createElement('td');
-      const copyButton = document.createElement('button'); copyButton.type='button'; copyButton.textContent='Copiar link'; copyButton.onclick=()=>copy(item.url);
-      const reset = document.createElement('button'); reset.type='button'; reset.className='nfl-secondary'; reset.textContent='Redefinir link';
-      reset.onclick=async()=>{
-        if (!confirm('Redefinir o link de ' + item.email + '? O link anterior deixará de funcionar.')) return;
-        reset.disabled=true;
-        try { const data=await api('/reset',{email:item.email}); showLinks([data.item]); await load(); message('Link redefinido. Envie o novo link ao cliente.'); }
-        catch(error){message(error.message);} finally{reset.disabled=false;}
-      };
-      const remove = document.createElement('button'); remove.type='button'; remove.className='nfl-danger'; remove.textContent='Excluir email e link';
-      remove.onclick=async()=>{
-        const warning=identity.kind==='panel'?' O vínculo com o cliente será removido, mas o usuário e a caixa de email serão preservados. O email continuará na sua lista permitida.':' Essa ação não apaga a caixa de email.';
-        if (!confirm('Excluir o email ' + item.email + ' e seu link? O acesso por esse link será bloqueado.'+warning)) return;
-        remove.disabled=true; reset.disabled=true; copyButton.disabled=true;
-        try {
-          const data=await api('/delete',{email:item.email});
-          items=items.filter(existing=>existing.email!==item.email);
-          showLinks(generatedItems.filter(existing=>existing.email!==item.email));
-          render(); message(data.message);
-        } catch(error) {
-          message(error.message); remove.disabled=false; reset.disabled=false; copyButton.disabled=false;
-        }
-      };
-      actions.append(copyButton, reset);
-      if (identity.principal || identity.kind === 'panel') actions.append(remove);
-      else { const note=document.createElement('small'); note.textContent='Exclusão somente pelo admin principal'; actions.append(note); }
-      tr.append(actions); rows.append(tr);
-    });
-  }
-  async function load() { const data=await api(); items=data.items; render(); }
-  launcher.onclick = async()=>{ section.hidden=!section.hidden; if(!section.hidden){try{await load();}catch(error){message(error.message);}} };
-  el('nfl-search').addEventListener('input',render);
-  el('nfl-refresh').onclick=async()=>{try{await load();message('Lista atualizada.');}catch(error){message(error.message);}};
-  el('nfl-generated-copy').onclick=()=>copy(el('nfl-generated-url').value);
-  el('nfl-create').addEventListener('submit',async(event)=>{
-    event.preventDefault(); const button=event.currentTarget.querySelector('button'); button.disabled=true;
-    try {
-      const data=await api('',{emails:el('nfl-add-email').value});
-      showLinks(data.items); el('nfl-add-email').value=''; await load();
-      const notes=[data.created+' link(s) novo(s)',data.existing+' já cadastrado(s) mantido(s)'];
-      if(data.duplicates) notes.push(data.duplicates+' repetido(s) ignorado(s)');
-      if(data.invalid_emails.length) notes.push('Inválidos não adicionados: '+data.invalid_emails.join(', '));
-      if(data.conflict_emails && data.conflict_emails.length) notes.push('Já pertencem a outro acesso e não foram adicionados: '+data.conflict_emails.join(', '));
-      message(notes.join(' · ')+'. Copie os links e envie cada um ao respectivo cliente.');
-    }
-    catch(error){message(error.message);} finally{button.disabled=false;}
-  });
-  if (directPanel) {
-    try { await load(); } catch (error) { message(error.message); }
   }
 })();
