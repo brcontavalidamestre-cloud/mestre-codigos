@@ -384,7 +384,9 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
     def partial_batch(data, existing_links, original):
         username = actor()
         if not username:
-            return jsonify(success=False, message='Acesso restrito ao administrador.'), 403
+            return jsonify(success=False, message='A conta da sessão não tem mais o perfil de administrador. Entre novamente com sua conta de administrador.'), 403
+        if 'admin_session' in data and norm(data['admin_session']) != username:
+            return jsonify(success=False, message='A conta ativa mudou desde que você abriu o formulário. Reabra o painel com a conta de administrador que gerencia esse cliente.'), 403
         target = norm(data.get('assigned_user'))
         users = load_users()
         if target not in users or (username != 'admin' and target not in clients_of(username, users)):

@@ -2170,10 +2170,14 @@
       try {
         const r = await fetch('/api/admin/vinculos-emails/import', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas, partial: true })
+          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas, partial: true, admin_session: _meUser?.username || '' })
         });
         let j;
         try { j = await r.json(); } catch (_) { throw new Error('O servidor não respondeu corretamente. Sua lista foi mantida; tente novamente.'); }
+        if (r.status === 401 || (r.status === 403 && j.message === 'Acesso restrito ao administrador.')) {
+          vinculosImportFeedback('A sessão atual não é de administrador. Entre novamente com a conta que gerencia este cliente. Nenhum vínculo foi alterado; sua lista foi mantida.', true);
+          return;
+        }
         if (j.batch_results) {
           const groups = j.batch_results;
           const labels = {
