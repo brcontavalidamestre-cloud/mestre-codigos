@@ -5144,7 +5144,8 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     errors = []
     seen = set()
     accounts = get_imap_accounts()
-    cutoff = time.time() - lookback_hours * 3600
+    now = time.time()
+    cutoff = now - (720 if central else lookback_hours) * 3600
     since_date = time.strftime("%d-%b-%Y", time.gmtime(cutoff))
 
     for account_cfg in accounts:
@@ -5158,10 +5159,22 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                     st_sel, _ = mail.select(mailbox, readonly=True)
                     if st_sel != "OK":
                         continue
-                    st_search, msgs = mail.search(None, "SINCE", since_date)
-                    if st_search != "OK" or not msgs or not msgs[0]:
-                        continue
-                    recent_ids = msgs[0].split()[-80:]
+                    if central:
+                        matches = set()
+                        headers = ('To', 'Cc', 'Delivered-To', 'X-Original-To', 'Envelope-To', 'Apparently-To', 'Resent-To')
+                        for address in emails:
+                            if not address.isascii() or not re.fullmatch(r'[^\s"\\@]+@[^\s"\\@]+', address):
+                                continue
+                            terms = ' '.join(f'HEADER {header} "{address}"' for header in headers)
+                            status, found = mail.search(None, f'(SINCE {since_date} '+('OR ' * (len(headers)-1))+terms+')')
+                            if status == 'OK' and found and found[0]:
+                                matches.update(v for v in found[0].split() if v.isdigit())
+                        recent_ids = sorted(matches, key=int)[-240:]
+                    else:
+                        st_search, msgs = mail.search(None, "SINCE", since_date)
+                        if st_search != "OK" or not msgs or not msgs[0]:
+                            continue
+                        recent_ids = msgs[0].split()[-80:]
                     for eid in reversed(recent_ids):
                         key = (account_cfg.get("name"), mailbox, bytes(eid))
                         if key in seen:
@@ -5250,6 +5263,11 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                                 link = u.rstrip(".,;")
                                 break
 
+                        if central and msg_ts < now - 48 * 3600:
+                            subject = _admin_inbox_message_preview(subject, code)
+                            from_v = _admin_inbox_message_preview(from_v, code)
+                            code = None
+                            link = None
                         items.append({
                             "email": matched_email,
                             "recipients": actual_recipients,
