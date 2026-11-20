@@ -37,21 +37,31 @@ def register_binding_confirmation(app, store, load_users, load_subs, save_subs, 
                 smtp.login(username, password)
                 smtp.send_message(msg)
 
-    def prepare(admin, client, emails):
+    def prepare(admin, client, emails, partial=False):
         now = int(time.time())
-        if len(emails) > 5:
+        groups = {key: [] for key in ('registered', 'blocked', 'already_pending', 'limited', 'send_failed', 'confirmation_sent')}
+        if not partial and len(emails) > 5:
             return jsonify(success=False, message='Envie até 5 novos e-mails por tentativa.'), 400
         with store.connect() as conn:
             conn.execute('DELETE FROM pending_email_bindings WHERE expires<=?', (now,))
-            blocked = {norm(s.get('email')) for s in load_subs() if isinstance(s, dict)} | set(store.permissions())
-            if any(e in blocked or quarantine.is_blocked(e) for e in emails):
-                return jsonify(success=False, message='Um dos endereços já tem cadastro ou está bloqueado.'), 409
-            if conn.execute('SELECT COUNT(*) FROM pending_email_bindings WHERE admin=?', (admin,)).fetchone()[0] + len(emails) > 10:
-                return jsonify(success=False, message='Limite de pedidos pendentes atingido. Aguarde a confirmação ou o vencimento.'), 429
-            jobs = [(address, secrets.token_urlsafe(32)) for address in emails
-                    if not conn.execute('SELECT 1 FROM pending_email_bindings WHERE email=?', (address,)).fetchone()]
-            if len(jobs) != len(emails):
-                return jsonify(success=False, message='Já existe um pedido pendente para um dos endereços.'), 409
+            registered = {norm(s.get('email')) for s in load_subs() if isinstance(s, dict)} | set(store.permissions())
+            pending = {row['email'] for row in conn.execute('SELECT email FROM pending_email_bindings')}
+            capacity = max(0, min(5, 10 - conn.execute('SELECT COUNT(*) FROM pending_email_bindings WHERE admin=?', (admin,)).fetchone()[0]))
+            jobs = []
+            for address in emails:
+                if quarantine.is_blocked(address):
+                    groups['blocked'].append(address)
+                elif address in registered:
+                    groups['registered'].append(address)
+                elif address in pending:
+                    groups['already_pending'].append(address)
+                elif len(jobs) >= capacity:
+                    groups['limited'].append(address)
+                else:
+                    jobs.append((address, secrets.token_urlsafe(32)))
+            if not partial and len(jobs) != len(emails):
+                status = 409 if any(groups[key] for key in ('registered', 'blocked', 'already_pending')) else 429
+                return jsonify(success=False, message='Um dos endereços já está cadastrado, bloqueado ou pendente.' if status == 409 else 'Limite de pedidos pendentes atingido.'), status
             conn.executemany('INSERT INTO pending_email_bindings VALUES(?,?,?,?,?)', [(a, admin, client, digest(t), now+1800) for a,t in jobs])
             conn.commit()
         failed = []
@@ -64,10 +74,15 @@ def register_binding_confirmation(app, store, load_users, load_subs, save_subs, 
             with store.connect() as conn:
                 conn.executemany('DELETE FROM pending_email_bindings WHERE email=? AND admin=?', [(a, admin) for a in failed])
                 conn.commit()
-        sent = len(jobs)-len(failed)
-        return jsonify(success=bool(sent), pending=sent, skipped=len(failed), message=(
-            f'{sent} confirmação(ões) enviada(s). O vínculo só será ativado após a confirmação.' +
-            (' Alguns envios falharam; os endereços não foram vinculados.' if failed else ''))), 202 if sent else 503
+        groups['send_failed'] = failed
+        groups['confirmation_sent'] = [address for address, _ in jobs if address not in failed]
+        sent = len(groups['confirmation_sent'])
+        message = (f'{sent} confirmação(ões) enviada(s). O vínculo só será ativado após a confirmação.' if sent
+                   else 'Nenhuma confirmação nova foi enviada.')
+        payload = dict(success=bool(sent), pending=sent, skipped=len(failed), message=message)
+        if partial:
+            payload['batch_results'] = groups
+        return jsonify(payload), 202 if sent else (503 if failed else 409)
 
     app.config['EMAIL_POOL_PREPARE_CONFIRMATION'] = prepare
 
@@ -104,6 +119,7 @@ def register_binding_confirmation(app, store, load_users, load_subs, save_subs, 
             if (users.get(admin, {}).get('role') != 'admin' or target.get('role') != 'client'
                     or norm(target.get('created_by')) != admin or quarantine.is_blocked(address)
                     or address in store.permissions()
+                    or address in app.config.get('EMAIL_REGISTRATION_LINKS', set)()
                     or any(norm(s.get('email')) == address for s in subs if isinstance(s, dict))):
                 return jsonify(success=False, message='Não é possível confirmar este vínculo.'), 409
             now = int(time.time())

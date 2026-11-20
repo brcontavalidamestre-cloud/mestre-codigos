@@ -7384,7 +7384,9 @@ def api_admin_import_vinculos_emails():
             })
             created += 1
 
-    save_subscriptions(subs)
+    saved = save_subscriptions(subs)
+    if saved is False and data.get('partial') is True and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
+        return jsonify(success=False, message='Não foi possível salvar os vínculos. Tente novamente.'), 503
     msg = f"Emails vinculados com sucesso ao usuário {assigned_user_name}."
     if skipped:
         msg += " Este email já está vinculado a outro cliente. Remova o vínculo antigo antes de continuar."

@@ -381,6 +381,86 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             return jsonify(success=True,message='Vínculo removido. O email continua na sua lista e pode ser vinculado a outro cliente.')
         return None
 
+    def partial_batch(data, existing_links, original):
+        username = actor()
+        if not username:
+            return jsonify(success=False, message='Acesso restrito ao administrador.'), 403
+        target = norm(data.get('assigned_user'))
+        users = load_users()
+        if target not in users or (username != 'admin' and target not in clients_of(username, users)):
+            return jsonify(success=False, message='Selecione um usuário que você pode gerenciar.'), 403
+        raw = data.get('emails')
+        if isinstance(raw, str):
+            raw = raw.splitlines()
+        if not isinstance(raw, list) or len(raw) > 200 or sum(len(str(item)) for item in raw) > 60000:
+            return jsonify(success=False, message='Informe uma lista de até 200 emails.'), 400
+        groups = {key: [] for key in ('linked', 'registered', 'blocked', 'invalid', 'retry')}
+        seen = set()
+        by_email = {}
+        for sub in load_subscriptions():
+            if isinstance(sub, dict):
+                by_email.setdefault(norm(sub.get('email')), []).append(sub)
+        permissions = store.permissions()
+        blocked = quarantine.emails()
+        with store.connect() as conn:
+            pending = {row['email'] for row in conn.execute('SELECT email FROM pending_email_bindings WHERE expires>?', (time.time(),))}
+        groups['already_pending'] = []
+        direct, confirm = [], []
+        for item in raw:
+            email = norm(item)
+            if not email or email in seen:
+                continue
+            seen.add(email)
+            rows = by_email.get(email, [])
+            reservation = permissions.get(email)
+            reserved_here = reservation and reservation['admin_user'] == (target if username == 'admin' else username)
+            if not isinstance(item, str) or len(email) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', email):
+                groups['invalid'].append(email)
+            elif quarantine.matches(email, blocked):
+                groups['blocked'].append(email)
+            elif (email in existing_links or len(rows) > 1 or any(norm(row.get('assigned_user')) for row in rows)
+                  or (reservation and not reserved_here) or (rows and username != 'admin' and not reserved_here)):
+                groups['registered'].append(email)
+            elif email in pending:
+                groups['already_pending'].append(email)
+            elif username == 'admin' or reserved_here:
+                direct.append(email)
+            else:
+                confirm.append(email)
+
+        details = {}
+        if username == 'admin':
+            for email in groups['registered']:
+                owners = sorted({norm(row.get('assigned_user')) for row in by_email.get(email, []) if norm(row.get('assigned_user'))})
+                details[email] = {'assigned_users': owners, 'has_link': email in existing_links}
+        if direct:
+            # The uniqueness wrapper holds the same registration lock used by
+            # confirmation and delegation. Preserve it across classification and save.
+            data['emails'] = direct
+            try:
+                result = app.make_response(original() if username == 'admin' else mutation_guard('panel-batch', {}, data))
+            finally:
+                data['emails'] = raw
+            if result.status_code == 200 and (result.get_json(silent=True) or {}).get('success'):
+                groups['linked'] = direct
+                invalidate = app.config.get('EMAIL_POOL_BINDINGS_CHANGED')
+                if invalidate and username == 'admin':
+                    invalidate({target})
+            else:
+                groups['retry'] = direct
+        prepare = app.config.get('EMAIL_POOL_PREPARE_CONFIRMATION')
+        if confirm and prepare:
+            response = app.make_response(prepare(username, target, confirm, partial=True))
+            for key, addresses in (response.get_json(silent=True) or {}).get('batch_results', {}).items():
+                groups.setdefault(key, []).extend(addresses)
+        elif confirm:
+            groups['retry'].extend(confirm)
+        linked = len(groups['linked'])
+        sent = len(groups.get('confirmation_sent', []))
+        return jsonify(success=bool(linked or sent), created=linked, pending=sent, batch_results=groups,
+                       conflicts=details, message='Resultado da vinculação em lote.'), (200 if linked else 202 if sent else 503 if groups['retry'] or groups.get('send_failed') else 409)
+
+    app.config['EMAIL_POOL_PARTIAL_BATCH'] = partial_batch
     app.config['EMAIL_POOL_MUTATION_GUARD'] = mutation_guard
     app.config['EMAIL_POOL_CAN_MANAGE'] = can_manage
 
@@ -410,10 +490,13 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         if actor()=='admin' and request.method=='POST' and request.endpoint in ('api_admin_import_vinculos_emails','api_admin_add_subscription'):
             data = request.get_json(silent=True) or {};target = norm(data.get('assigned_user'));users = load_users()
             if target!='admin' and (users.get(target) or {}).get('role')=='admin':
-                try:
-                    requested=set(parse(data.get('emails') if request.endpoint=='api_admin_import_vinculos_emails' else data.get('email')))
-                except ValueError:
-                    requested=set()
+                if 'batch_results' in result:
+                    requested = set(result['batch_results']['linked'])
+                else:
+                    try:
+                        requested=set(parse(data.get('emails') if request.endpoint=='api_admin_import_vinculos_emails' else data.get('email')))
+                    except ValueError:
+                        requested=set()
                 with store.serialized(),store.connect() as conn:
                     for sub in load_subscriptions():
                         if isinstance(sub,dict) and norm(sub.get('assigned_user'))==target and norm(sub.get('email')) in requested:

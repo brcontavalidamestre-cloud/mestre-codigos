@@ -2157,10 +2157,36 @@
       try {
         const r = await fetch('/api/admin/vinculos-emails/import', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas })
+          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas, partial: true })
         });
         let j;
         try { j = await r.json(); } catch (_) { throw new Error('O servidor não respondeu corretamente. Sua lista foi mantida; tente novamente.'); }
+        if (j.batch_results) {
+          const groups = j.batch_results;
+          const labels = {
+            linked: 'Vinculados agora', confirmation_sent: 'Confirmação enviada — aguardando o titular',
+            registered: 'Já cadastrados — sem alteração', blocked: 'Bloqueados pela quarentena',
+            already_pending: 'Já aguardavam confirmação', invalid: 'Endereços inválidos',
+            limited: 'Não enviados — limite de confirmações atingido',
+            send_failed: 'Falha no envio da confirmação', retry: 'Não foi possível concluir — tente novamente'
+          };
+          const sections = Object.entries(labels).filter(([key]) => groups[key]?.length).map(([key, label]) => {
+            const rows = groups[key].map(email => {
+              const details = key === 'registered' && Object.hasOwn(j.conflicts || {}, email) ? j.conflicts[email] : null;
+              return email + (details?.assigned_users?.length ? ' — vinculado a: ' + details.assigned_users.join(', ') : '');
+            });
+            return label + ' (' + rows.length + '):\n' + rows.join('\n');
+          });
+          const retry = ['invalid', 'limited', 'send_failed', 'retry'].flatMap(key => groups[key] || []);
+          if (field.value.trim() === txt) field.value = retry.join('\n');
+          vinculosImportFeedback(sections.join('\n\n') || j.message, !j.success);
+          if (groups.linked?.length) {
+            await loadVinculosEmails();
+            try { await loadComprasPorData(); } catch (_) { /* Saving has already succeeded. */ }
+            scrollToText('ve-tbody', groups.linked[0]);
+          }
+          return;
+        }
         if (!r.ok || !j.success) {
           const details = Array.isArray(j.conflicts) ? j.conflicts : [];
           const emails = [...new Set([...(j.duplicate_emails || []), ...(j.conflict_emails || [])])];

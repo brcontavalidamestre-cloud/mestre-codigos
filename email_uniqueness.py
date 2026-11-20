@@ -53,6 +53,8 @@ def register_email_uniqueness(app, data_dir, load_subscriptions):
         finally:
             conn.close()
 
+    app.config['EMAIL_REGISTRATION_LINKS'] = links
+
     def conflict(emails):
         emails = list(dict.fromkeys(emails))
         message = DUPLICATE_MESSAGE
@@ -95,6 +97,9 @@ def register_email_uniqueness(app, data_dir, load_subscriptions):
                 try:
                     data = request.get_json(silent=True) or {}
                     data = data if isinstance(data, dict) else {}
+                    batch = app.config.get('EMAIL_POOL_PARTIAL_BATCH')
+                    if kind == 'panel-batch' and data.get('partial') is True and batch:
+                        return batch(data, links(), lambda: original(*args, **kwargs))
                     permission_guard = app.config.get('EMAIL_POOL_MUTATION_GUARD')
                     if permission_guard:
                         guarded_response = permission_guard(kind, kwargs, data)
