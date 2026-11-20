@@ -3119,6 +3119,15 @@
       if (_bdLast) renderBandeja(_bdLast);
     }
     if (_bdCentral) {
+      const tray = document.getElementById('view-bandeja');
+      tray.classList.add('bd-red');
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = '/static/central-inbox.css?v=1'; document.head.append(css);
+      const heading = tray.querySelector('.section-title');
+      const header = document.createElement('div'); header.className = 'bd-heading';
+      heading.before(header); header.append(heading);
+      const live = document.createElement('span'); live.className = 'bd-live'; live.textContent = 'AUTOATUALIZAÇÃO'; header.append(live);
+      document.getElementById('bd-status').parentElement.classList.add('bd-toolbar');
       document.querySelector('#view-bandeja .section-subtitle').textContent = 'Mensagens dos e-mails vinculados, conforme os filtros ativos · últimas 2 horas';
       document.getElementById('bd-list').addEventListener('click', async event => {
         const change = event.target.closest('button[data-bd-switch-account]');
@@ -3146,8 +3155,8 @@
           return;
         }
         const title = allowed ? 'Mensagens de ' + _bdShortcutEmail : (j.quarantine_message || 'O vínculo existe, mas a consulta está bloqueada pelas permissões atuais.');
-        list.innerHTML = '<div style="overflow-wrap:anywhere;font-weight:700">' + _esc(title) + '</div>' + (allowed && all.length
-          ? all.map(it => '<div style="padding:12px;border:1px solid #4c1d95;border-radius:12px">Mensagem recebida · ' + _esc(it.platform) + ' · ' + _esc(_fmtDate(it.date_ts)) + '</div>').join('')
+        list.innerHTML = '<div class="bd-context">' + _esc(title) + '</div>' + (allowed && all.length
+          ? all.map(it => '<article class="bd-record"><div class="bd-record-mark" aria-hidden="true">✉</div><div class="bd-record-main"><div class="bd-subject">Mensagem recebida</div><div class="bd-meta">' + _esc(it.platform) + ' · ' + _esc(_fmtDate(it.date_ts)) + '</div></div></article>').join('')
           : (allowed ? '<div>' + _esc(j.quarantine_message || 'Nenhuma mensagem nos filtros ativos nas últimas 2 horas.') + '</div>' : ''));
         return;
       }
@@ -3169,15 +3178,15 @@
         if (it.code) btns.push('<button class="btn-primary" style="padding:5px 12px;font-size:.75rem" onclick="copyBandeja(\'' + _esc(it.code) + '\', this)">📋 Copiar</button>');
         if (_bdCentral && it.email) btns.push('<button type="button" class="btn-primary" style="padding:5px 12px;font-size:.75rem" data-bd-email="' + _esc(it.email) + '">📥 Ver mensagens</button>');
         if (!_bdCentral && it.link) btns.push('<a href="' + _esc(it.link) + '" target="_blank" rel="noopener" style="padding:5px 12px;font-size:.75rem;background:#059669;color:#fff;border-radius:8px;text-decoration:none">🔗 Abrir link</a>');
-        return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(23,6,42,.85);border:1px solid #4c1d95;border-radius:12px">'
-          + '<div style="min-width:110px">' + badge + '</div>'
-          + '<div style="flex:1;min-width:0">'
+        return (centralInbox ? '<div class="bd-record">' : '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(23,6,42,.85);border:1px solid #4c1d95;border-radius:12px">')
+          + (centralInbox ? '<div class="bd-record-mark">' : '<div style="min-width:110px">') + badge + '</div>'
+          + (centralInbox ? '<div class="bd-record-main">' : '<div style="flex:1;min-width:0">')
           +   '<div style="font-size:.82rem;color:#e9d5ff;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(it.subject) + '</div>'
           +   '<div style="font-size:.72rem;color:var(--text-muted,#9ca3af);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📧 ' + _esc(it.email) + ' · ' + _esc(it.from) + '</div>'
           +   '<div style="font-size:.7rem;color:var(--text-muted,#9ca3af)">' + _fmtDate(it.date_ts) + ' · ' + _esc(it.platform) + '</div>'
           + (centralInbox && it.message_preview ? '<details data-bd-message="' + _esc(messageKey) + '"' + (openMessages.has(messageKey) ? ' open' : '') + ' style="margin-top:8px"><summary style="cursor:pointer;color:#c4b5fd">Ver mensagem</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:6px;font-size:.8rem">' + _esc(it.message_preview) + '</div></details>' : '')
           + '</div>'
-          + '<div style="display:flex;gap:6px;flex-shrink:0">' + btns.join('') + '</div>'
+          + (centralInbox ? '<div class="bd-record-actions">' : '<div style="display:flex;gap:6px;flex-shrink:0">') + btns.join('') + '</div>'
           + '</div>';
       }).join('');
     }
