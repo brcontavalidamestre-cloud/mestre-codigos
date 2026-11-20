@@ -665,12 +665,12 @@ ADMIN_LIVE_INBOX_FILTER_GROUPS = {
 }
 
 
-def _admin_live_inbox_filters_file():
+def _admin_live_inbox_filters_file(admin_username=None):
     try:
         host = _normalize_domain(request.host or "")
     except Exception:
         host = "default"
-    current_admin = str(session.get("username") or "").strip().lower() or "default"
+    current_admin = str(admin_username or session.get("username") or "").strip().lower() or "default"
     if "mestre-codigos-production" in host:
         suffix = "mestre"
     elif "jmp" in host:
@@ -696,8 +696,8 @@ def _normalize_admin_live_inbox_filters(filters_list):
     return out
 
 
-def load_admin_live_inbox_filters():
-    path = _admin_live_inbox_filters_file()
+def load_admin_live_inbox_filters(admin_username=None):
+    path = _admin_live_inbox_filters_file(admin_username)
     if not os.path.exists(path):
         return [item["key"] for item in ADMIN_LIVE_INBOX_FILTER_OPTIONS]
     data = _read_json_file(path, [])
@@ -5118,7 +5118,7 @@ def _extract_msg_text(msg):
     return "\n".join(texts)
 
 
-def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48):
+def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48, central=False):
     """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
     vinculados do usuário (INBOX + Spam), extraindo código/link."""
     emails = [email for email in _user_live_inbox_emails(username) if not email_quarantine.is_blocked(email)]
@@ -5126,7 +5126,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
         return [], []
     # REGRA: bandeja so mostra emails que batem com os FILTROS cadastrados
     # (mesma lista de plataformas ativadas no painel admin).
-    selected_filters = load_admin_live_inbox_filters()
+    selected_filters = load_admin_live_inbox_filters('admin' if central else None)
     expanded_filters = _expand_admin_live_inbox_filters(selected_filters)
     if not expanded_filters:
         return [], []
@@ -5144,7 +5144,8 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     errors = []
     seen = set()
     accounts = get_imap_accounts()
-    since_date = time.strftime("%d-%b-%Y", time.gmtime(time.time() - lookback_hours * 3600))
+    cutoff = time.time() - lookback_hours * 3600
+    since_date = time.strftime("%d-%b-%Y", time.gmtime(cutoff))
 
     for account_cfg in accounts:
         mail = None
@@ -5178,6 +5179,8 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                             continue
                         head = email.message_from_bytes(bytes(raw_h))
                         recipients = _admin_inbox_extract_recipients(head)
+                        if central and (not recipients or not set(recipients).issubset(allowed_set)):
+                            continue
                         matched_email = None
                         for rc in recipients:
                             rc2 = str(rc or "").strip().lower()
@@ -5206,6 +5209,9 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         if guard and not guard(msg, _extract_msg_text(msg)):
                             continue
                         actual_recipients = sorted(delegated_recipients(msg, _extract_msg_text(msg)))
+                        msg_ts = _admin_inbox_date_ts(msg)
+                        if central and (msg_ts < cutoff or not actual_recipients or not set(actual_recipients).issubset(allowed_set)):
+                            continue
                         body_text = _admin_inbox_strip_html(_extract_msg_text(msg))
                         if email_quarantine.is_blocked(matched_email):
                             continue
@@ -5281,11 +5287,11 @@ _bd_refreshing = set()
 _BD_CACHE_TTL = 60  # segundos
 
 
-def _bd_refresh_background(username):
+def _bd_refresh_background(username, central=False):
     """Varredura IMAP em segundo plano — atualiza o cache sem travar a tela."""
     try:
         linked_emails = tuple(_user_live_inbox_emails(username))
-        items, errors = _fetch_user_live_inbox_items(username)
+        items, errors = _fetch_user_live_inbox_items(username, central=True) if central else _fetch_user_live_inbox_items(username)
         if linked_emails != tuple(_user_live_inbox_emails(username)):
             return
         with _bd_cache_lock:
@@ -5295,6 +5301,40 @@ def _bd_refresh_background(username):
     finally:
         with _bd_cache_lock:
             _bd_refreshing.discard(username)
+
+
+@app.after_request
+def scope_central_inbox_to_current_filters(response):
+    if request.path != '/api/live-inbox/messages' or response.status_code != 200 or not response.is_json:
+        return response
+    data = response.get_json(silent=True)
+    if not isinstance(data, dict) or not data.get('success'):
+        return response
+    if request.host.lower().split(':', 1)[0] != 'consulta-codigos-jr7z.onrender.com':
+        if not any('message_preview' in item for item in data.get('items', [])):
+            return response
+        for item in data['items']:
+            item.pop('message_preview', None)
+    else:
+        enabled = set(_expand_admin_live_inbox_filters(load_admin_live_inbox_filters('admin')))
+        owned = set(_user_live_inbox_emails(session.get('username')))
+        items = []
+        for item in data.get('items', []):
+            address = item.get('email')
+            if address not in owned or item.get('platform') not in enabled or email_quarantine.is_blocked(address):
+                continue
+            row = {key: value for key, value in item.items() if key != 'link'}
+            recipients = row.get('recipients') or []
+            if not recipients or not set(recipients).issubset(owned) or any(email_quarantine.is_blocked(e) for e in recipients):
+                continue
+            if recipients != [address]:
+                row.pop('message_preview', None)
+            items.append(row)
+        data['items'] = items
+    data['count'] = len(data['items'])
+    response.set_data(app.json.dumps(data))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 
 @app.route("/api/live-inbox/messages", methods=["GET"])
@@ -5320,6 +5360,7 @@ def api_user_live_inbox_messages():
         cached = None
         with _bd_cache_lock:
             _bd_cache.pop(username, None)
+    central = request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
     fresh = request.args.get("fresh") == "1"
 
     if cached and (now - cached["ts"] < _BD_CACHE_TTL) and not fresh:
@@ -5335,7 +5376,14 @@ def api_user_live_inbox_messages():
             _bd_refreshing.add(username)
     if not already:
         try:
-            threading.Thread(target=_bd_refresh_background, args=(username,), daemon=True).start()
+            if central:
+                from flask import copy_current_request_context
+                @copy_current_request_context
+                def refresh():
+                    _bd_refresh_background(username, central=True)
+                threading.Thread(target=refresh, daemon=True).start()
+            else:
+                threading.Thread(target=_bd_refresh_background, args=(username,), daemon=True).start()
         except Exception:
             with _bd_cache_lock:
                 _bd_refreshing.discard(username)
@@ -5346,7 +5394,7 @@ def api_user_live_inbox_messages():
                         "errors": cached.get("errors") or []})
 
     # Primeira vez de todos (sem cache nenhum): faz a varredura agora.
-    items, errors = _fetch_user_live_inbox_items(username)
+    items, errors = _fetch_user_live_inbox_items(username, central=True) if central else _fetch_user_live_inbox_items(username)
     with _bd_cache_lock:
         _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors, "linked_emails": tuple(emails)}
         _bd_refreshing.discard(username)
