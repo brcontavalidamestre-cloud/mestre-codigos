@@ -5118,6 +5118,20 @@ def _extract_msg_text(msg):
     return "\n".join(texts)
 
 
+def _central_inbox_route_recipients(msg, found, allowed, mailbox_user):
+    # Only ignore the configured collection address when it is a delivery
+    # hop, not when it is itself a primary recipient of the message.
+    from email.utils import getaddresses
+    address = str(mailbox_user or '').strip().lower()
+    direct = {a.strip().lower() for _, a in getaddresses([
+        str(v) for name in ('To', 'Cc', 'Bcc', 'Resent-To') for v in msg.get_all(name, [])
+    ]) if a}
+    found = set(found)
+    if address and address not in direct and direct and direct.issubset(allowed):
+        found.discard(address)
+    return found
+
+
 def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48, central=False):
     """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
     vinculados do usuário (INBOX + Spam), extraindo código/link."""
@@ -5192,8 +5206,10 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                             continue
                         head = email.message_from_bytes(bytes(raw_h))
                         recipients = _admin_inbox_extract_recipients(head)
-                        if central and (not recipients or not set(recipients).issubset(allowed_set)):
-                            continue
+                        if central:
+                            recipients = sorted(_central_inbox_route_recipients(head, recipients, allowed_set, account_cfg.get('user')))
+                            if not recipients or not set(recipients).issubset(allowed_set):
+                                continue
                         matched_email = None
                         for rc in recipients:
                             rc2 = str(rc or "").strip().lower()
@@ -5222,8 +5238,13 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         if guard and not guard(msg, _extract_msg_text(msg)):
                             continue
                         actual_recipients = sorted(delegated_recipients(msg, _extract_msg_text(msg)))
+                        forwarded_to_collector = False
+                        if central:
+                            verified = sorted(_central_inbox_route_recipients(msg, actual_recipients, allowed_set, account_cfg.get('user')))
+                            forwarded_to_collector = verified != actual_recipients
+                            actual_recipients = verified
                         msg_ts = _admin_inbox_date_ts(msg)
-                        if central and (msg_ts < cutoff or not actual_recipients or not set(actual_recipients).issubset(allowed_set)):
+                        if central and (msg_ts < cutoff or matched_email not in actual_recipients or not set(actual_recipients).issubset(allowed_set)):
                             continue
                         body_text = _admin_inbox_strip_html(_extract_msg_text(msg))
                         if email_quarantine.is_blocked(matched_email):
@@ -5263,11 +5284,8 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                                 link = u.rstrip(".,;")
                                 break
 
-                        if central and msg_ts < now - 48 * 3600:
-                            subject = _admin_inbox_message_preview(subject, code)
-                            from_v = _admin_inbox_message_preview(from_v, code)
-                            code = None
-                            link = None
+                        if central and forwarded_to_collector:
+                            subject, from_v, code, link = 'Mensagem recebida', '', None, None
                         items.append({
                             "email": matched_email,
                             "recipients": actual_recipients,
