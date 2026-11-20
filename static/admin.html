@@ -2168,6 +2168,11 @@
           vinculosImportFeedback((j.message || 'Não foi possível vincular os emails.') + (lines.length ? '\n\nEmails que precisam de revisão:\n' + lines.join('\n') : '') + '\n\nNenhum vínculo desta tentativa foi criado. Sua lista foi mantida.', true);
           return;
         }
+        if (r.status === 202 && j.pending) {
+          document.getElementById('ve-import-status').textContent = j.message;
+          if (!j.skipped) field.value = '';
+          return;
+        }
         const pending = (j.invalid || 0) + (j.skipped || 0);
         if (!pending) field.value = '';
         vinculosImportFeedback((j.message || 'Emails vinculados com sucesso.') + '\n' + (j.created || 0) + ' criado(s), ' + (j.updated || 0) + ' atualizado(s), ' + (j.invalid || 0) + ' inválido(s), ' + (j.skipped || 0) + ' não vinculado(s).' + (pending ? '\nSua lista foi mantida para revisão.' : ''), !!pending);
@@ -3325,6 +3330,6 @@
 
   </script>
 <script src="/static/netflix-links-admin.js?v=14" defer></script>
-<script src="/static/email-delegation-launcher.js?v=1" defer></script>
+<script src="/static/email-delegation-launcher.js?v=2" defer></script>
 </body>
 </html>

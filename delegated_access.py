@@ -11,6 +11,17 @@ QUERY_PATHS={'/api/get-code','/api/admin/get-code','/api/verify-reset-pin','/api
 INBOX_PATHS={'/api/live-inbox/messages','/api/admin/live-inbox/messages','/api/admin/live-inbox/allowed'}
 
 
+def inbox_address_family(value):
+    address = str(value or '').strip().lower()
+    local, sep, domain = address.partition('@')
+    if not sep:
+        return address
+    local = local.split('+', 1)[0]
+    if domain in ('gmail.com', 'googlemail.com'):
+        local, domain = local.replace('.', ''), 'gmail.com'
+    return local + '@' + domain
+
+
 def register_delegated_access(app,pool_store,load_users,load_subscriptions,pending_resets):
     def central():return has_request_context() and request.host.lower().split(':',1)[0]==HOST
     def permissions(fresh=False):
@@ -24,6 +35,11 @@ def register_delegated_access(app,pool_store,load_users,load_subscriptions,pendi
         email=str(email or '').strip().lower();permission=permissions().get(email)
         username=str(username or session.get('username') or '').strip().lower()
         account=users().get(username) or {}
+        if central() and request.path in QUERY_PATHS and email:
+            canonical = inbox_address_family(email)
+            if any(isinstance(entry, dict) and entry.get('verified_inbox_only')
+                   and inbox_address_family(entry.get('email')) == canonical for entry in load_subscriptions()):
+                return False
         # Free admin consultation is unrestricted only for the principal.
         # Other admins require an exact, principal-defined pool permission.
         if central() and request.path=='/api/admin/get-code' and account.get('role')=='admin' and username!='admin':

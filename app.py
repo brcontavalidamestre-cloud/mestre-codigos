@@ -9334,6 +9334,8 @@ app.config['EMAIL_POOL_BINDINGS_CHANGED'] = _invalidate_binding_inboxes
 from email_delegation import register_email_delegation
 email_permission_store = register_email_delegation(app, _data_dir, load_subscriptions,
     save_subscriptions, load_users, email_quarantine)
+from email_binding_confirmation import register_binding_confirmation
+register_binding_confirmation(app, email_permission_store, load_users, load_subscriptions, save_subscriptions, email_quarantine)
 
 from delegated_access import register_delegated_access
 from delegated_recipients import recipients as delegated_recipients

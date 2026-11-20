@@ -33,7 +33,8 @@ class EmailPoolStore:
         conn.row_factory = sqlite3.Row
         conn.executescript('''CREATE TABLE IF NOT EXISTS permissions(email TEXT PRIMARY KEY,admin_user TEXT NOT NULL,created_at INTEGER NOT NULL,created_by TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS events(id INTEGER PRIMARY KEY,created_at INTEGER NOT NULL,actor TEXT NOT NULL,action TEXT NOT NULL,payload TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);''')
+CREATE TABLE IF NOT EXISTS metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS pending_email_bindings(email TEXT PRIMARY KEY,admin TEXT NOT NULL,client TEXT NOT NULL,digest TEXT UNIQUE NOT NULL,expires INTEGER NOT NULL);''')
         os.chmod(self.path, 0o600)
         try:
             yield conn
@@ -293,7 +294,14 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             emails = parse(data.get('emails') if kind=='panel-batch' else data.get('email') if kind=='panel-create' else kwargs.get('email'))
         except ValueError as error:
             return jsonify(success=False,message=str(error)),400
-        if any(not can_manage(email,username) for email in emails):
+        missing = [email for email in emails if not can_manage(email,username)]
+        if missing:
+            prepare = app.config.get('EMAIL_POOL_PREPARE_CONFIRMATION')
+            if kind == 'panel-batch' and prepare and len(missing) == len(emails):
+                target = norm(data.get('assigned_user'))
+                if target not in clients_of(username,load_users()):
+                    return jsonify(success=False,message='Selecione um cliente que você gerencia.'),403
+                return prepare(username,target,emails)
             return jsonify(success=False,message=DENIED),403
         if kind in ('panel-batch','panel-create'):
             target = norm(data.get('assigned_user'));users = load_users()
