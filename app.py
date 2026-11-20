@@ -5372,6 +5372,10 @@ def api_user_live_inbox_messages():
         return jsonify({"success": False, "message": "Faça login para ver sua bandeja."}), 401
     username = str(session.get("username") or "").strip().lower()
     emails = _user_live_inbox_emails(username)
+    central = request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
+    selected = request.args.get('inbox_email', '').strip().lower() if central else ''
+    if selected and selected not in emails:
+        return jsonify(success=True, items=[], emails=[], count=0, inbox_issue='wrong_account', inbox_username=username)
     if not emails:
         return jsonify({"success": True, "items": [], "emails": [], "count": 0,
                         "message": "Nenhum email vinculado a este usuário."})
@@ -5386,7 +5390,6 @@ def api_user_live_inbox_messages():
         cached = None
         with _bd_cache_lock:
             _bd_cache.pop(username, None)
-    central = request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
     fresh = request.args.get("fresh") == "1"
 
     if cached and (now - cached["ts"] < _BD_CACHE_TTL) and not fresh:
