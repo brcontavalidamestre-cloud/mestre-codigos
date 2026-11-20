@@ -1061,6 +1061,8 @@
     let _users = [], _pwUser = null, _delUser = null, _meUser = null;
     let _vinculosSelecionados = new Set();
     let _vinculosCache = [];
+    let _vinculosRequest = 0, _vinculosOpen = 0;
+    let _usersPending = null, _usersLoadedAt = 0, _usersRequest = 0;
 
     function withNoCache(url) {
       const sep = url.includes('?') ? '&' : '?';
@@ -1904,16 +1906,24 @@
       _adminLiveInboxLoading = false;
     }
 
-    async function abrirVinculosEmails() {
+    async function abrirVinculosEmails(username) {
+      const open = ++_vinculosOpen;
+      ++_vinculosRequest;
       const m = document.getElementById('vinculos-modal');
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
       showVinculosTab('lista');
       clearVinculosSearch();
-      await loadUsers();
-      renderUserSelect('ve-user', 'Todos os usuários');
+      _vinculosCache = [];
+      document.getElementById('ve-tbody').innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Carregando...</td></tr>';
+      await loadUsers(true);
+      if (open !== _vinculosOpen) return;
+      const sel = document.getElementById('ve-user');
+      if (typeof username === 'string' && sel) sel.value = username;
       await loadVinculosEmails();
     }
     function fecharVinculosEmails() {
+      ++_vinculosOpen;
+      ++_vinculosRequest;
       const m = document.getElementById('vinculos-modal');
       if (m) { m.style.display = 'none'; document.body.style.overflow = ''; }
     }
@@ -2048,18 +2058,23 @@
     async function loadVinculosEmails() {
       const tb = document.getElementById('ve-tbody');
       if (!tb) return;
+      const request = ++_vinculosRequest;
       const assignedUser = (document.getElementById('ve-user')?.value || '').trim();
+      _vinculosCache = [];
+      if (document.getElementById('ve-search-input')?.value.trim()) searchVinculosEmails();
       tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Carregando...</td></tr>';
       try {
         const url = assignedUser
           ? '/api/admin/vinculos-emails?assigned_user=' + encodeURIComponent(assignedUser)
           : '/api/admin/vinculos-emails';
-        const { j } = await fetchJsonNoCache(url);
+        const { r, j } = await fetchJsonNoCache(url);
+        if (request !== _vinculosRequest) return;
+        if (!r.ok || !j.success) throw new Error('Falha ao carregar vínculos.');
         _vinculosCache = Array.isArray(j.items) ? j.items.slice() : [];
-        if (!j.success || !_vinculosCache.length) {
+        if (!_vinculosCache.length) {
           tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">Nenhum email vinculado encontrado.</td></tr>';
           updateVinculosSelectionInfo();
-          clearVinculosSearch();
+          if (document.getElementById('ve-search-input')?.value.trim()) searchVinculosEmails();
           return;
         }
 
@@ -2113,6 +2128,7 @@
         const q = String(document.getElementById('ve-search-input')?.value || '').trim();
         if (q) searchVinculosEmails();
       } catch(e) {
+        if (request !== _vinculosRequest) return;
         _vinculosCache = [];
         tb.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#ff8a80;">Erro ao carregar emails vinculados.</td></tr>';
         updateVinculosSelectionInfo();
@@ -2930,11 +2946,7 @@
 
     /* render */
     function openUserVinculos(username) {
-      abrirVinculosEmails().then(() => {
-        const sel = document.getElementById('ve-user');
-        if (sel) sel.value = username;
-        loadVinculosEmails();
-      }).catch(() => {});
+      abrirVinculosEmails(username);
     }
 
     function renderTable(list) {
@@ -3034,17 +3046,24 @@
       }
     }
 
-    async function loadUsers() {
-      document.getElementById('tbody').innerHTML =
+    function loadUsers(reuseRecent = false) {
+      if (reuseRecent === true && _usersPending) return _usersPending;
+      if (reuseRecent === true && Date.now() - _usersLoadedAt < 15000) return Promise.resolve();
+      const request = ++_usersRequest;
+      _usersLoadedAt = 0;
+      const pending = loadUsersFromServer(request);
+      _usersPending = pending;
+      pending.finally(() => { if (_usersPending === pending) _usersPending = null; });
+      return pending;
+    }
+
+    async function loadUsersFromServer(request) {
+      if (!_users.length) document.getElementById('tbody').innerHTML =
         `<tr><td colspan="6"><div class="empty"><span class="sp"></span> Carregando...</div></td></tr>`;
-      const si = document.getElementById('s-in');
-      if (si) si.value = '';
-      const sei = document.getElementById('s-email-in');
-      if (sei) sei.value = '';
-      document.getElementById('s-info').textContent = '';
       try {
-        const { j: d } = await fetchJsonNoCache('/api/admin/users');
-        if (!d.success) { showTblErr('Erro ao carregar usuários.'); return; }
+        const { r, j: d } = await fetchJsonNoCache('/api/admin/users');
+        if (request !== _usersRequest) return;
+        if (!r.ok || !d.success) { showTblErr('Erro ao carregar usuários.'); return; }
         _users = Array.isArray(d.users) ? d.users.slice() : [];
         if (_meUser && _meUser.username) {
           const hasMe = _users.some(u => String(u.username || '').toLowerCase() === String(_meUser.username || '').toLowerCase());
@@ -3055,8 +3074,9 @@
         document.getElementById('st-total').textContent = _users.length;
         document.getElementById('st-cli').textContent   = _users.filter(u => u.role === 'client').length;
         document.getElementById('st-adm').textContent   = _users.filter(u => u.role === 'admin').length;
-        renderTable(_users);
-      } catch { showTblErr('Erro de conexão.'); }
+        filterUsers(document.getElementById('s-in')?.value || '');
+        _usersLoadedAt = Date.now();
+      } catch { if (request === _usersRequest) showTblErr('Erro de conexão.'); }
     }
 
     /* create */
