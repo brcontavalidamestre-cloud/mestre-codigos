@@ -7294,6 +7294,10 @@ def api_admin_list_vinculos_emails():
             "expires_at": exp,
             "active": (now < exp) if exp else False,
         })
+    pending = app.config.get('EMAIL_POOL_PENDING_BINDINGS')
+    if pending and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
+        existing = {item['email'] for item in items}
+        items.extend(row for row in pending(assigned_user) if row['email'] not in existing)
     items.sort(key=lambda x: (x.get("assigned_user") or "", x.get("email") or ""))
     return jsonify({"success": True, "items": items})
 

@@ -462,6 +462,22 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         return jsonify(success=bool(linked or sent), created=linked, pending=sent, batch_results=groups,
                        conflicts=details, message='Resultado da vinculação em lote.'), (200 if linked else 202 if sent else 503 if groups['retry'] or groups.get('send_failed') else 409)
 
+    def pending_bindings(target):
+        username = actor()
+        if not central() or not username:
+            return []
+        users = load_users()
+        allowed = clients_of(username, users) if username != 'admin' else set(users)
+        with store.connect() as conn:
+            rows = conn.execute('SELECT email, admin, client, expires FROM pending_email_bindings WHERE expires>?', (time.time(),)).fetchall()
+        return [dict(email=row['email'], assigned_user=row['client'],
+                     assigned_user_name=users[row['client']].get('name') or row['client'],
+                     created_at=int(row['expires']) - 1800, active=False, pending_confirmation=True,
+                     plataforma='Confirmação solicitada')
+                for row in rows if row['client'] in allowed and (not target or row['client'] == target)
+                and (username == 'admin' or row['admin'] == username)]
+
+    app.config['EMAIL_POOL_PENDING_BINDINGS'] = pending_bindings
     app.config['EMAIL_POOL_PARTIAL_BATCH'] = partial_batch
     app.config['EMAIL_POOL_MUTATION_GUARD'] = mutation_guard
     app.config['EMAIL_POOL_CAN_MANAGE'] = can_manage

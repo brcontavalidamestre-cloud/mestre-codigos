@@ -2084,7 +2084,7 @@
             return String(a.email || '').localeCompare(String(b.email || ''), 'pt-BR');
           })
           .map(it => {
-            const badge = it.active
+            const badge = it.pending_confirmation ? '<span style="color:#fcd34d;">Aguardando confirmação</span>' : it.active
               ? '<span style="color:#4caf50;">✓ liberado</span>'
               : '<span style="color:#ff5252;">✗ inativo</span>';
             const safeEmail = String(it.email || '').replace(/'/g, "\'");
@@ -2096,7 +2096,7 @@
             return `<tr>
               <td>
                 <div style="display:flex;gap:10px;align-items:flex-start;">
-                  <input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>
+                  ${it.pending_confirmation ? '' : `<input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>`}
                   <div>
                     <div style="font-weight:800;color:#fff;">${x(it.assigned_user_name || it.assigned_user || '-')}</div>
                     <div style="font-size:.82rem;color:#93c5fd;">@${x(it.assigned_user || '-')}</div>
@@ -2112,8 +2112,8 @@
               <td>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                   <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(it.assigned_user || '')}'; loadVinculosEmails();">🎯 Ver só este</button>
-                  ${location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin' && it.assigned_user && normalizedEmail ? `<button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'copy')">📥 Gerar / copiar link</button><button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'rotate')">Atualizar link</button><button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'remove')">Excluir link</button>` : ''}
-                  <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
+                  ${location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin' && !it.pending_confirmation && it.assigned_user && normalizedEmail ? `<button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'copy')">📥 Gerar / copiar link</button><button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'rotate')">Atualizar link</button><button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'remove')">Excluir link</button>` : ''}
+                  ${it.pending_confirmation ? '' : `<button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>`}
                 </div>
               </td>
             </tr>`;
@@ -2199,6 +2199,8 @@
           vinculosImportFeedback(sections.join('\n\n') || j.message, !j.success);
           if (groups.linked?.length) {
             await refreshSavedBindings(groups.linked[0]);
+          } else if (groups.confirmation_sent?.length || groups.already_pending?.length) {
+            await loadVinculosEmails();
           }
           return;
         }
