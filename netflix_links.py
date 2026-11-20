@@ -228,6 +228,8 @@ def register_netflix_links(app, data_dir, search, search_all=None):
                 response.direct_passthrough = False
                 page = response.get_data(as_text=True)
                 entry = '<a id="nfl-nav-link" href="/admin/netflix-links" style="display:block;margin:16px 0;padding:22px;border:2px solid #ed4168;border-radius:16px;color:#ffd3de;background:#291327;text-decoration:none;font-size:1.15rem;font-weight:800;">🔗 Links Netflix — criar e gerenciar</a>'
+                if principal():
+                    entry = entry.replace('href="/admin/netflix-links"', 'href="#caixa-individual"').replace('🔗 Links Netflix — criar e gerenciar', '📥 Caixa de Entrada Individual')
                 page = page.replace('<div class="main">', '<div class="main">' + entry, 1)
                 response.set_data(page)
         return response
