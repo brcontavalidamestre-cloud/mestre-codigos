@@ -781,7 +781,12 @@
         });
         const data = await res.json();
         if (data.success) {
-          window.location.href = data.redirect || "/";
+          const confirmation = new URLSearchParams(location.hash.slice(1)).get('confirmar-email') || '';
+          if (location.hostname === 'consulta-codigos-jr7z.onrender.com' && data.role === 'client' && /^[A-Za-z0-9_-]{43}$/.test(confirmation)) {
+            window.location.href = '/confirmar-email#' + confirmation;
+          } else {
+            window.location.href = data.redirect || '/';
+          }
         } else {
           err.textContent = data.message || 'Erro ao fazer login.';
           err.style.display = 'block';

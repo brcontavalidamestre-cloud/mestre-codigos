@@ -7256,6 +7256,10 @@ def api_admin_list_vinculos_emails():
             "expires_at": exp,
             "active": (now < exp) if exp else False,
         })
+    pending = app.config.get('EMAIL_POOL_PENDING_BINDINGS')
+    if pending and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
+        existing = {item['email'] for item in items}
+        items.extend(row for row in pending(assigned_user) if row['email'] not in existing)
     items.sort(key=lambda x: (x.get("assigned_user") or "", x.get("email") or ""))
     return jsonify({"success": True, "items": items})
 
@@ -7365,7 +7369,9 @@ def api_admin_import_vinculos_emails():
             })
             created += 1
 
-    save_subscriptions(subs)
+    saved = save_subscriptions(subs)
+    if saved is False and data.get('partial') is True and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
+        return jsonify(success=False, message='Não foi possível salvar os vínculos. Tente novamente.'), 503
     msg = f"Emails vinculados com sucesso ao usuário {assigned_user_name}."
     if skipped:
         msg += " Este email já está vinculado a outro cliente. Remova o vínculo antigo antes de continuar."
@@ -9315,6 +9321,8 @@ app.config['EMAIL_POOL_BINDINGS_CHANGED'] = _invalidate_binding_inboxes
 from email_delegation import register_email_delegation
 email_permission_store = register_email_delegation(app, _data_dir, load_subscriptions,
     save_subscriptions, load_users, email_quarantine)
+from email_binding_confirmation import register_binding_confirmation
+register_binding_confirmation(app, email_permission_store, load_users, load_subscriptions, save_subscriptions, email_quarantine)
 
 from delegated_access import register_delegated_access
 from delegated_recipients import recipients as delegated_recipients
