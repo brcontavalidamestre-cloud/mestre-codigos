@@ -2198,9 +2198,7 @@
           if (field.value.trim() === txt) field.value = retry.join('\n');
           vinculosImportFeedback(sections.join('\n\n') || j.message, !j.success);
           if (groups.linked?.length) {
-            await loadVinculosEmails();
-            try { await loadComprasPorData(); } catch (_) { /* Saving has already succeeded. */ }
-            scrollToText('ve-tbody', groups.linked[0]);
+            await refreshSavedBindings(groups.linked[0]);
           }
           return;
         }
@@ -2219,14 +2217,18 @@
         const pending = (j.invalid || 0) + (j.skipped || 0);
         if (!pending) field.value = '';
         vinculosImportFeedback((j.message || 'Emails vinculados com sucesso.') + '\n' + (j.created || 0) + ' criado(s), ' + (j.updated || 0) + ' atualizado(s), ' + (j.invalid || 0) + ' inválido(s), ' + (j.skipped || 0) + ' não vinculado(s).' + (pending ? '\nSua lista foi mantida para revisão.' : ''), !!pending);
-        await loadVinculosEmails();
-        try { await loadComprasPorData(); } catch (_) { /* Saving has already succeeded. */ }
-        scrollToText('ve-tbody', linhas[0] || assignedUser);
+        await refreshSavedBindings(linhas[0] || assignedUser);
       } catch (error) {
         vinculosImportFeedback(error.message || 'Erro de conexão. Sua lista foi mantida; confira a tabela antes de tentar novamente.', true);
       } finally {
         if (button) { button.disabled = false; button.textContent = '✅ Vincular Emails'; }
       }
+    }
+
+    async function refreshSavedBindings(firstEmail) {
+      await Promise.all([loadVinculosEmails(), loadUsers(true)]);
+      scrollToText('ve-tbody', firstEmail);
+      try { await loadComprasPorData(); } catch (_) { /* Saving has already succeeded. */ }
     }
 
     async function deleteVinculoEmail(email) {
@@ -3100,13 +3102,13 @@
       }
     }
 
-    async function loadUsers() {
+    async function loadUsers(keepSearch = false) {
       document.getElementById('tbody').innerHTML =
         `<tr><td colspan="6"><div class="empty"><span class="sp"></span> Carregando...</div></td></tr>`;
       const si = document.getElementById('s-in');
-      if (si) si.value = '';
+      if (si && !keepSearch) si.value = '';
       const sei = document.getElementById('s-email-in');
-      if (sei) sei.value = '';
+      if (sei && !keepSearch) sei.value = '';
       document.getElementById('s-info').textContent = '';
       try {
         const { j: d } = await fetchJsonNoCache('/api/admin/users');
@@ -3121,7 +3123,8 @@
         document.getElementById('st-total').textContent = _users.length;
         document.getElementById('st-cli').textContent   = _users.filter(u => u.role === 'client').length;
         document.getElementById('st-adm').textContent   = _users.filter(u => u.role === 'admin').length;
-        renderTable(_users);
+        if (keepSearch && si?.value) filterUsers(si.value);
+        else renderTable(_users);
       } catch { showTblErr('Erro de conexão.'); }
     }
 
