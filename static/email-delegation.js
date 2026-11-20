@@ -64,7 +64,37 @@
    for(const row of data.items){
     const item=document.createElement('li'), address=document.createElement('strong');address.textContent=row.email;
     const clients=row.clients.map(client=>client.name===client.username?'@'+client.username:client.name+' (@'+client.username+')').join(', ');
-    item.append(address,document.createElement('br'),`Lista permitida: ${row.list_owner||'Sem responsável'} · Cliente vinculado: ${clients||'Nenhum'}${row.managers.length?' · Admin do cliente: '+row.managers.join(', '):''} · ${row.quarantined?'Em quarentena':'Fora da quarentena'}`);
+    const details=document.createElement('span');
+    const showDetails=()=>{details.textContent=`Lista permitida: ${row.list_owner||'Sem responsável'} · Cliente vinculado: ${clients||'Nenhum'}${row.managers.length?' · Admin do cliente: '+row.managers.join(', '):''} · ${row.quarantined?'Em quarentena':'Fora da quarentena'}`;};
+    showDetails();item.append(address,document.createElement('br'),details);
+    const controls=document.createElement('div');controls.style.margin='6px 0 12px';
+    const button=document.createElement('button');button.type='button';button.textContent='Liberar e-mail';
+    const targets=document.createElement('select');targets.setAttribute('aria-label','Subadmin para '+row.email);
+    const choices=(state.admins||[]).filter(admin=>row.eligible_admins.includes(admin.username));
+    options(targets,choices,'Selecione um subadmin');
+    const selectedOwner=el('ep-admin').value;
+    if(choices.some(admin=>admin.username===selectedOwner))targets.value=selectedOwner;
+    const note=document.createElement('span');note.setAttribute('role','status');
+    const unavailable=row.quarantined?'Endereço em quarentena.':row.list_owner?'Já liberado para '+row.list_owner+'.':!choices.length?'Não há subadmin elegível. O vínculo atual não será transferido.':'';
+    if(unavailable){button.disabled=true;controls.append(button,' ',note);note.textContent=unavailable;}
+    else {
+     controls.append(targets,' ',button,' ',note);
+     button.onclick=async()=>{
+      const target=targets.value;
+      if(!target){note.textContent='Selecione um subadmin.';targets.focus();return;}
+      if(!confirm('Liberar '+row.email+' na lista de '+target+'? O vínculo com o cliente não será alterado.'))return;
+      button.disabled=true;targets.disabled=true;note.textContent='Salvando…';
+      try{
+       const response=await fetch('/api/admin/email-pool/grant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({admin_user:target,emails:[row.email]})});
+       const data=await response.json();
+       if(!response.ok||!data.success)throw new Error(data.blocked_emails?.length?'Endereço em quarentena.':data.conflict_emails?.length?'O endereço já está em outra lista ou vinculado a outro responsável.':data.message||'Não foi possível liberar.');
+       note.textContent='Liberado para '+target+'.';targets.hidden=true;
+       row.list_owner=target;showDetails();
+       if(el('ep-admin').value===target||!el('ep-admin').value)await load().catch(()=>{});
+      }catch(error){note.textContent=error.message;button.disabled=false;targets.disabled=false;}
+     };
+    }
+    item.append(controls);
     results.append(item);
    }
   }catch(error){if(id===searchVersion)info.textContent=error.message;}

@@ -226,7 +226,10 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             clients = sorted(matching[email])
             owner = permissions.get(email, {}).get('admin_user')
             managers = {norm(users.get(client, {}).get('created_by')) for client in clients}
-            items.append(dict(email=email, list_owner=owner, managers=sorted(managers - {''}),
+            eligible = sorted(name for name, user in users.items() if name != 'admin' and user.get('role') == 'admin'
+                              and all(client == name or (users.get(client, {}).get('role', 'client') == 'client'
+                                      and norm(users.get(client, {}).get('created_by')) == name) for client in clients))
+            items.append(dict(email=email, list_owner=owner, eligible_admins=eligible, managers=sorted(managers - {''}),
                               clients=[dict(username=client, name=users.get(client, {}).get('name') or client) for client in clients],
                               quarantined=quarantine.matches(email, blocked)))
         return jsonify(success=True, items=items, total=len(ordered)), 200, {'Cache-Control': 'no-store'}
