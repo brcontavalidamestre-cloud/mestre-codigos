@@ -1,4 +1,4 @@
-from flask import Flask, g, request, jsonify, send_from_directory, session, redirect, url_for
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, url_for
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import imaplib
@@ -5135,20 +5135,6 @@ def _central_inbox_route_recipients(msg, found, allowed, mailbox_user):
 _CENTRAL_INBOX_WINDOW_SECONDS = 15 * 60
 
 
-def _connect_central_inbox(account):
-    # IMAP SELECT changes connection state. A shared connection may be
-    # switched to another folder or closed by a concurrent request.
-    import ssl
-    mail = imaplib.IMAP4_SSL(account['server'], int(account['port']),
-                            ssl_context=ssl.create_default_context(), timeout=8)
-    try:
-        mail.login(account['user'], account['password'])
-        return mail
-    except Exception:
-        mail.shutdown()
-        raise
-
-
 def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48, central=False):
     """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
     vinculados do usuário (INBOX + Spam), extraindo código/link."""
@@ -5182,7 +5168,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     for account_cfg in accounts:
         mail = None
         try:
-            mail = _connect_central_inbox(account_cfg) if central else connect_imap(account_cfg)
+            mail = connect_imap(account_cfg)
             spam_boxes = _get_spam_boxes(mail, account_cfg)
             boxes = ["INBOX"] + [b for b in spam_boxes if b and b.upper() != "INBOX"]
             for mailbox in boxes:
@@ -5384,12 +5370,7 @@ def scope_central_inbox_to_current_filters(response):
         items = []
         now = time.time()
         cutoff = now - _CENTRAL_INBOX_WINDOW_SECONDS
-        shortcut_email = getattr(g, 'inbox_shortcut_email', '')
-        selected = shortcut_email or request.args.get('inbox_email', '').strip().lower()
-        if shortcut_email and app.config['INBOX_SHORTCUT_RESOLVE'](g.inbox_shortcut_slug, session.get('username')) != shortcut_email:
-            revoked = jsonify(success=False, message='Este atalho não está disponível para esta conta.'); revoked.status_code = 404
-            revoked.headers['Cache-Control'] = 'no-store'
-            return revoked
+        selected = request.args.get('inbox_email', '').strip().lower()
         for item in data.get('items', []):
             if not cutoff <= (item.get('date_ts') or 0) <= now:
                 continue
@@ -5402,18 +5383,11 @@ def scope_central_inbox_to_current_filters(response):
             recipients = row.get('recipients') or []
             if not recipients or not set(recipients).issubset(owned) or any(email_quarantine.is_blocked(e) for e in recipients):
                 continue
-            if shortcut_email and set(recipients) != {shortcut_email}:
-                continue
             if selected:
                 row = {key: row[key] for key in ('email', 'recipients', 'platform', 'date_ts')}
             elif recipients != [address]:
                 row.pop('message_preview', None)
             items.append(row)
-        if shortcut_email:
-            items = sorted(items, key=lambda item: item['date_ts'], reverse=True)[:3]
-            data['emails'] = [shortcut_email] if shortcut_email in data.get('emails', []) else []
-            data['shortcut_email'] = shortcut_email
-            data['errors'] = ['Uma ou mais caixas não responderam.'] if data.get('errors') else []
         data['items'] = items
     data['count'] = len(data['items'])
     response.set_data(app.json.dumps(data))
@@ -5432,13 +5406,6 @@ def api_user_live_inbox_messages():
     emails = _user_live_inbox_emails(username)
     central = request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
     selected = request.args.get('inbox_email', '').strip().lower() if central else ''
-    if central and 'inbox_shortcut' in request.args:
-        g.inbox_shortcut_slug = request.args.get('inbox_shortcut', '')
-        selected = app.config['INBOX_SHORTCUT_RESOLVE'](g.inbox_shortcut_slug, username)
-        allowed = app.config.get('EMAIL_POOL_CONSULT_ALLOWED')
-        if not selected or selected not in emails or (allowed and not allowed(selected, username)):
-            return jsonify(success=False, message='Este atalho não está disponível para esta conta.'), 404, {'Cache-Control': 'no-store'}
-        g.inbox_shortcut_email = selected
     if selected and selected not in emails:
         return jsonify(success=True, items=[], emails=[], count=0, inbox_issue='wrong_account', inbox_username=username)
     if not emails:
@@ -5457,8 +5424,7 @@ def api_user_live_inbox_messages():
             _bd_cache.pop(username, None)
     fresh = request.args.get("fresh") == "1"
 
-    ttl = 10 if central else _BD_CACHE_TTL
-    if cached and (now - cached["ts"] < ttl) and not fresh:
+    if cached and (now - cached["ts"] < _BD_CACHE_TTL) and not fresh:
         return jsonify({"success": True, "items": cached["items"], "emails": emails,
                         "count": len(cached["items"]), "cached": True,
                         "errors": cached.get("errors") or []})
@@ -5484,11 +5450,8 @@ def api_user_live_inbox_messages():
                 _bd_refreshing.discard(username)
 
     if cached:
-        with _bd_cache_lock:
-            cached = _bd_cache.get(username) or cached
-            pending = username in _bd_refreshing
         return jsonify({"success": True, "items": cached["items"], "emails": emails,
-                        "count": len(cached["items"]), "cached": True, "refreshing": pending,
+                        "count": len(cached["items"]), "cached": True, "refreshing": True,
                         "errors": cached.get("errors") or []})
 
     # Central already started the background scan; do not open a second IMAP
@@ -7294,10 +7257,6 @@ def api_admin_list_vinculos_emails():
             "expires_at": exp,
             "active": (now < exp) if exp else False,
         })
-    pending = app.config.get('EMAIL_POOL_PENDING_BINDINGS')
-    if pending and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
-        existing = {item['email'] for item in items}
-        items.extend(row for row in pending(assigned_user) if row['email'] not in existing)
     items.sort(key=lambda x: (x.get("assigned_user") or "", x.get("email") or ""))
     return jsonify({"success": True, "items": items})
 
@@ -7407,9 +7366,7 @@ def api_admin_import_vinculos_emails():
             })
             created += 1
 
-    saved = save_subscriptions(subs)
-    if saved is False and data.get('partial') is True and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
-        return jsonify(success=False, message='Não foi possível salvar os vínculos. Tente novamente.'), 503
+    save_subscriptions(subs)
     msg = f"Emails vinculados com sucesso ao usuário {assigned_user_name}."
     if skipped:
         msg += " Este email já está vinculado a outro cliente. Remova o vínculo antigo antes de continuar."
@@ -9359,8 +9316,6 @@ app.config['EMAIL_POOL_BINDINGS_CHANGED'] = _invalidate_binding_inboxes
 from email_delegation import register_email_delegation
 email_permission_store = register_email_delegation(app, _data_dir, load_subscriptions,
     save_subscriptions, load_users, email_quarantine)
-from email_binding_confirmation import register_binding_confirmation
-register_binding_confirmation(app, email_permission_store, load_users, load_subscriptions, save_subscriptions, email_quarantine)
 
 from delegated_access import register_delegated_access
 from delegated_recipients import recipients as delegated_recipients
@@ -9369,9 +9324,6 @@ register_delegated_access(app, email_permission_store, load_users, load_subscrip
 from email_uniqueness import register_email_uniqueness
 app.config['EMAIL_UNIQUENESS_INTERNAL_TOKEN'] = MASTER_API_TOKEN
 register_email_uniqueness(app, _data_dir, load_subscriptions)
-
-from inbox_shortcuts import register_inbox_shortcuts
-register_inbox_shortcuts(app, _data_dir, load_users, load_subscriptions, email_quarantine)
 
 from purchase_code_links import register_purchase_code_links
 from purchase_code_search import make_purchase_code_search

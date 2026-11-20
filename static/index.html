@@ -3114,7 +3114,6 @@
     let _bdEmailFilter = '';
     const _bdCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com';
     const _bdShortcutEmail = _bdCentral ? (new URLSearchParams(location.hash.slice(1)).get('bandeja') || '').trim().toLowerCase() : '';
-    const _bdShortcutSlug = _bdCentral ? new URLSearchParams(location.hash.slice(1)).get('caixa') : null;
     function filterBandejaEmail(email) {
       _bdEmailFilter = email || '';
       if (_bdLast) renderBandeja(_bdLast);
@@ -3153,14 +3152,13 @@
         list.innerHTML = '<div class="bd-empty" role="status">' + (j.refreshing ? 'Consultando as caixas de e-mail…' : 'Não foi possível consultar todas as caixas. Aguarde a próxima atualização ou clique em Atualizar agora.') + '</div>';
         return;
       }
-      if (_bdShortcutEmail || _bdShortcutSlug !== null) {
-        const address = j.shortcut_email || _bdShortcutEmail;
-        const allowed = (j.emails || []).includes(address);
+      if (_bdShortcutEmail) {
+        const allowed = (j.emails || []).includes(_bdShortcutEmail);
         if (j.inbox_issue === 'wrong_account') {
           list.innerHTML = '<div>Este e-mail não está vinculado à conta atual' + (j.inbox_username ? ' (@' + _esc(j.inbox_username) + ')' : '') + '. Entre com a conta do cliente a quem o e-mail foi vinculado.</div><button type="button" class="btn-primary" data-bd-switch-account>Trocar de conta</button>';
           return;
         }
-        const title = allowed ? 'Mensagens de ' + address : (j.quarantine_message || 'O vínculo existe, mas a consulta está bloqueada pelas permissões atuais.');
+        const title = allowed ? 'Mensagens de ' + _bdShortcutEmail : (j.quarantine_message || 'O vínculo existe, mas a consulta está bloqueada pelas permissões atuais.');
         list.innerHTML = '<div class="bd-context">' + _esc(title) + '</div>' + (allowed && all.length
           ? all.map(it => '<article class="bd-record"><div class="bd-record-mark" aria-hidden="true">✉</div><div class="bd-record-main"><div class="bd-subject">Mensagem recebida</div><div class="bd-meta">' + _esc(it.platform) + ' · ' + _esc(_fmtDate(it.date_ts)) + '</div></div></article>').join('')
           : (allowed ? '<div>' + _esc(j.quarantine_message || 'Nenhuma mensagem nos filtros ativos nos últimos 15 minutos.') + '</div>' : ''));
@@ -3206,18 +3204,11 @@
         if (manual && status) status.textContent = 'Atualizando...';
         const params = new URLSearchParams();
         if (manual) params.set('fresh','1');
-        if (_bdShortcutSlug !== null) params.set('inbox_shortcut', _bdShortcutSlug);
-        else if (_bdShortcutEmail) params.set('inbox_email',_bdShortcutEmail);
-        const r = await fetch('/api/live-inbox/messages' + (params.size ? '?' + params : ''), { cache: 'no-store' });
+        if (_bdShortcutEmail) params.set('inbox_email',_bdShortcutEmail);
+        const r = await fetch('/api/live-inbox/messages' + (params.size ? '?' + params : ''));
         const j = await r.json();
         if (!j.success) {
-          if (_bdShortcutSlug !== null && list) {
-            _bdLast = null;
-            list.textContent = j.message || 'Este atalho não está disponível para esta conta.';
-            if (r.status === 401) location.assign('/login' + location.hash);
-          } else if (j.quarantined && list) list.textContent = j.message || 'Esse email está na lista que não pode receber códigos.';
-          const linked = document.getElementById('bd-emails');
-          if (_bdCentral && linked) { linked.textContent = ''; linked.style.display = 'none'; }
+          if (j.quarantined && list) list.textContent = j.message || 'Esse email está na lista que não pode receber códigos.';
           if (status) status.textContent = j.message || 'Erro ao carregar.';
           return;
         }
@@ -3226,13 +3217,6 @@
           if (!(j.emails || []).length) {
             emailsEl.style.display = 'block';
             emailsEl.innerHTML = '⚠️ Nenhum email vinculado à sua conta. Peça ao administrador para vincular.';
-          } else if (_bdCentral) {
-            emailsEl.style.display = 'block';
-            emailsEl.classList.add('bd-context');
-            const address = j.shortcut_email || _bdShortcutEmail;
-            const linked = address ? j.emails.filter(email => email === address) : j.emails;
-            emailsEl.textContent = linked.length ? (linked.length === 1 ? 'E-mail vinculado: ' : 'E-mails vinculados: ') + linked.join(', ') : '';
-            if (!linked.length) emailsEl.style.display = 'none';
           } else {
             emailsEl.style.display = 'none';
             emailsEl.innerHTML = '';
@@ -3240,7 +3224,7 @@
         }
         _bdLast = j;
         renderBandeja(j);
-        if (status) status.textContent = (j.quarantine_message ? j.quarantine_message + ' · ' : '') + (_bdCentral && j.errors?.length ? 'Uma ou mais caixas não responderam · ' : '') + (j.refreshing ? 'Consultando caixas…' : 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR')) + (_bdCentral ? ' · automático a cada 5s' : ' · automático a cada 12s');
+        if (status) status.textContent = (j.quarantine_message ? j.quarantine_message + ' · ' : '') + (_bdCentral && j.errors?.length ? 'Uma ou mais caixas não responderam · ' : '') + (j.refreshing ? 'Consultando caixas…' : 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR')) + ' · automático a cada 12s';
       } catch (e) {
         if (status) status.textContent = 'Erro de conexão. Tentando novamente...';
       } finally {
@@ -3252,7 +3236,7 @@
       stopBandeja();
       if (_bdLast) { renderBandeja(_bdLast); }
       loadBandeja(true);
-      _bdTimer = setInterval(() => loadBandeja(false), _bdCentral ? 5000 : 12000);
+      _bdTimer = setInterval(() => loadBandeja(false), 12000);
     }
 
     function stopBandeja() {
@@ -3790,7 +3774,7 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
 
     // Iniciação do hash (#loja abre direto a loja)
     if (window.location.hash === '#loja') switchView('loja');
-    else if (_bdShortcutEmail || _bdShortcutSlug !== null) switchView('bandeja');
+    else if (_bdShortcutEmail) switchView('bandeja');
 
     // KEEP-ALIVE: aquece a conexão IMAP em background ao carregar a página
     // Isso faz a primeira busca ser quase instantânea (sem cold-start)

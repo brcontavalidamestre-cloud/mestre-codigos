@@ -2084,7 +2084,7 @@
             return String(a.email || '').localeCompare(String(b.email || ''), 'pt-BR');
           })
           .map(it => {
-            const badge = it.pending_confirmation ? '<span style="color:#fcd34d;">Aguardando confirmação</span>' : it.active
+            const badge = it.active
               ? '<span style="color:#4caf50;">✓ liberado</span>'
               : '<span style="color:#ff5252;">✗ inativo</span>';
             const safeEmail = String(it.email || '').replace(/'/g, "\'");
@@ -2096,7 +2096,7 @@
             return `<tr>
               <td>
                 <div style="display:flex;gap:10px;align-items:flex-start;">
-                  ${it.pending_confirmation ? '' : `<input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>`}
+                  <input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>
                   <div>
                     <div style="font-weight:800;color:#fff;">${x(it.assigned_user_name || it.assigned_user || '-')}</div>
                     <div style="font-size:.82rem;color:#93c5fd;">@${x(it.assigned_user || '-')}</div>
@@ -2112,8 +2112,8 @@
               <td>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                   <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(it.assigned_user || '')}'; loadVinculosEmails();">🎯 Ver só este</button>
-                  ${location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin' && !it.pending_confirmation && it.assigned_user && normalizedEmail ? `<button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'copy')">📥 Gerar / copiar link</button><button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'rotate')">Atualizar link</button><button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="manageInboxShortcut(this,'remove')">Excluir link</button>` : ''}
-                  ${it.pending_confirmation ? '' : `<button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>`}
+                  ${location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin' && it.assigned_user && normalizedEmail ? `<button type="button" class="btn-ref" data-inbox-email="${x(normalizedEmail)}" onclick="copyInboxShortcut(this)">📥 Copiar atalho da caixa</button>` : ''}
+                  <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
                 </div>
               </td>
             </tr>`;
@@ -2130,24 +2130,11 @@
       }
     }
 
-    async function manageInboxShortcut(button, action) {
-      if (action !== 'copy' && !window.confirm((action === 'rotate' ? 'Atualizar' : 'Excluir') + ' o link de ' + button.dataset.inboxEmail + '? O link antigo deixará de funcionar.')) return;
-      const controls = Array.from(button.parentElement.querySelectorAll('[data-inbox-email]'));
-      controls.forEach(el => el.disabled = true);
-      try {
-        const response = await fetch('/api/admin/inbox-shortcuts', {
-          method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({email: button.dataset.inboxEmail, action})
-        });
-        const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.message || 'Não foi possível gerenciar o link.');
-        if (action === 'remove') { toast('Link excluído. O vínculo foi mantido.', '#15803d'); return; }
-        const url = new URL('/', location.origin);
-        url.hash = new URLSearchParams({caixa: result.slug}).toString();
-        try { await navigator.clipboard.writeText(url.href); toast('Link da caixa copiado.', '#15803d'); }
-        catch { window.prompt('Copie o link da caixa de entrada:', url.href); }
-      } catch (error) { toast(error.message || 'Não foi possível gerenciar o link.', '#b91c1c'); }
-      finally { controls.forEach(el => el.disabled = false); }
+    async function copyInboxShortcut(button) {
+      const url = new URL('/', location.origin);
+      url.hash = new URLSearchParams({ bandeja: button.dataset.inboxEmail }).toString();
+      try { await navigator.clipboard.writeText(url.href); toast('Atalho copiado. O cliente precisa entrar na conta.', '#15803d'); }
+      catch { window.prompt('Copie o atalho da caixa. O cliente precisa entrar na conta.', url.href); }
     }
 
     function vinculosImportFeedback(message, failed=false) {
@@ -2170,40 +2157,10 @@
       try {
         const r = await fetch('/api/admin/vinculos-emails/import', {
           method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas, partial: true, admin_session: _meUser?.username || '' })
+          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas })
         });
         let j;
         try { j = await r.json(); } catch (_) { throw new Error('O servidor não respondeu corretamente. Sua lista foi mantida; tente novamente.'); }
-        if (r.status === 401 || (r.status === 403 && j.message === 'Acesso restrito ao administrador.')) {
-          vinculosImportFeedback('A sessão atual não é de administrador. Entre novamente com a conta que gerencia este cliente. Nenhum vínculo foi alterado; sua lista foi mantida.', true);
-          return;
-        }
-        if (j.batch_results) {
-          const groups = j.batch_results;
-          const labels = {
-            linked: 'Vinculados agora', confirmation_sent: 'Confirmação enviada — aguardando o titular',
-            registered: 'Já cadastrados — sem alteração', blocked: 'Bloqueados pela quarentena',
-            already_pending: 'Já aguardavam confirmação', invalid: 'Endereços inválidos',
-            limited: 'Não enviados — limite de confirmações atingido',
-            send_failed: 'Falha no envio da confirmação', retry: 'Não foi possível concluir — tente novamente'
-          };
-          const sections = Object.entries(labels).filter(([key]) => groups[key]?.length).map(([key, label]) => {
-            const rows = groups[key].map(email => {
-              const details = key === 'registered' && Object.hasOwn(j.conflicts || {}, email) ? j.conflicts[email] : null;
-              return email + (details?.assigned_users?.length ? ' — vinculado a: ' + details.assigned_users.join(', ') : '');
-            });
-            return label + ' (' + rows.length + '):\n' + rows.join('\n');
-          });
-          const retry = ['invalid', 'limited', 'send_failed', 'retry'].flatMap(key => groups[key] || []);
-          if (field.value.trim() === txt) field.value = retry.join('\n');
-          vinculosImportFeedback(sections.join('\n\n') || j.message, !j.success);
-          if (groups.linked?.length) {
-            await refreshSavedBindings(groups.linked[0]);
-          } else if (groups.confirmation_sent?.length || groups.already_pending?.length) {
-            await loadVinculosEmails();
-          }
-          return;
-        }
         if (!r.ok || !j.success) {
           const details = Array.isArray(j.conflicts) ? j.conflicts : [];
           const emails = [...new Set([...(j.duplicate_emails || []), ...(j.conflict_emails || [])])];
@@ -2211,26 +2168,17 @@
           vinculosImportFeedback((j.message || 'Não foi possível vincular os emails.') + (lines.length ? '\n\nEmails que precisam de revisão:\n' + lines.join('\n') : '') + '\n\nNenhum vínculo desta tentativa foi criado. Sua lista foi mantida.', true);
           return;
         }
-        if (r.status === 202 && j.pending) {
-          document.getElementById('ve-import-status').textContent = j.message;
-          if (!j.skipped) field.value = '';
-          return;
-        }
         const pending = (j.invalid || 0) + (j.skipped || 0);
         if (!pending) field.value = '';
         vinculosImportFeedback((j.message || 'Emails vinculados com sucesso.') + '\n' + (j.created || 0) + ' criado(s), ' + (j.updated || 0) + ' atualizado(s), ' + (j.invalid || 0) + ' inválido(s), ' + (j.skipped || 0) + ' não vinculado(s).' + (pending ? '\nSua lista foi mantida para revisão.' : ''), !!pending);
-        await refreshSavedBindings(linhas[0] || assignedUser);
+        await loadVinculosEmails();
+        try { await loadComprasPorData(); } catch (_) { /* Saving has already succeeded. */ }
+        scrollToText('ve-tbody', linhas[0] || assignedUser);
       } catch (error) {
         vinculosImportFeedback(error.message || 'Erro de conexão. Sua lista foi mantida; confira a tabela antes de tentar novamente.', true);
       } finally {
         if (button) { button.disabled = false; button.textContent = '✅ Vincular Emails'; }
       }
-    }
-
-    async function refreshSavedBindings(firstEmail) {
-      await Promise.all([loadVinculosEmails(), loadUsers(true)]);
-      scrollToText('ve-tbody', firstEmail);
-      try { await loadComprasPorData(); } catch (_) { /* Saving has already succeeded. */ }
     }
 
     async function deleteVinculoEmail(email) {
@@ -3104,13 +3052,13 @@
       }
     }
 
-    async function loadUsers(keepSearch = false) {
+    async function loadUsers() {
       document.getElementById('tbody').innerHTML =
         `<tr><td colspan="6"><div class="empty"><span class="sp"></span> Carregando...</div></td></tr>`;
       const si = document.getElementById('s-in');
-      if (si && !keepSearch) si.value = '';
+      if (si) si.value = '';
       const sei = document.getElementById('s-email-in');
-      if (sei && !keepSearch) sei.value = '';
+      if (sei) sei.value = '';
       document.getElementById('s-info').textContent = '';
       try {
         const { j: d } = await fetchJsonNoCache('/api/admin/users');
@@ -3125,8 +3073,7 @@
         document.getElementById('st-total').textContent = _users.length;
         document.getElementById('st-cli').textContent   = _users.filter(u => u.role === 'client').length;
         document.getElementById('st-adm').textContent   = _users.filter(u => u.role === 'admin').length;
-        if (keepSearch && si?.value) filterUsers(si.value);
-        else renderTable(_users);
+        renderTable(_users);
       } catch { showTblErr('Erro de conexão.'); }
     }
 
@@ -3378,6 +3325,6 @@
 
   </script>
 <script src="/static/netflix-links-admin.js?v=14" defer></script>
-<script src="/static/email-delegation-launcher.js?v=2" defer></script>
+<script src="/static/email-delegation-launcher.js?v=1" defer></script>
 </body>
 </html>

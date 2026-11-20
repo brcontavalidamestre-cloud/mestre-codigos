@@ -781,14 +781,8 @@
         });
         const data = await res.json();
         if (data.success) {
-          const fragment = new URLSearchParams(location.hash.slice(1));
-          const central = location.hostname === 'consulta-codigos-jr7z.onrender.com';
-          const confirmation = fragment.get('confirmar-email') || '';
-          if (central && /^[A-Za-z0-9_-]{43}$/.test(confirmation) && data.role === 'client') {
-            window.location.href = '/confirmar-email#' + confirmation;
-          } else {
-            window.location.href = central && (fragment.has('bandeja') || fragment.has('caixa')) && data.redirect === '/' ? '/' + location.hash : (data.redirect || '/');
-          }
+          const inbox = location.hostname === 'consulta-codigos-jr7z.onrender.com' && new URLSearchParams(location.hash.slice(1)).has('bandeja');
+          window.location.href = inbox && data.redirect === '/' ? '/' + location.hash : (data.redirect || '/');
         } else {
           err.textContent = data.message || 'Erro ao fazer login.';
           err.style.display = 'block';
