@@ -2,7 +2,8 @@
 (async () => {
   if (location.hostname !== 'consulta-codigos-jr7z.onrender.com') return;
   if (location.pathname === '/admin' && document.getElementById('nfl-nav-link')) return;
-  const directPanel = location.pathname === '/admin/netflix-links';
+  const statusPanel = location.pathname === '/admin/netflix-links/status';
+  const directPanel = statusPanel || location.pathname === '/admin/netflix-links';
   let identity;
   try {
     identity = await (await fetch('/api/netflix-admin/me', {cache:'no-store'})).json();
@@ -20,6 +21,11 @@
       logout.onclick=async()=>{const response=await fetch('/api/netflix-admin/logout',{method:'POST'});if(response.ok)location.replace('/netflix-admin/login');};
       directory.prepend(logout);
     }
+    return;
+  }
+  if (statusPanel) {
+    document.querySelector('main h1').textContent = 'Gerenciar links de status';
+    document.getElementById('restricted-email-directory').removeAttribute('hidden');
     return;
   }
   const css = document.createElement('link'); css.rel = 'stylesheet'; css.href = '/static/netflix-links.css?v=7'; document.head.append(css);

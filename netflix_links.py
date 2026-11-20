@@ -481,7 +481,15 @@ def register_netflix_links(app, data_dir, search, search_all=None):
     @bp.get('/admin/netflix-links')
     @manager_only
     def admin_panel():
+        manager = g.netflix_manager
+        if not manager['principal'] and manager.get('kind') != 'panel':
+            return send_from_directory(app.static_folder, 'netflix-status-admin.html')
         return send_from_directory(app.static_folder, 'netflix-links-panel.html')
+
+    @bp.get('/admin/netflix-links/status')
+    @manager_only
+    def admin_status_panel():
+        return send_from_directory(app.static_folder, 'netflix-status-admin.html')
 
     @bp.route('/api/admin/netflix-links', methods=['GET', 'POST'])
     @manager_only
