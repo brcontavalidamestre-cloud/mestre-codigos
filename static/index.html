@@ -3216,6 +3216,8 @@
             list.textContent = j.message || 'Este atalho não está disponível para esta conta.';
             if (r.status === 401) location.assign('/login' + location.hash);
           } else if (j.quarantined && list) list.textContent = j.message || 'Esse email está na lista que não pode receber códigos.';
+          const linked = document.getElementById('bd-emails');
+          if (_bdCentral && linked) { linked.textContent = ''; linked.style.display = 'none'; }
           if (status) status.textContent = j.message || 'Erro ao carregar.';
           return;
         }
@@ -3224,6 +3226,13 @@
           if (!(j.emails || []).length) {
             emailsEl.style.display = 'block';
             emailsEl.innerHTML = '⚠️ Nenhum email vinculado à sua conta. Peça ao administrador para vincular.';
+          } else if (_bdCentral) {
+            emailsEl.style.display = 'block';
+            emailsEl.classList.add('bd-context');
+            const address = j.shortcut_email || _bdShortcutEmail;
+            const linked = address ? j.emails.filter(email => email === address) : j.emails;
+            emailsEl.textContent = linked.length ? (linked.length === 1 ? 'E-mail vinculado: ' : 'E-mails vinculados: ') + linked.join(', ') : '';
+            if (!linked.length) emailsEl.style.display = 'none';
           } else {
             emailsEl.style.display = 'none';
             emailsEl.innerHTML = '';
