@@ -5179,10 +5179,14 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         for address in emails:
                             if not address.isascii() or not re.fullmatch(r'[^\s"\\@]+@[^\s"\\@]+', address):
                                 continue
-                            terms = ' '.join(f'HEADER {header} "{address}"' for header in headers)
-                            status, found = mail.search(None, f'(SINCE {since_date} '+('OR ' * (len(headers)-1))+terms+')')
-                            if status == 'OK' and found and found[0]:
-                                matches.update(v for v in found[0].split() if v.isdigit())
+                            mailbox_matches = set()
+                            for header in headers:
+                                status, found = mail.search(None, 'SINCE', since_date, 'HEADER', header, '"' + address + '"')
+                                if status == 'OK' and found and found[0]:
+                                    mailbox_matches.update(v for v in found[0].split() if v.isdigit())
+                                if mailbox_matches:
+                                    break
+                            matches.update(mailbox_matches)
                         recent_ids = sorted(matches, key=int)[-240:]
                     else:
                         st_search, msgs = mail.search(None, "SINCE", since_date)
@@ -5238,11 +5242,8 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         if guard and not guard(msg, _extract_msg_text(msg)):
                             continue
                         actual_recipients = sorted(delegated_recipients(msg, _extract_msg_text(msg)))
-                        forwarded_to_collector = False
                         if central:
-                            verified = sorted(_central_inbox_route_recipients(msg, actual_recipients, allowed_set, account_cfg.get('user')))
-                            forwarded_to_collector = verified != actual_recipients
-                            actual_recipients = verified
+                            actual_recipients = sorted(_central_inbox_route_recipients(msg, actual_recipients, allowed_set, account_cfg.get('user')))
                         msg_ts = _admin_inbox_date_ts(msg)
                         if central and (msg_ts < cutoff or matched_email not in actual_recipients or not set(actual_recipients).issubset(allowed_set)):
                             continue
@@ -5259,6 +5260,15 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         except Exception:
                             plat = None
                         if not plat:
+                            continue
+
+                        if central:
+                            items.append({
+                                'email': matched_email, 'recipients': actual_recipients,
+                                'subject': 'Mensagem recebida', 'platform': plat, 'date_ts': msg_ts,
+                            })
+                            if len(items) >= max_items:
+                                break
                             continue
 
                         code = None
@@ -5284,8 +5294,6 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                                 link = u.rstrip(".,;")
                                 break
 
-                        if central and forwarded_to_collector:
-                            subject, from_v, code, link = 'Mensagem recebida', '', None, None
                         items.append({
                             "email": matched_email,
                             "recipients": actual_recipients,
