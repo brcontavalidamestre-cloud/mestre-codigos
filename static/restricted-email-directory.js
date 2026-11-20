@@ -25,7 +25,7 @@
       tr.insertCell().textContent=row.username;
       tr.insertCell().textContent=row.has_status_link?'Link já gerado':'Sem link';
       const li=tr.insertCell();
-      if (principal) {
+      if (principal && row.source !== 'panel') {
         const button=document.createElement('button');
         button.type='button'; button.className='nfl-secondary'; button.textContent='Remover'; button.setAttribute('aria-label','Remover '+row.email);
         button.onclick=async()=>{
@@ -75,7 +75,7 @@
           li.append(' ',button);
         }
       }
-      if (restricted && !row.has_status_link) {
+      if ((principal || restricted) && !row.has_status_link) {
         const button=document.createElement('button'); button.type='button'; button.className='nfl-secondary'; button.textContent='Gerar link de status';
         button.onclick=async()=>{
           button.disabled=true;
@@ -99,7 +99,7 @@
   async function load() {
     const d=await api(); const current=owner.value;
     items=d.items; principal=d.principal===true;
-    if(!principal){ const r=await fetch('/api/netflix-admin/me',{cache:'no-store'});const me=await r.json();restricted=me.success===true && me.kind!=='panel'; }
+    if(!principal){ const r=await fetch('/api/netflix-admin/me',{cache:'no-store'});const me=await r.json();restricted=me.success===true; }
     if(restricted) {
       const heading=document.querySelector('main h1');
       if(heading) heading.textContent='Gerenciar links de status';

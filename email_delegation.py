@@ -147,6 +147,13 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
 
     app.config['EMAIL_POOL_RESERVED_LIST']=lambda:sorted(store.permissions())
     app.config['EMAIL_POOL_OWNER_ASSIGNMENT_OK']=lambda email,owner:source_allowed(norm(email),owner,load_users(),load_subscriptions())
+    def status_owners():
+        users, subs = load_users(), load_subscriptions()
+        return {email: row['admin_user'] for email, row in store.permissions().items()
+                if users.get(row['admin_user'], {}).get('role') == 'admin'
+                and source_allowed(email, row['admin_user'], users, subs)}
+
+    app.config['EMAIL_POOL_STATUS_OWNERS']=status_owners
     app.config['EMAIL_POOL_PANEL_LINK_ACTOR']=panel_link_actor
     app.config['EMAIL_POOL_LINK_CAN_SHARE']=shared_link_allowed
     app.config['EMAIL_POOL_LINK_OWNER']=link_owner
@@ -229,6 +236,11 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
             deleted = conn.execute('DELETE FROM permissions WHERE email=?',(email,)).rowcount
             conn.commit()
             if deleted:
+                path = os.path.join(data_dir, 'netflix_links.sqlite3')
+                if os.path.isfile(path):
+                    with sqlite3.connect(path, timeout=15) as links_conn:
+                        if links_conn.execute("SELECT 1 FROM sqlite_master WHERE name='restricted_status_links' AND type='table'").fetchone():
+                            links_conn.execute("DELETE FROM restricted_status_links WHERE email=? AND owner LIKE 'panel:%'", (email,))
                 revoke_link(email)
                 store.audit('admin','revoke',{'email':email})
         return jsonify(success=True,message='Permissão removida. O vínculo atual e o cliente foram preservados.')
