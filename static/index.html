@@ -3148,6 +3148,10 @@
     function renderBandeja(j) {
       const list = document.getElementById('bd-list');
       const all = j.items || [];
+      if (_bdCentral && !all.length && (j.refreshing || j.errors?.length) && !j.inbox_issue) {
+        list.innerHTML = '<div class="bd-empty" role="status">' + (j.refreshing ? 'Consultando as caixas de e-mail…' : 'Não foi possível consultar todas as caixas. Aguarde a próxima atualização ou clique em Atualizar agora.') + '</div>';
+        return;
+      }
       if (_bdShortcutEmail) {
         const allowed = (j.emails || []).includes(_bdShortcutEmail);
         if (j.inbox_issue === 'wrong_account') {

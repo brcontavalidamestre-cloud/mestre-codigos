@@ -5448,8 +5448,20 @@ def api_user_live_inbox_messages():
                         "count": len(cached["items"]), "cached": True, "refreshing": True,
                         "errors": cached.get("errors") or []})
 
-    # Primeira vez de todos (sem cache nenhum): faz a varredura agora.
-    items, errors = _fetch_user_live_inbox_items(username, central=True) if central else _fetch_user_live_inbox_items(username)
+    # Central already started the background scan; do not open a second IMAP
+    # connection or wait for the mailbox before responding to a cold inbox.
+    if central:
+        with _bd_cache_lock:
+            initial = _bd_cache.get(username)
+            pending = username in _bd_refreshing
+        if initial and initial.get('linked_emails') == tuple(emails):
+            return jsonify(success=True, items=initial['items'], emails=emails,
+                           count=len(initial['items']), errors=initial.get('errors') or [])
+        return jsonify(success=True, items=[], emails=emails, count=0, refreshing=pending,
+                       errors=[] if pending else ['Não foi possível iniciar a consulta.'])
+
+    # Other deployments retain their existing first-load behavior.
+    items, errors = _fetch_user_live_inbox_items(username)
     with _bd_cache_lock:
         _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors, "linked_emails": tuple(emails)}
         _bd_refreshing.discard(username)
