@@ -51,6 +51,24 @@
   }else options(el('ep-client'),data.clients,'Selecione um dos seus clientes');
   render();
  }
+ let searchVersion=0;
+ el('ep-global-query').oninput=()=>{searchVersion++;el('ep-global-status').textContent='';el('ep-global-results').replaceChildren();};
+ el('ep-global-search').onsubmit=async event=>{
+  event.preventDefault();if(!state?.principal)return;
+  const id=++searchVersion, info=el('ep-global-status'), results=el('ep-global-results');
+  results.replaceChildren();info.textContent='Pesquisando…';
+  try{
+   const data=await api('/api/admin/email-pool/search?q='+encodeURIComponent(el('ep-global-query').value.trim()));
+   if(id!==searchVersion)return;
+   info.textContent=data.total>50?`Mostrando 50 de ${data.total} resultados. Refine a busca.`:data.total?`${data.total} resultado(s).`:'Nenhum e-mail encontrado na Central.';
+   for(const row of data.items){
+    const item=document.createElement('li'), address=document.createElement('strong');address.textContent=row.email;
+    const clients=row.clients.map(client=>client.name===client.username?'@'+client.username:client.name+' (@'+client.username+')').join(', ');
+    item.append(address,document.createElement('br'),`Lista permitida: ${row.list_owner||'Sem responsável'} · Cliente vinculado: ${clients||'Nenhum'}${row.managers.length?' · Admin do cliente: '+row.managers.join(', '):''} · ${row.quarantined?'Em quarentena':'Fora da quarentena'}`);
+    results.append(item);
+   }
+  }catch(error){if(id===searchVersion)info.textContent=error.message;}
+ };
  el('ep-copy-direct').onclick=()=>{el('ep-emails').value=(state.direct_emails||[]).join('\n');status('Confira os emails e clique em Adicionar à lista permitida para aprovar.');};
  el('ep-admin').onchange=()=>{const value=el('ep-admin').value;const param=value.startsWith('restricted:')?'acesso_restrito':'admin_user';const next=value.startsWith('restricted:')?value.slice(11):value;history.replaceState(null,'','/admin/emails-subadmins'+(next?'?'+param+'='+encodeURIComponent(next):''));status('');load().catch(error=>status(error.message));};
  el('ep-search').oninput=()=>{if(state)render();};el('ep-refresh').onclick=()=>load().catch(error=>status(error.message));

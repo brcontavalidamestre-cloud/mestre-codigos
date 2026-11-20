@@ -198,6 +198,39 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         direct_emails = sorted({norm(s.get('email')) for s in subscriptions if isinstance(s,dict) and selected and norm(s.get('assigned_user'))==selected and norm(s.get('email'))}) if principal else []
         return jsonify(success=True,principal=principal,admin_user=selected,admins=admins,items=items,clients=clients,direct_emails=direct_emails)
 
+    @bp.get('/api/admin/email-pool/search')
+    @admin_only
+    def search_addresses():
+        if actor() != 'admin':
+            return jsonify(success=False, message='Busca disponível somente para o administrador principal.'), 403
+        query = norm(request.args.get('q'))
+        if not 3 <= len(query) <= 254:
+            return jsonify(success=False, message='Digite pelo menos 3 caracteres do e-mail.'), 400
+        permissions = store.permissions()
+        blocked = quarantine.emails()
+        users = load_users()
+        matching = {email: set() for email in set(permissions) | blocked if query in email}
+        for row in load_subscriptions():
+            if not isinstance(row, dict):
+                continue
+            email = norm(row.get('email'))
+            if query in email:
+                names = matching.setdefault(email, set())
+                if norm(row.get('assigned_user')):
+                    names.add(norm(row['assigned_user']))
+        if re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', query) and quarantine.matches(query, blocked):
+            matching.setdefault(query, set())
+        ordered = sorted(matching, key=lambda email: (email != query, email))
+        items = []
+        for email in ordered[:50]:
+            clients = sorted(matching[email])
+            owner = permissions.get(email, {}).get('admin_user')
+            managers = {norm(users.get(client, {}).get('created_by')) for client in clients}
+            items.append(dict(email=email, list_owner=owner, managers=sorted(managers - {''}),
+                              clients=[dict(username=client, name=users.get(client, {}).get('name') or client) for client in clients],
+                              quarantined=quarantine.matches(email, blocked)))
+        return jsonify(success=True, items=items, total=len(ordered)), 200, {'Cache-Control': 'no-store'}
+
     @bp.post('/api/admin/email-pool/grant')
     @admin_only
     def grant():
