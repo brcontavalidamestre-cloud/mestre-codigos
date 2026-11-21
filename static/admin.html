@@ -629,6 +629,21 @@
           <button onclick="fecharAdminLiveInbox()" style="background:#ff5252;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:1rem;">✕ Fechar</button>
         </div>
 
+        <details id="inbox-client-create" class="panel" style="margin-bottom:18px;" hidden>
+          <summary style="cursor:pointer;font-weight:800;color:#93c5fd;">Criar cliente com caixa de entrada</summary>
+          <p class="sinfo">Use um e-mail já autorizado em uma lista permitida, fora da quarentena e sem vínculo com outro cliente. O cliente entra com usuário e senha e vê na bandeja somente as mensagens filtradas do endereço atribuído.</p>
+          <form id="inbox-client-form" onsubmit="createInboxClient(event)">
+            <div class="fgrid">
+              <label class="fgrp">Nome do cliente<input class="fi" name="name" required maxlength="100"></label>
+              <label class="fgrp">Usuário<input class="fi" name="username" autocomplete="off" required minlength="3" maxlength="30" pattern="[a-zA-Z0-9_.]{3,30}"></label>
+              <label class="fgrp">Senha inicial<input class="fi" name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label>
+              <label class="fgrp">E-mail para a bandeja<input class="fi" name="email" type="email" required maxlength="254"></label>
+            </div>
+            <button class="btn-ref" type="submit">Criar acesso e vincular e-mail</button>
+            <p id="inbox-client-status" role="status" aria-live="polite"></p>
+          </form>
+        </details>
+
         <div class="panel" style="margin-bottom:18px;border:2px solid #60a5fa;">
           <div class="phdr">
             <div class="ptit">📌 Emails vinculados na central de usuários</div>
@@ -1717,10 +1732,35 @@
       }
     }
 
+    async function createInboxClient(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const button = form.querySelector('button[type="submit"]');
+      const notice = document.getElementById('inbox-client-status');
+      if (button.disabled) return;
+      const data = Object.fromEntries(new FormData(form));
+      button.disabled = true;
+      notice.textContent = 'Salvando…';
+      try {
+        const response = await fetch('/api/admin/live-inbox/client', {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.message || 'Não foi possível cadastrar.');
+        form.reset();
+        notice.textContent = result.message + ' Usuário: ' + result.username + '.';
+        await Promise.allSettled([loadAdminLiveInboxAllowed(), loadUsers()]);
+      } catch (error) {
+        notice.textContent = error.message || 'Não foi possível cadastrar.';
+      } finally { button.disabled = false; }
+    }
+
     async function abrirAdminLiveInbox() {
       const ok = await ensureAdminLiveInboxUnlocked();
       if (!ok) return;
       const m = document.getElementById('admin-live-inbox-modal');
+      const create = document.getElementById('inbox-client-create');
+      if (create) create.hidden = location.hostname !== 'consulta-codigos-jr7z.onrender.com' || _meUser?.username !== 'admin';
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
       await Promise.all([
         loadAdminLiveInboxAllowed(),

@@ -179,8 +179,10 @@ def save_users(users):
                 json.dump(users, f, indent=2)
             os.replace(tmp_path, USERS_FILE)
         print(f"[users] salvo em {USERS_FILE} ({len(users)} usuarios)")
+        return True
     except Exception as e:
         print(f"[users] ERRO ao salvar: {e}")
+        return False
 
 # ─── CONFIGURACOES IMAP ────────────────────────────────────────────────────────
 IMAP_SERVER = os.environ.get("IMAP_SERVER", "imap.hostinger.com")
@@ -4977,6 +4979,49 @@ def api_check_reset_pin():
         "custom_pin": _user_has_custom_reset_pin(user),
         "pending": bool(_peek_pending_reset_link(username))
     })
+
+@app.post('/api/admin/live-inbox/client')
+@admin_required
+def create_inbox_client():
+    host = 'consulta-codigos-jr7z.onrender.com'
+    if request.host.lower().split(':', 1)[0] != host or session.get('username') != 'admin' or request.headers.get('Origin') not in (None, 'https://' + host):
+        return jsonify(success=False, message='Ação exclusiva do administrador principal da Central.'), 403
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify(success=False, message='Dados inválidos.'), 400
+    username, name, address = (str(data.get(k) or '').strip() for k in ('username', 'name', 'email'))
+    username, address = username.lower(), address.lower()
+    password = data.get('password')
+    if not re.fullmatch(r'[a-z0-9_.]{3,30}', username) or not 1 <= len(name) <= 100 or not isinstance(password, str) or not 12 <= len(password) <= 128 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', address) or len(address) > 254:
+        return jsonify(success=False, message='Confira nome, usuário, e-mail e a senha (12 a 128 caracteres).'), 400
+    password_hash = generate_password_hash(password)
+    with email_permission_store.serialized():
+        users = load_users()
+        if (users.get('admin') or {}).get('role') != 'admin':
+            return jsonify(success=False, message='Sessão administrativa inválida.'), 403
+        permission = email_permission_store.permissions().get(address) or {}
+        owner = permission.get('admin_user')
+        if not owner or (users.get(owner) or {}).get('role') != 'admin' or email_quarantine.is_blocked(address):
+            return jsonify(success=False, message='Use um e-mail já autorizado em uma lista permitida e fora da quarentena.'), 409
+        subs = load_subscriptions()
+        matches = [r for r in subs if isinstance(r, dict) and str(r.get('email') or '').strip().lower() == address]
+        if username in users or len(matches) > 1 or any(r.get('assigned_user') for r in matches):
+            return jsonify(success=False, message='Usuário já cadastrado ou e-mail já vinculado. Nenhum registro foi alterado.'), 409
+        now = int(time.time())
+        row = matches[0] if matches else dict(email=address, created_at=now, start_at=now, expires_at=now+3650*86400, dur_days=3650, plataforma='Caixa de entrada', valor=0)
+        if not matches:
+            subs.append(row)
+        row.update(assigned_user=username, assigned_user_name=name, show_in_panel=False, verified_inbox_only=True)
+        users[username] = dict(name=name, role='client', password=password_hash, created_by=owner)
+        if not save_users(users):
+            return jsonify(success=False, message='Não foi possível salvar o cliente.'), 503
+        if not save_subscriptions(subs):
+            users.pop(username)
+            rolled_back = save_users(users)
+            return jsonify(success=False, message='Não foi possível salvar o vínculo.' if rolled_back else 'O cliente foi criado sem vínculo; confira o cadastro antes de tentar novamente.'), 503
+        email_permission_store.audit('admin', 'create_inbox_client', {'email':address, 'client':username})
+    return jsonify(success=True, message='Cliente criado e e-mail vinculado à bandeja.', username=username), 201
+
 
 @app.route("/api/admin/live-inbox/access-status", methods=["GET"])
 @admin_required
