@@ -3120,9 +3120,12 @@
     }
     if (_bdCentral) {
       const tray = document.getElementById('view-bandeja');
-      tray.classList.add('bd-red');
+      tray.classList.add('bd-red', 'central-inbox-modern');
       const css = document.createElement('link');
       css.rel = 'stylesheet'; css.href = '/static/central-inbox.css?v=1'; document.head.append(css);
+      const theme = document.createElement('link');
+      theme.rel = 'stylesheet'; theme.href = '/static/inbox-modern.css?v=1'; document.head.append(theme);
+      document.getElementById('bd-status').setAttribute('role', 'status');
       const heading = tray.querySelector('.section-title');
       const header = document.createElement('div'); header.className = 'bd-heading';
       heading.before(header); header.append(heading);
