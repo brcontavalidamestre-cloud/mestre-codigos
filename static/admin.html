@@ -1711,17 +1711,18 @@
 
     function showAdminLiveInboxIfSupported() {
       const btn = document.getElementById('admin-live-inbox-launch');
-      if (btn) btn.style.display = hostSupportsAdminLiveInbox() ? 'flex' : 'none';
-      if (location.hostname === 'consulta-codigos-jr7z.onrender.com') {
-        const title = document.querySelector('#admin-live-inbox-modal .ib-admin-title');
-        if (!title) return;
-        document.getElementById('admin-live-inbox-modal').classList.add('central-inbox-modern');
-        title.parentElement.classList.add('ib-admin-head');
-        const label = document.createElement('span');
-        label.className = 'ib-eyebrow'; label.textContent = 'Central · Administração'; title.prepend(label);
-        const css = document.createElement('link');
-        css.rel = 'stylesheet'; css.href = '/static/inbox-modern.css?v=1'; document.head.append(css);
-      }
+      const supported = hostSupportsAdminLiveInbox();
+      if (btn) btn.style.display = supported ? 'flex' : 'none';
+      if (!supported) return;
+      const inbox = document.getElementById('admin-live-inbox-modal');
+      const title = inbox?.querySelector('.ib-admin-title');
+      if (!title || inbox.classList.contains('central-inbox-modern')) return;
+      inbox.classList.add('central-inbox-modern');
+      title.parentElement.classList.add('ib-admin-head');
+      const label = document.createElement('span');
+      label.className = 'ib-eyebrow'; label.textContent = 'Central · Administração'; title.prepend(label);
+      const css = document.createElement('link');
+      css.rel = 'stylesheet'; css.href = '/static/inbox-modern.css?v=2'; document.head.append(css);
     }
 
     function setupPrivateInboxShortcut() {
@@ -1857,7 +1858,9 @@
       const principalCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin';
       if (create) create.hidden = !principalCentral;
       document.getElementById('extra-inbox-admin').hidden = !principalCentral;
-      document.getElementById('admin-live-inbox-legacy-panel').hidden = principalCentral;
+      const linkedPanel = document.getElementById('admin-live-inbox-legacy-panel');
+      linkedPanel.hidden = principalCentral;
+      linkedPanel.querySelector('.ptit').textContent = '📌 E-mails vinculados';
       document.getElementById('inbox-client-email-panel').hidden = !principalCentral;
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
       await Promise.all([
