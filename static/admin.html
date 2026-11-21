@@ -649,7 +649,10 @@
           <form onsubmit="manageExtraInbox(event)">
             <label class="fgrp">E-mail<input class="fi" name="email" type="email" required maxlength="254"></label>
             <button class="btn-ref" type="submit" value="issue">Gerar ou renovar senha</button>
+            <button class="btn-ref" type="button" onclick="const field=this.form.elements.extra_password; field.closest('label').hidden=false; this.form.querySelector('[value=change]').hidden=false; field.focus()">Alterar senha</button>
             <button class="btn-ref" type="submit" value="revoke">Revogar acesso</button>
+            <label hidden>Nova senha <input class="fi" type="password" name="extra_password" maxlength="128" autocomplete="new-password" placeholder="14 caracteres ou mais"></label>
+            <button class="btn-ref" type="submit" value="change" hidden>Salvar nova senha</button>
             <pre id="extra-inbox-result" role="status" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
           </form>
         </details>
@@ -1829,14 +1832,18 @@
       event.preventDefault();
       const form = event.currentTarget, result = document.getElementById('extra-inbox-result');
       const revoke = event.submitter?.value === 'revoke';
+      const change = event.submitter?.value === 'change';
       const email = form.elements.email.value.trim();
-      if (!confirm((revoke ? 'Revogar o acesso extra de ' : 'Gerar uma senha para ')+email+'? A senha extra anterior, se houver, será invalidada.')) return;
+      const password = form.elements.extra_password.value;
+      if (change && password.length < 14) { result.textContent = 'Digite uma senha com pelo menos 14 caracteres.'; form.elements.extra_password.focus(); return; }
+      if (!confirm((revoke ? 'Revogar o acesso extra de ' : change ? 'Alterar a senha de ' : 'Gerar uma senha para ')+email+'? A senha extra anterior, se houver, será invalidada.')) return;
       const buttons = [...form.querySelectorAll('button')];
       buttons.forEach(button => button.disabled = true);
       result.textContent = 'Salvando…';
       try {
-        const res = await fetch('/api/admin/extra-inbox', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,revoke})});
+        const res = await fetch('/api/admin/extra-inbox', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(change ? {email,action:'change_password',password} : {email,revoke})});
         const data = await res.json();
+        if (data.success) form.elements.extra_password.value = '';
         result.textContent = data.success && data.password ? `Login: ${data.email}\nSenha: ${data.password}\nEndereço: ${data.url}` : data.message || 'Não foi possível salvar.';
       } catch { result.textContent = 'Não foi possível concluir.'; }
       finally { buttons.forEach(button => button.disabled = false); }
@@ -1863,6 +1870,7 @@
 
     function fecharAdminLiveInbox() {
       document.getElementById('extra-inbox-result').textContent = '';
+      document.querySelector('#extra-inbox-admin input[name=extra_password]').value = '';
       const m = document.getElementById('admin-live-inbox-modal');
       if (m) { m.style.display = 'none'; document.body.style.overflow = ''; }
       stopAdminLiveInboxAutoRefresh();

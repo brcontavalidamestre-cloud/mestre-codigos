@@ -7,6 +7,7 @@ import sqlite3
 import time
 from contextlib import closing
 from flask import abort, jsonify, request, session, send_from_directory
+from werkzeug.security import check_password_hash, generate_password_hash
 
 HOST = 'consulta-codigos-jr7z.onrender.com'
 COOKIE = '__Secure-central-inbox'
@@ -64,9 +65,26 @@ def register_extra_inbox(app, data_dir, scope, collect):
         owner = scope(address)
         if not owner:
             return jsonify(success=False, message='O endereço precisa estar autorizado, fora da quarentena e vinculado a um único cliente.'), 409
-        password = secrets.token_urlsafe(24)
+        custom = data.get('action') == 'change_password'
+        if custom:
+            password = data.get('password')
+            if (not isinstance(password, str) or not 14 <= len(password) <= 128
+                    or password != password.strip() or password.casefold() in address.casefold()
+                    or len(set(password.casefold())) < 6 or any(ord(c) < 32 for c in password)):
+                return jsonify(success=False, message='Use de 14 a 128 caracteres variados, sem espaços no início ou no fim. Evite usar seu e-mail na senha.'), 400
+        else:
+            alphabet = 'abcdefghjkmnpqrstuvwxyz23456789'
+            password = '-'.join(''.join(secrets.choice(alphabet) for _ in range(4)) for _ in range(3))
+        stored = generate_password_hash(password)
         with closing(db()) as con, con:
-            con.execute('INSERT INTO inbox(email, owner, password) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET owner=excluded.owner,password=excluded.password,token=NULL,expires=0', (address, owner, digest(password)))
+            if custom:
+                changed = con.execute('UPDATE inbox SET password=?,token=NULL,expires=0 WHERE email=? AND owner=?', (stored, address, owner)).rowcount
+                if not changed:
+                    return jsonify(success=False, message='Ainda não há acesso extra ativo para este e-mail. Use Gerar ou renovar senha.'), 404
+            else:
+                con.execute('INSERT INTO inbox(email, owner, password) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET owner=excluded.owner,password=excluded.password,token=NULL,expires=0', (address, owner, stored))
+        if custom:
+            return jsonify(success=True, message='Senha alterada. A senha e a sessão anteriores foram invalidadas.')
         return jsonify(success=True, email=address, password=password, url='https://' + HOST + '/bandeja-extra'), 201
 
     @app.get('/bandeja-extra')
@@ -83,17 +101,17 @@ def register_extra_inbox(app, data_dir, scope, collect):
             return jsonify(success=False, message='Dados inválidos.'), 400
         address = str(data.get('email') or '').strip().lower()
         password = str(data.get('password') or '').strip()
-        if len(address) <= 254 and re.fullmatch(r'[A-Za-z0-9_-]{32}', password):
+        if len(address) <= 254 and 14 <= len(password) <= 128:
             with closing(db()) as con, con:
                 row = con.execute('SELECT owner, password FROM inbox WHERE email=?', (address,)).fetchone()
-                if row and hmac.compare_digest(row[1], digest(password)) and scope(address) == row[0]:
+                if row and scope(address) == row[0] and (check_password_hash(row[1], password) if '$' in row[1] else hmac.compare_digest(row[1], digest(password))):
                     token = secrets.token_urlsafe(32)
                     updated = con.execute('UPDATE inbox SET token=?, expires=? WHERE email=? AND password=?', (digest(token), int(time.time()) + LIFETIME, address, row[1])).rowcount
                     if updated:
                         response = jsonify(success=True)
                         response.set_cookie(COOKIE, token, max_age=LIFETIME, secure=True, httponly=True, samesite='Strict', path='/bandeja-extra')
                         return response
-        return jsonify(success=False, message='Não foi possível entrar. Confira o endereço completo e use a senha gerada na Caixa de Entrada Admin para este e-mail.'), 401
+        return jsonify(success=False, message='Não foi possível entrar. Confira o endereço completo e use a senha atual da bandeja individual para este e-mail.'), 401
 
     @app.post('/bandeja-extra/logout')
     def extra_inbox_logout():
