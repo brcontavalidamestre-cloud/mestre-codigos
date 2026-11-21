@@ -1686,7 +1686,7 @@
       button.textContent = 'Copiar link privado da Caixa de Entrada Admin';
       button.onclick = async () => {
         const url = new URL('/admin#caixa-admin', location.origin).href;
-        try { await navigator.clipboard.writeText(url); showToast('Atalho copiado. A caixa mantém a proteção por login e PIN.'); }
+        try { await navigator.clipboard.writeText(url); showToast('Atalho copiado. A caixa mantém a proteção por login.'); }
         catch { window.prompt('Copie o atalho privado da caixa:', url); }
       };
       launch.after(button);
