@@ -643,6 +643,17 @@
           </form>
         </details>
 
+        <details id="extra-inbox-admin" class="panel" style="margin-bottom:18px" hidden>
+          <summary>Criar login extra para uma bandeja individual</summary>
+          <p>Use um e-mail autorizado que já esteja vinculado a um cliente. Este acesso não altera o login atual.</p>
+          <form onsubmit="manageExtraInbox(event)">
+            <label class="fgrp">E-mail<input class="fi" name="email" type="email" required maxlength="254"></label>
+            <button class="btn-ref" type="submit" value="issue">Gerar ou renovar senha</button>
+            <button class="btn-ref" type="submit" value="revoke">Revogar acesso</button>
+            <pre id="extra-inbox-result" role="status" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
+          </form>
+        </details>
+
         <section id="inbox-client-email-panel" class="panel" style="margin-bottom:18px;" hidden>
           <h3 class="ptit">Adicionar e-mails à bandeja do cliente</h3>
           <p class="sinfo">Para autorizar endereços para um cliente novo, use a <a href="/admin/emails-subadmins?admin_user=admin">lista do admin principal</a>.</p>
@@ -1814,6 +1825,23 @@
       finally { button.disabled = false; select.disabled = false; }
     }
 
+    async function manageExtraInbox(event) {
+      event.preventDefault();
+      const form = event.currentTarget, result = document.getElementById('extra-inbox-result');
+      const revoke = event.submitter?.value === 'revoke';
+      const email = form.elements.email.value.trim();
+      if (!confirm((revoke ? 'Revogar o acesso extra de ' : 'Gerar uma senha para ')+email+'? A senha extra anterior, se houver, será invalidada.')) return;
+      const buttons = [...form.querySelectorAll('button')];
+      buttons.forEach(button => button.disabled = true);
+      result.textContent = 'Salvando…';
+      try {
+        const res = await fetch('/api/admin/extra-inbox', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({email,revoke})});
+        const data = await res.json();
+        result.textContent = data.success && data.password ? `Login: ${data.email}\nSenha: ${data.password}\nEndereço: ${data.url}` : data.message || 'Não foi possível salvar.';
+      } catch { result.textContent = 'Não foi possível concluir.'; }
+      finally { buttons.forEach(button => button.disabled = false); }
+    }
+
     async function abrirAdminLiveInbox() {
       const ok = await ensureAdminLiveInboxUnlocked();
       if (!ok) return;
@@ -1821,6 +1849,7 @@
       const create = document.getElementById('inbox-client-create');
       const principalCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin';
       if (create) create.hidden = !principalCentral;
+      document.getElementById('extra-inbox-admin').hidden = !principalCentral;
       document.getElementById('admin-live-inbox-legacy-panel').hidden = principalCentral;
       document.getElementById('inbox-client-email-panel').hidden = !principalCentral;
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
@@ -1833,6 +1862,7 @@
     }
 
     function fecharAdminLiveInbox() {
+      document.getElementById('extra-inbox-result').textContent = '';
       const m = document.getElementById('admin-live-inbox-modal');
       if (m) { m.style.display = 'none'; document.body.style.overflow = ''; }
       stopAdminLiveInboxAutoRefresh();

@@ -5292,10 +5292,12 @@ def _central_inbox_route_recipients(msg, found, allowed, mailbox_user):
 _CENTRAL_INBOX_WINDOW_SECONDS = 15 * 60
 
 
-def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48, central=False):
+def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48, central=False, *, extra_address=None):
     """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
     vinculados do usuário (INBOX + Spam), extraindo código/link."""
     emails = [email for email in _user_live_inbox_emails(username) if not email_quarantine.is_blocked(email)]
+    if central and extra_address is not None:
+        emails = [extra_address] if extra_address in emails else []
     if not emails:
         return [], []
     # REGRA: bandeja so mostra emails que batem com os FILTROS cadastrados
@@ -5388,7 +5390,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         subject = _decode_mime_value(msg.get("Subject", ""))
                         from_v = _decode_mime_value(msg.get("From", ""))
                         guard = app.config.get("EMAIL_POOL_MESSAGE_ALLOWED")
-                        if guard and not guard(msg, _extract_msg_text(msg)):
+                        if guard and extra_address is None and not guard(msg, _extract_msg_text(msg)):
                             continue
                         actual_recipients = sorted(delegated_recipients(msg, _extract_msg_text(msg)))
                         if central:
@@ -9475,6 +9477,27 @@ from purchase_code_search import make_purchase_code_search
 register_purchase_code_links(app, _data_dir, email_quarantine,
     make_purchase_code_search(PLATFORM_CONFIG, get_imap_accounts, _batch_search_mailbox,
         _fetch_and_extract, _get_spam_boxes, _targeted_body_extract))
+
+def _extra_inbox_scope(address):
+    if email_quarantine.is_blocked(address):
+        return None
+    rows = [row for row in load_subscriptions() if isinstance(row, dict)
+            and str(row.get('email') or '').strip().lower() == address]
+    if len(rows) != 1 or not rows[0].get('assigned_user'):
+        return None
+    username = rows[0]['assigned_user']
+    account = load_users().get(username) or {}
+    permission = email_permission_store.permissions().get(address) or {}
+    if not account or account.get('role', 'client') != 'client' or permission.get('admin_user') != (account.get('created_by') or 'admin'):
+        return None
+    if rows[0].get('expires_at') and float(rows[0]['expires_at']) <= time.time():
+        return None
+    return username
+
+
+from extra_inbox import register_extra_inbox
+register_extra_inbox(app, _data_dir, _extra_inbox_scope,
+    lambda owner, address: _fetch_user_live_inbox_items(owner, central=True, extra_address=address))
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
