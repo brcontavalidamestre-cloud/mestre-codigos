@@ -1,7 +1,11 @@
 'use strict';
 const get = id => document.getElementById(id);
 const login = get('login'), tray = get('tray'), status = get('status'), rows = get('rows');
-let active = false, busy = false;
+let active = false, busy = false, nextCheck;
+function schedule(delay) {
+  clearTimeout(nextCheck);
+  if (active) nextCheck = setTimeout(load, delay);
+}
 async function api(path, data) {
   const response = await fetch('/bandeja-extra/' + path, data ? {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)} : {cache:'no-store'});
   return response.json();
@@ -25,8 +29,9 @@ async function load() {
       }
       return row;
     }));
-    status.textContent = j.partial ? 'Uma ou mais caixas não responderam. Tentaremos novamente.' : j.items.length ? 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR') : 'Nenhuma mensagem dos filtros ativos nos últimos 15 minutos.';
-  } catch { if (active) status.textContent = 'Não foi possível atualizar. Tentaremos novamente.'; }
+    status.textContent = j.refreshing ? 'Consultando as caixas de e-mail…' : j.partial ? 'Uma ou mais caixas não responderam. Tentaremos novamente.' : j.items.length ? 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR') : 'Nenhuma mensagem dos filtros ativos nos últimos 15 minutos.';
+    schedule(j.refreshing ? 3000 : 12000);
+  } catch { if (active) { status.textContent = 'Não foi possível atualizar. Tentaremos novamente.'; schedule(12000); } }
   finally { busy = false; }
 }
 login.onsubmit = async event => {
@@ -49,5 +54,4 @@ get('logout').onclick = async () => {
   try { await api('logout', {}); show(false); status.textContent = 'Sessão encerrada.'; }
   catch { status.textContent = 'Não foi possível sair. Tente novamente.'; }
 };
-setInterval(load, 12000);
 api('messages?status=1').then(j => { if (j.success && !active) { show(true); load(); } }).catch(() => {});

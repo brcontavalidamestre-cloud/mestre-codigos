@@ -5292,6 +5292,21 @@ def _central_inbox_route_recipients(msg, found, allowed, mailbox_user):
 _CENTRAL_INBOX_WINDOW_SECONDS = 15 * 60
 
 
+def _connect_extra_inbox(account):
+    import ssl
+    conn = imaplib.IMAP4_SSL(account['server'], int(account['port']), timeout=8,
+                            ssl_context=ssl.create_default_context())
+    try:
+        conn.login(account['user'], account['password'])
+        return conn
+    except Exception:
+        try:
+            conn.shutdown()
+        except Exception:
+            pass
+        raise
+
+
 def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48, central=False, *, extra_address=None):
     """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
     vinculados do usuário (INBOX + Spam), extraindo código/link."""
@@ -5327,7 +5342,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     for account_cfg in accounts:
         mail = None
         try:
-            mail = connect_imap(account_cfg)
+            mail = _connect_extra_inbox(account_cfg) if extra_address is not None else connect_imap(account_cfg)
             spam_boxes = _get_spam_boxes(mail, account_cfg)
             boxes = ["INBOX"] + [b for b in spam_boxes if b and b.upper() != "INBOX"]
             for mailbox in boxes:
@@ -5464,11 +5479,16 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                 except Exception as box_err:
                     errors.append(f"[{account_cfg.get('name')}/{mailbox}] {box_err}")
                     continue
-            _safe_logout(mail)
         except Exception as e:
             errors.append(f"[{account_cfg.get('name')}] {e}")
-            _force_logout(mail)
-            continue
+            if extra_address is None:
+                _force_logout(mail)
+        finally:
+            if extra_address is not None and mail is not None:
+                try:
+                    mail.logout()
+                except Exception:
+                    pass
         if len(items) >= max_items:
             break
 

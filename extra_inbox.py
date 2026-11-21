@@ -4,9 +4,11 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import closing
-from flask import abort, jsonify, request, session, send_from_directory
+from flask import abort, copy_current_request_context, jsonify, request, session, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 
 HOST = 'consulta-codigos-jr7z.onrender.com'
@@ -16,6 +18,10 @@ LIFETIME = 8 * 3600
 
 def register_extra_inbox(app, data_dir, scope, collect):
     path = os.path.join(data_dir, 'central_extra_inbox.sqlite3')
+    scan_lock = threading.Lock()
+    scans = ThreadPoolExecutor(max_workers=2, thread_name_prefix='extra-inbox')
+    active_scans = set()
+    results = {}
 
     def db():
         con = sqlite3.connect(path, timeout=5)
@@ -135,11 +141,42 @@ def register_extra_inbox(app, data_dir, scope, collect):
         address, owner = user
         if request.args.get('status') == '1':
             return jsonify(success=True, email=address)
-        items, errors = collect(owner, address)
+        key = (address, owner, digest(request.cookies[COOKIE]))
         now = time.time()
-        safe = [dict(platform=row['platform'], date_ts=row['date_ts']) for row in items
-                if row.get('email') == address and row.get('recipients') == [address] and now - 900 <= row.get('date_ts', 0) <= now]
+        with scan_lock:
+            for expired in [k for k, result in results.items() if now - result[0] > 900]:
+                results.pop(expired, None)
+            snapshot = results.get(key)
+            refreshing = key in active_scans or not snapshot or now - snapshot[0] >= 10
+            if refreshing and key not in active_scans and len(active_scans) < 2:
+                active_scans.add(key)
+
+                @copy_current_request_context
+                def scan():
+                    safe, partial = [], True
+                    try:
+                        rows, errors = collect(owner, address)
+                        safe = [dict(platform=row['platform'], date_ts=row['date_ts']) for row in rows
+                                if row.get('email') == address and row.get('recipients') == [address]]
+                        partial = bool(errors)
+                    except Exception:
+                        app.logger.warning('Falha na leitura da bandeja individual')
+                    finally:
+                        with scan_lock:
+                            previous = results.get(key)
+                            if previous and partial:
+                                index = {(row['platform'], row['date_ts']): row for row in previous[1]}
+                                index.update({(row['platform'], row['date_ts']): row for row in safe})
+                                safe = list(index.values())
+                            received = time.time()
+                            safe = sorted((row for row in safe if received - 900 <= row['date_ts'] <= received),
+                                          key=lambda row: row['date_ts'], reverse=True)[:60]
+                            results[key] = received, safe, partial
+                            active_scans.discard(key)
+
+                scans.submit(scan)
+        safe = [row for row in snapshot[1] if now - 900 <= row['date_ts'] <= now] if snapshot else []
         with closing(db()) as con:
             if current(con) != user or scope(address) != owner:
                 return jsonify(success=False, message='O acesso foi encerrado.'), 401
-        return jsonify(success=True, email=address, items=safe, partial=bool(errors))
+        return jsonify(success=True, email=address, items=safe, partial=bool(snapshot and snapshot[2]), refreshing=refreshing)
