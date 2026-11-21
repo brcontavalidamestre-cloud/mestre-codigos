@@ -3124,7 +3124,7 @@
       const css = document.createElement('link');
       css.rel = 'stylesheet'; css.href = '/static/central-inbox.css?v=1'; document.head.append(css);
       const theme = document.createElement('link');
-      theme.rel = 'stylesheet'; theme.href = '/static/inbox-modern.css?v=1'; document.head.append(theme);
+      theme.rel = 'stylesheet'; theme.href = '/static/inbox-modern.css?v=2'; document.head.append(theme);
       document.getElementById('bd-status').setAttribute('role', 'status');
       const heading = tray.querySelector('.section-title');
       const header = document.createElement('div'); header.className = 'bd-heading';
@@ -3152,7 +3152,12 @@
         list.innerHTML = filterBar + '<div style="padding:22px;text-align:center;color:var(--text-muted,#9ca3af);border:1px dashed #4c1d95;border-radius:12px">' + _esc(j.quarantine_message || (_bdCentral ? 'Nenhuma mensagem encontrada para os e-mails e filtros selecionados.' : 'Nenhum código recebido nos últimos 2 dias nos seus emails vinculados.')) + '</div>';
         return;
       }
-      const centralInbox = location.hostname === 'consulta-codigos-jr7z.onrender.com';
+      if (_bdCentral) {
+        const rows = items.map(it => `<tr><td>${_esc(it.email)}</td><td>${_esc(it.platform)}</td><td>${_esc(it.subject || 'Mensagem recebida')}</td><td>${_esc(_fmtDate(it.date_ts))}</td></tr>`).join('');
+        list.innerHTML = filterBar + '<h3>📨 E-mails recebidos em tempo real</h3><div class="bd-table-scroll" tabindex="0" role="region" aria-label="E-mails recebidos em tempo real"><table class="bd-table"><thead><tr><th scope="col">E-mail vinculado</th><th scope="col">Filtro</th><th scope="col">Mensagem</th><th scope="col">Data</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
+        return;
+      }
+      const centralInbox = false;
       const openMessages = new Set(Array.from(list.querySelectorAll('details[data-bd-message][open]'), el => el.dataset.bdMessage));
       list.innerHTML = filterBar + items.map(it => {
         const messageKey = JSON.stringify([it.email, it.subject, it.date_ts, it.platform]);

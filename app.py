@@ -914,6 +914,14 @@ def _admin_live_inbox_match_platform(from_value, subject, body, selected_platfor
     return None
 
 
+def _live_inbox_recent_ids(mail, cutoff_ts, limit):
+    since_date = time.strftime("%d-%b-%Y", time.gmtime(max(cutoff_ts - 86400, 0)))
+    status, messages = mail.search(None, "SINCE", since_date)
+    if status != "OK" or not messages or not messages[0]:
+        status, messages = mail.search(None, "ALL")
+    return messages[0].split()[-limit:] if status == "OK" and messages and messages[0] else []
+
+
 def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=None):
     visible_entries = [entry for entry in _admin_live_inbox_visible_user_entries(selected_user=selected_user)
                        if not email_quarantine.is_blocked(entry.get('email'))]
@@ -957,13 +965,7 @@ def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=N
                     st_sel, _ = mail.select(mailbox, readonly=True)
                     if st_sel != "OK":
                         continue
-                    since_date = time.strftime("%d-%b-%Y", time.gmtime(max(cutoff_ts - 86400, 0)))
-                    st_search, msgs = mail.search(None, "SINCE", since_date)
-                    if st_search != "OK" or not msgs or not msgs[0]:
-                        st_search, msgs = mail.search(None, "ALL")
-                    if st_search != "OK" or not msgs or not msgs[0]:
-                        continue
-                    recent_ids = msgs[0].split()[-max_per_box:]
+                    recent_ids = _live_inbox_recent_ids(mail, cutoff_ts, max_per_box)
                     for eid in reversed(recent_ids):
                         unique_key = (account_cfg.get("name"), mailbox, bytes(eid))
                         if unique_key in seen:
@@ -5332,20 +5334,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                     if st_sel != "OK":
                         continue
                     if central:
-                        matches = set()
-                        headers = ('To', 'Cc', 'Delivered-To', 'X-Original-To', 'Envelope-To', 'Apparently-To', 'Resent-To')
-                        for address in emails:
-                            if not address.isascii() or not re.fullmatch(r'[^\s"\\@]+@[^\s"\\@]+', address):
-                                continue
-                            mailbox_matches = set()
-                            for header in headers:
-                                status, found = mail.search(None, 'SINCE', since_date, 'HEADER', header, '"' + address + '"')
-                                if status == 'OK' and found and found[0]:
-                                    mailbox_matches.update(v for v in found[0].split() if v.isdigit())
-                                if mailbox_matches:
-                                    break
-                            matches.update(mailbox_matches)
-                        recent_ids = sorted(matches, key=int)[-240:]
+                        recent_ids = _live_inbox_recent_ids(mail, cutoff, 12)
                     else:
                         st_search, msgs = mail.search(None, "SINCE", since_date)
                         if st_search != "OK" or not msgs or not msgs[0]:
@@ -5387,7 +5376,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                                     break
                         if not matched_email:
                             continue
-                        st_f, data_f = mail.fetch(eid, "(RFC822)")
+                        st_f, data_f = mail.fetch(eid, "(BODY.PEEK[])" if central else "(RFC822)")
                         raw_full = None
                         for part in (data_f or []):
                             if isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], (bytes, bytearray)):
@@ -5534,7 +5523,8 @@ def scope_central_inbox_to_current_filters(response):
                 continue
             if address not in owned or item.get('platform') not in enabled or email_quarantine.is_blocked(address):
                 continue
-            row = {key: value for key, value in item.items() if key != 'link'}
+            row = {key: item[key] for key in ('email', 'recipients', 'subject', 'platform', 'date_ts') if key in item}
+            row['subject'] = 'Mensagem recebida'
             recipients = row.get('recipients') or []
             if not recipients or not set(recipients).issubset(owned) or any(email_quarantine.is_blocked(e) for e in recipients):
                 continue
@@ -5544,6 +5534,7 @@ def scope_central_inbox_to_current_filters(response):
                 row.pop('message_preview', None)
             items.append(row)
         data['items'] = items
+        data['errors'] = ['Uma ou mais caixas não responderam.'] if data.get('errors') else []
     data['count'] = len(data['items'])
     response.set_data(app.json.dumps(data))
     response.headers['Cache-Control'] = 'no-store'
@@ -5578,7 +5569,7 @@ def api_user_live_inbox_messages():
             _bd_cache.pop(username, None)
     fresh = request.args.get("fresh") == "1"
 
-    if cached and (now - cached["ts"] < _BD_CACHE_TTL) and not fresh:
+    if cached and (now - cached["ts"] < (10 if central else _BD_CACHE_TTL)) and not fresh:
         return jsonify({"success": True, "items": cached["items"], "emails": emails,
                         "count": len(cached["items"]), "cached": True,
                         "errors": cached.get("errors") or []})
