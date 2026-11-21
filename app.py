@@ -4617,13 +4617,6 @@ def index():
         return redirect("/login")
     return send_from_directory("static", "index.html")
 
-def _central_client_start(user):
-    if (request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
-            and user.get('role') == 'client' and user.get('inbox_created')):
-        return '/#bandeja'
-    return '/'
-
-
 @app.route("/login")
 def login_page():
     # InstAddr público: não tem tela de login.
@@ -4635,9 +4628,6 @@ def login_page():
     if session.get("logged_in"):
         if session.get("role") == "admin":
             return redirect("/admin")
-        if (session.get('role') == 'client'
-                and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'):
-            return redirect(_central_client_start(load_users().get(session.get('username'), {})))
         return redirect("/")
     return send_from_directory("static", "login.html")
 
@@ -4702,7 +4692,7 @@ def api_login():
     session["username"]  = username
     session["role"]      = user.get("role", "client")
     session["name"]      = user.get("name", username)
-    redirect_to = "/admin" if user.get("role") == "admin" else _central_client_start(user)
+    redirect_to = "/admin" if user.get("role") == "admin" else "/"
     return jsonify({"success": True, "role": user.get("role", "client"), "redirect": redirect_to})
 
 @app.route("/auto-login/<username>")
@@ -5571,10 +5561,10 @@ def api_user_live_inbox_messages():
     if not session.get("logged_in"):
         return jsonify({"success": False, "message": "Faça login para ver sua bandeja."}), 401
     username = str(session.get("username") or "").strip().lower()
-    emails = _user_live_inbox_emails(username)
     central = request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
-    if central and ('inbox_email' in request.args or 'inbox_shortcut' in request.args):
-        return jsonify(success=False, message='Os atalhos individuais da bandeja foram desativados.'), 410, {'Cache-Control': 'no-store'}
+    if central:
+        return jsonify(success=False, message='A bandeja do perfil foi desativada na Central.'), 410, {'Cache-Control': 'no-store'}
+    emails = _user_live_inbox_emails(username)
     if not emails:
         return jsonify({"success": True, "items": [], "emails": [], "count": 0,
                         "message": "Nenhum email vinculado a este usuário."})

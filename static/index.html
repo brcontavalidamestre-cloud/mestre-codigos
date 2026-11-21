@@ -3113,12 +3113,18 @@
     let _bdLast = null;
     let _bdEmailFilter = '';
     const _bdCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com';
-    if (_bdCentral && /(?:^|[&])(?:bandeja|caixa)=/.test(location.hash.slice(1))) history.replaceState(null, "", location.pathname + location.search);
+    if (_bdCentral) {
+      document.getElementById('btn-view-bandeja')?.remove();
+      document.getElementById('view-bandeja')?.remove();
+      if (location.hash === '#bandeja' || /(?:^|[&])(?:bandeja|caixa)=/.test(location.hash.slice(1))) {
+        history.replaceState(null, '', location.pathname + location.search);
+      }
+    }
     function filterBandejaEmail(email) {
       _bdEmailFilter = email || '';
       if (_bdLast) renderBandeja(_bdLast);
     }
-    if (_bdCentral) {
+    if (_bdCentral && document.getElementById('view-bandeja')) {
       const tray = document.getElementById('view-bandeja');
       tray.classList.add('bd-red', 'central-inbox-modern');
       const css = document.createElement('link');
@@ -3229,6 +3235,7 @@
     }
 
     function switchView(name) {
+      if (_bdCentral && name === 'bandeja') return;
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.getElementById('view-' + name).classList.add('active');
       document.querySelectorAll('.top-menu button').forEach(b => b.classList.remove('active'));
@@ -3758,9 +3765,6 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
     }
 
     if (window.location.hash === '#loja') switchView('loja');
-    else if (window.location.hostname === 'consulta-codigos-jr7z.onrender.com' && window.location.hash === '#bandeja') {
-      switchView('bandeja');
-    }
 
     // KEEP-ALIVE: aquece a conexão IMAP em background ao carregar a página
     // Isso faz a primeira busca ser quase instantânea (sem cold-start)
