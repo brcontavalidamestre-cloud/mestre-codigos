@@ -82,7 +82,7 @@ def register_extra_inbox(app, data_dir, scope, collect):
         if not isinstance(data, dict):
             return jsonify(success=False, message='Dados inválidos.'), 400
         address = str(data.get('email') or '').strip().lower()
-        password = str(data.get('password') or '')
+        password = str(data.get('password') or '').strip()
         if len(address) <= 254 and re.fullmatch(r'[A-Za-z0-9_-]{32}', password):
             with closing(db()) as con, con:
                 row = con.execute('SELECT owner, password FROM inbox WHERE email=?', (address,)).fetchone()
@@ -93,7 +93,7 @@ def register_extra_inbox(app, data_dir, scope, collect):
                         response = jsonify(success=True)
                         response.set_cookie(COOKIE, token, max_age=LIFETIME, secure=True, httponly=True, samesite='Strict', path='/bandeja-extra')
                         return response
-        return jsonify(success=False, message='E-mail ou senha inválidos, ou acesso desativado.'), 401
+        return jsonify(success=False, message='Não foi possível entrar. Confira o endereço completo e use a senha gerada na Caixa de Entrada Admin para este e-mail.'), 401
 
     @app.post('/bandeja-extra/logout')
     def extra_inbox_logout():

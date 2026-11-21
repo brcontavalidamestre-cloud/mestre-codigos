@@ -34,8 +34,12 @@ login.onsubmit = async event => {
   const button = login.querySelector('button'); button.disabled = true;
   try {
     const j = await api('login', Object.fromEntries(new FormData(login)));
+    if (!j.success) {
+      status.textContent = j.message;
+      login.elements.email.focus();
+      return;
+    }
     login.elements.password.value = '';
-    if (!j.success) { status.textContent = j.message; return; }
     show(true); status.textContent = 'Consultando a bandeja…'; await load();
   } catch { status.textContent = 'Erro de conexão.'; }
   finally { button.disabled = false; }
