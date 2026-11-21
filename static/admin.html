@@ -631,21 +631,30 @@
 
         <details id="inbox-client-create" class="panel" style="margin-bottom:18px;" hidden>
           <summary style="cursor:pointer;font-weight:800;color:#93c5fd;">Criar cliente com caixa de entrada</summary>
-          <p class="sinfo">Você pode criar o acesso mesmo se o e-mail ainda não estiver autorizado. Nesse caso, a bandeja fica vazia até o endereço ser autorizado e vinculado.</p>
+          <p class="sinfo">Primeiro crie o usuário e a senha. Depois, adicione os e-mails autorizados na seção abaixo.</p>
           <form id="inbox-client-form" onsubmit="createInboxClient(event)">
             <div class="fgrid">
               <label class="fgrp">Nome do cliente<input class="fi" name="name" required maxlength="100"></label>
               <label class="fgrp">Usuário<input class="fi" name="username" autocomplete="off" required minlength="3" maxlength="30" pattern="[a-zA-Z0-9_.]{3,30}"></label>
               <label class="fgrp">Senha inicial<input class="fi" name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label>
-              <label class="fgrp">E-mail para a bandeja<input class="fi" name="email" type="email" required maxlength="254"></label>
+              <label class="fgrp">Responsável pela lista de e-mails<select id="inbox-client-responsible" class="fi" name="responsible" required></select></label>
             </div>
-            <button class="btn-ref" type="submit">Criar acesso e vincular e-mail</button>
-            <button id="inbox-client-unbound" class="btn-ref" type="submit" hidden>Criar só o acesso</button>
+            <button class="btn-ref" type="submit">Criar acesso</button>
             <p id="inbox-client-status" role="status" aria-live="polite"></p>
           </form>
         </details>
 
-        <div class="panel" style="margin-bottom:18px;border:2px solid #60a5fa;">
+        <section id="inbox-client-email-panel" class="panel" style="margin-bottom:18px;" hidden>
+          <h3 class="ptit">Adicionar e-mails à bandeja do cliente</h3>
+          <form id="inbox-client-email-form" onsubmit="addInboxClientEmails(event)">
+            <label class="fgrp">Cliente<select id="inbox-client-target" class="fi" required><option value="">Selecione um cliente</option></select></label>
+            <label class="fgrp">E-mails autorizados, um por linha<textarea class="fi" name="emails" rows="4" required maxlength="60000"></textarea></label>
+            <button class="btn-ref" type="submit">Adicionar e-mails</button>
+            <p id="inbox-client-email-status" class="sinfo" role="status" style="white-space:pre-wrap"></p>
+          </form>
+        </section>
+
+        <div id="admin-live-inbox-legacy-panel" class="panel" style="margin-bottom:18px;border:2px solid #60a5fa;">
           <div class="phdr">
             <div class="ptit">📌 Emails vinculados na central de usuários</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -1747,12 +1756,10 @@
       event.preventDefault();
       const form = event.currentTarget;
       const buttons = [...form.querySelectorAll('button[type="submit"]')];
-      const unbound = document.getElementById('inbox-client-unbound');
       const notice = document.getElementById('inbox-client-status');
       if (buttons.some(button => button.disabled)) return;
       const data = Object.fromEntries(new FormData(form));
-      data.create_without_binding = event.submitter === unbound;
-      unbound.hidden = true;
+      data.create_without_binding = true;
       buttons.forEach(button => button.disabled = true);
       notice.textContent = 'Salvando…';
       try {
@@ -1761,15 +1768,49 @@
         });
         const result = await response.json();
         if (!response.ok || !result.success) {
-          if (result.can_create_without_binding) unbound.hidden = false;
           throw new Error(result.message || 'Não foi possível cadastrar.');
         }
         form.reset();
         notice.textContent = result.message + ' Usuário: ' + result.username + '.';
-        await Promise.allSettled([loadAdminLiveInboxAllowed(), loadUsers()]);
+        await Promise.allSettled([loadInboxClientTargets(result.username), loadUsers()]);
       } catch (error) {
         notice.textContent = error.message || 'Não foi possível cadastrar.';
       } finally { buttons.forEach(button => button.disabled = false); }
+    }
+
+    async function loadInboxClientTargets(preferred) {
+      const select = document.getElementById('inbox-client-target');
+      const current = preferred || select.value;
+      const {j} = await fetchJsonNoCache('/api/admin/live-inbox/client-emails');
+      if (!j.success) throw new Error(j.message || 'Não foi possível carregar os clientes.');
+      const responsible = document.getElementById('inbox-client-responsible');
+      const previous = responsible.value;
+      responsible.replaceChildren(new Option('Selecione a lista responsável', ''));
+      for (const admin of j.admins || []) responsible.add(new Option(`${admin.name} (@${admin.username})`, admin.username));
+      if ([...responsible.options].some(option => option.value === previous)) responsible.value = previous;
+      select.replaceChildren(new Option('Selecione um cliente', ''));
+      for (const client of j.clients) select.add(new Option(`${client.name} (@${client.username})`, client.username));
+      if ([...select.options].some(option => option.value === current)) select.value = current;
+      if (preferred && select.value === preferred) select.focus();
+    }
+
+    async function addInboxClientEmails(event) {
+      event.preventDefault();
+      const form = event.currentTarget, button = form.querySelector('button'), field = form.elements.emails;
+      const select = document.getElementById('inbox-client-target');
+      const notice = document.getElementById('inbox-client-email-status');
+      if (button.disabled) return;
+      const emails = field.value, username = select.value;
+      button.disabled = true; select.disabled = true; notice.textContent = 'Salvando…';
+      try {
+        const response = await fetch('/api/admin/live-inbox/client-emails', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, emails})});
+        const data = await response.json();
+        if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível adicionar os e-mails.');
+        notice.textContent = data.results.map(row => `${row.email} — ${row.status}`).join('\n');
+        if (field.value === emails) field.value = data.retry.join('\n');
+        if (data.added.length) await Promise.allSettled([loadUsers(), loadAdminLiveInboxMessages()]);
+      } catch (error) { notice.textContent = error.message; }
+      finally { button.disabled = false; select.disabled = false; }
     }
 
     async function abrirAdminLiveInbox() {
@@ -1777,10 +1818,13 @@
       if (!ok) return;
       const m = document.getElementById('admin-live-inbox-modal');
       const create = document.getElementById('inbox-client-create');
-      if (create) create.hidden = location.hostname !== 'consulta-codigos-jr7z.onrender.com' || _meUser?.username !== 'admin';
+      const principalCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin';
+      if (create) create.hidden = !principalCentral;
+      document.getElementById('admin-live-inbox-legacy-panel').hidden = principalCentral;
+      document.getElementById('inbox-client-email-panel').hidden = !principalCentral;
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
       await Promise.all([
-        loadAdminLiveInboxAllowed(),
+        principalCentral ? loadInboxClientTargets().catch(error => { document.getElementById('inbox-client-email-status').textContent = error.message; }) : loadAdminLiveInboxAllowed(),
         loadAdminLiveInboxFilters()
       ]);
       await loadAdminLiveInboxMessages();

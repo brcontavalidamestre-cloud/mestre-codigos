@@ -4992,7 +4992,8 @@ def create_inbox_client():
     username, name, address = (str(data.get(k) or '').strip() for k in ('username', 'name', 'email'))
     username, address = username.lower(), address.lower()
     password = data.get('password')
-    if not re.fullmatch(r'[a-z0-9_.]{3,30}', username) or not 1 <= len(name) <= 100 or not isinstance(password, str) or not 12 <= len(password) <= 128 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', address) or len(address) > 254:
+    create_only = data.get('create_without_binding') is True and not address
+    if not re.fullmatch(r'[a-z0-9_.]{3,30}', username) or not 1 <= len(name) <= 100 or not isinstance(password, str) or not 12 <= len(password) <= 128 or (not create_only and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', address)) or len(address) > 254:
         return jsonify(success=False, message='Confira nome, usuário, e-mail e a senha (12 a 128 caracteres).'), 400
     password_hash = generate_password_hash(password)
     with email_permission_store.serialized():
@@ -5012,7 +5013,10 @@ def create_inbox_client():
         if username in users or len(matches) > 1 or any(r.get('assigned_user') for r in matches):
             return jsonify(success=False, message='Usuário já cadastrado ou e-mail já vinculado. Nenhum registro foi alterado.'), 409
         if not authorized:
-            users[username] = dict(name=name, role='client', password=password_hash, created_by='admin')
+            responsible = str(data.get('responsible') or 'admin').strip().lower()
+            if (users.get(responsible) or {}).get('role') != 'admin':
+                return jsonify(success=False, message='Selecione um administrador responsável válido.'), 400
+            users[username] = dict(name=name, role='client', password=password_hash, created_by=responsible, inbox_created=True)
             if not save_users(users):
                 return jsonify(success=False, message='Não foi possível salvar o cliente.'), 503
             email_permission_store.audit('admin', 'create_inbox_client_without_binding', {'email':address, 'client':username})
@@ -5022,7 +5026,7 @@ def create_inbox_client():
         if not matches:
             subs.append(row)
         row.update(assigned_user=username, assigned_user_name=name, show_in_panel=False, verified_inbox_only=True)
-        users[username] = dict(name=name, role='client', password=password_hash, created_by=owner)
+        users[username] = dict(name=name, role='client', password=password_hash, created_by=owner, inbox_created=True)
         if not save_users(users):
             return jsonify(success=False, message='Não foi possível salvar o cliente.'), 503
         if not save_subscriptions(subs):
@@ -5031,6 +5035,78 @@ def create_inbox_client():
             return jsonify(success=False, message='Não foi possível salvar o vínculo.' if rolled_back else 'O cliente foi criado sem vínculo; confira o cadastro antes de tentar novamente.'), 503
         email_permission_store.audit('admin', 'create_inbox_client', {'email':address, 'client':username})
     return jsonify(success=True, message='Cliente criado e e-mail vinculado à bandeja.', username=username), 201
+
+
+@app.route('/api/admin/live-inbox/client-emails', methods=['GET', 'POST'])
+@admin_required
+def inbox_client_emails():
+    host = 'consulta-codigos-jr7z.onrender.com'
+    if (request.host.lower().split(':', 1)[0] != host or session.get('username') != 'admin'
+            or request.headers.get('Origin') not in (None, 'https://' + host)):
+        return jsonify(success=False, message='Ação exclusiva do administrador principal da Central.'), 403
+    users = load_users()
+    if (users.get('admin') or {}).get('role') != 'admin':
+        return jsonify(success=False, message='Sessão administrativa inválida.'), 403
+    if request.method == 'GET':
+        return jsonify(success=True, clients=[dict(username=u, name=r.get('name') or u) for u,r in sorted(users.items())
+                       if r.get('role') == 'client' and r.get('inbox_created')],
+                       admins=[dict(username=u, name=r.get('name') or u) for u,r in sorted(users.items())
+                               if r.get('role') == 'admin' and u != 'admin']), 200, {'Cache-Control':'no-store'}
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict) or not isinstance(data.get('emails'), str) or len(data['emails']) > 60000:
+        return jsonify(success=False, message='Informe os e-mails, um por linha.'), 400
+    target = str(data.get('username') or '').strip().lower()
+    emails = list(dict.fromkeys(line.strip().lower() for line in data['emails'].splitlines() if line.strip()))
+    if not 1 <= len(emails) <= 200:
+        return jsonify(success=False, message='Informe de 1 a 200 e-mails.'), 400
+    results, added, retry = [], [], []
+    with email_permission_store.serialized():
+        users = load_users()
+        account = users.get(target) or {}
+        if (users.get('admin') or {}).get('role') != 'admin' or account.get('role') != 'client' or not account.get('inbox_created'):
+            return jsonify(success=False, message='Selecione um cliente criado nesta caixa de entrada.'), 403
+        owner = account.get('created_by')
+        permissions = email_permission_store.permissions()
+        blocked = email_quarantine.emails()
+        subs = load_subscriptions()
+        by_email = {}
+        for row in subs:
+            if isinstance(row, dict):
+                by_email.setdefault(str(row.get('email') or '').strip().lower(), []).append(row)
+        now = int(time.time())
+        for address in emails:
+            rows = by_email.get(address, [])
+            if len(address) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', address):
+                status = 'Endereço inválido'
+            elif email_quarantine.matches(address, blocked):
+                status = 'Em quarentena'
+            elif len(rows) == 1 and rows[0].get('assigned_user') == target:
+                results.append(dict(email=address, status='Já vinculado a este cliente'))
+                continue
+            elif len(rows) > 1 or any(row.get('assigned_user') for row in rows):
+                status = 'Já vinculado ou duplicado'
+            elif permissions.get(address, {}).get('admin_user') != owner or (users.get(owner) or {}).get('role') != 'admin':
+                status = 'Sem autorização na lista do responsável'
+            else:
+                row = rows[0] if rows else dict(email=address, created_at=now, start_at=now,
+                           expires_at=now+3650*86400, dur_days=3650, plataforma='Caixa de entrada', valor=0)
+                if not rows:
+                    subs.append(row)
+                row.update(assigned_user=target, assigned_user_name=account.get('name') or target,
+                           show_in_panel=False, verified_inbox_only=True)
+                results.append(dict(email=address, status='Vinculado à bandeja'))
+                added.append(address)
+                continue
+            retry.append(address)
+            results.append(dict(email=address, status=status))
+        if added and not save_subscriptions(subs):
+            return jsonify(success=False, message='Não foi possível salvar os vínculos.'), 503
+        if added:
+            email_permission_store.audit('admin', 'add_inbox_client_emails', {'client':target, 'emails':added})
+    invalidate = app.config.get('EMAIL_POOL_BINDINGS_CHANGED')
+    if added and invalidate:
+        invalidate({target})
+    return jsonify(success=True, added=added, results=results, retry=retry)
 
 
 @app.route("/api/admin/live-inbox/access-status", methods=["GET"])
