@@ -5001,12 +5001,22 @@ def create_inbox_client():
             return jsonify(success=False, message='Sessão administrativa inválida.'), 403
         permission = email_permission_store.permissions().get(address) or {}
         owner = permission.get('admin_user')
-        if not owner or (users.get(owner) or {}).get('role') != 'admin' or email_quarantine.is_blocked(address):
-            return jsonify(success=False, message='Use um e-mail já autorizado em uma lista permitida e fora da quarentena.'), 409
+        if email_quarantine.is_blocked(address):
+            return jsonify(success=False, message='O e-mail está em quarentena. Nenhum registro foi alterado.'), 409
+        authorized = bool(owner and (users.get(owner) or {}).get('role') == 'admin')
+        if not authorized and data.get('create_without_binding') is not True:
+            return jsonify(success=False, can_create_without_binding=True,
+                           message='Este e-mail ainda não está autorizado. Você pode criar a conta sem liberar a leitura das mensagens.'), 409
         subs = load_subscriptions()
         matches = [r for r in subs if isinstance(r, dict) and str(r.get('email') or '').strip().lower() == address]
         if username in users or len(matches) > 1 or any(r.get('assigned_user') for r in matches):
             return jsonify(success=False, message='Usuário já cadastrado ou e-mail já vinculado. Nenhum registro foi alterado.'), 409
+        if not authorized:
+            users[username] = dict(name=name, role='client', password=password_hash, created_by='admin')
+            if not save_users(users):
+                return jsonify(success=False, message='Não foi possível salvar o cliente.'), 503
+            email_permission_store.audit('admin', 'create_inbox_client_without_binding', {'email':address, 'client':username})
+            return jsonify(success=True, linked=False, message='Cliente criado. A bandeja fica vazia até o e-mail ser autorizado e vinculado.', username=username), 201
         now = int(time.time())
         row = matches[0] if matches else dict(email=address, created_at=now, start_at=now, expires_at=now+3650*86400, dur_days=3650, plataforma='Caixa de entrada', valor=0)
         if not matches:

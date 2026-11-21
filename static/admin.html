@@ -631,7 +631,7 @@
 
         <details id="inbox-client-create" class="panel" style="margin-bottom:18px;" hidden>
           <summary style="cursor:pointer;font-weight:800;color:#93c5fd;">Criar cliente com caixa de entrada</summary>
-          <p class="sinfo">Use um e-mail já autorizado em uma lista permitida, fora da quarentena e sem vínculo com outro cliente. O cliente entra com usuário e senha e vê na bandeja somente as mensagens filtradas do endereço atribuído.</p>
+          <p class="sinfo">Você pode criar o acesso mesmo se o e-mail ainda não estiver autorizado. Nesse caso, a bandeja fica vazia até o endereço ser autorizado e vinculado.</p>
           <form id="inbox-client-form" onsubmit="createInboxClient(event)">
             <div class="fgrid">
               <label class="fgrp">Nome do cliente<input class="fi" name="name" required maxlength="100"></label>
@@ -640,6 +640,7 @@
               <label class="fgrp">E-mail para a bandeja<input class="fi" name="email" type="email" required maxlength="254"></label>
             </div>
             <button class="btn-ref" type="submit">Criar acesso e vincular e-mail</button>
+            <button id="inbox-client-unbound" class="btn-ref" type="submit" hidden>Criar só o acesso</button>
             <p id="inbox-client-status" role="status" aria-live="polite"></p>
           </form>
         </details>
@@ -1745,24 +1746,30 @@
     async function createInboxClient(event) {
       event.preventDefault();
       const form = event.currentTarget;
-      const button = form.querySelector('button[type="submit"]');
+      const buttons = [...form.querySelectorAll('button[type="submit"]')];
+      const unbound = document.getElementById('inbox-client-unbound');
       const notice = document.getElementById('inbox-client-status');
-      if (button.disabled) return;
+      if (buttons.some(button => button.disabled)) return;
       const data = Object.fromEntries(new FormData(form));
-      button.disabled = true;
+      data.create_without_binding = event.submitter === unbound;
+      unbound.hidden = true;
+      buttons.forEach(button => button.disabled = true);
       notice.textContent = 'Salvando…';
       try {
         const response = await fetch('/api/admin/live-inbox/client', {
           method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
         });
         const result = await response.json();
-        if (!response.ok || !result.success) throw new Error(result.message || 'Não foi possível cadastrar.');
+        if (!response.ok || !result.success) {
+          if (result.can_create_without_binding) unbound.hidden = false;
+          throw new Error(result.message || 'Não foi possível cadastrar.');
+        }
         form.reset();
         notice.textContent = result.message + ' Usuário: ' + result.username + '.';
         await Promise.allSettled([loadAdminLiveInboxAllowed(), loadUsers()]);
       } catch (error) {
         notice.textContent = error.message || 'Não foi possível cadastrar.';
-      } finally { button.disabled = false; }
+      } finally { buttons.forEach(button => button.disabled = false); }
     }
 
     async function abrirAdminLiveInbox() {
