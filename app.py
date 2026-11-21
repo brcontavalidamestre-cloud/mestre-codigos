@@ -4608,57 +4608,10 @@ def instaddr_admin_sync_page():
         return redirect("/")
     return send_from_directory("static", "instaddr_admin_sync.html")
 
-_EXTRA_ADMIN_HOST = 'consulta-codigos-jr7z.onrender.com'
-
-
 @app.before_request
-def _isolate_extra_admin():
-    if not session.get('logged_in') or session.get('role') != 'admin_extra':
-        return None
-    if request.host.lower().split(':', 1)[0] != _EXTRA_ADMIN_HOST or (load_users().get(session.get('username')) or {}).get('role') != 'admin_extra':
+def _disable_retired_admin_extra_session():
+    if session.get('role') == 'admin_extra':
         session.clear()
-        return redirect('/login')
-    if request.path in ('/', '/admin', '/login') and request.method == 'GET':
-        return redirect('/admin-extra')
-    if request.endpoint not in ('extra_admin_page', 'extra_admin_status', 'api_me', 'api_logout', 'static'):
-        return jsonify(success=False, message='Acesso restrito ao painel Admin Extra.'), 403
-
-
-@app.get('/admin-extra')
-def extra_admin_page():
-    if request.host.lower().split(':', 1)[0] != _EXTRA_ADMIN_HOST:
-        return '', 404
-    if not session.get('logged_in'):
-        return redirect('/login')
-    if session.get('role') != 'admin_extra':
-        return redirect('/admin' if session.get('role') == 'admin' else '/')
-    return send_from_directory('static', 'admin-extra.html'), 200, {'Cache-Control':'no-store'}
-
-
-@app.get('/api/admin-extra/status')
-def extra_admin_status():
-    if request.host.lower().split(':', 1)[0] != _EXTRA_ADMIN_HOST or not session.get('logged_in') or session.get('role') != 'admin_extra':
-        return jsonify(success=False, message='Entre com uma conta Admin Extra.'), 403
-    username = session['username']
-    available = {str(row.get('email') or '').strip().lower() for row in load_subscriptions() if isinstance(row, dict)
-                 and row.get('assigned_user') == username and _sub_is_active(row)}
-    available = {address for address in available if address and not email_quarantine.is_blocked(address)}
-    address = request.args.get('email', '').strip().lower()
-    if address and address not in available:
-        return jsonify(success=False, message='Este e-mail não está vinculado ao seu perfil.'), 403
-    items, errors = [], []
-    if address:
-        rows, errors = _fetch_user_live_inbox_items(username, central=True, extra_address=address)
-        still_linked = any(isinstance(row, dict) and row.get('assigned_user') == username
-                           and str(row.get('email') or '').strip().lower() == address
-                           and _sub_is_active(row) for row in load_subscriptions())
-        if not still_linked or email_quarantine.is_blocked(address) or (load_users().get(username) or {}).get('role') != 'admin_extra':
-            return jsonify(success=False, message='Acesso ao e-mail encerrado.'), 403
-        now = time.time()
-        items = [dict(platform=row['platform'], date_ts=row['date_ts']) for row in rows
-                 if row.get('email') == address and row.get('recipients') == [address]
-                 and now - 900 <= row.get('date_ts', 0) <= now]
-    return jsonify(success=True, items=items[:60], emails=sorted(available), partial=bool(errors)), 200, {'Cache-Control':'no-store'}
 
 
 @app.route("/")
@@ -4738,14 +4691,14 @@ def api_login():
         except Exception as e:
             print(f"[login license sync] erro: {e}")
 
-    if not user or not check_password_hash(user["password"], password):
+    if not user or user.get('role') == 'admin_extra' or not check_password_hash(user["password"], password):
         return jsonify({"success": False, "message": "Usuario ou senha incorretos."}), 401
     session.permanent = True
     session["logged_in"] = True
     session["username"]  = username
     session["role"]      = user.get("role", "client")
     session["name"]      = user.get("name", username)
-    redirect_to = {'admin': '/admin', 'admin_extra': '/admin-extra'}.get(user.get('role'), '/')
+    redirect_to = "/admin" if user.get("role") == "admin" else "/"
     return jsonify({"success": True, "role": user.get("role", "client"), "redirect": redirect_to})
 
 @app.route("/auto-login/<username>")
@@ -4766,7 +4719,7 @@ def auto_login_user(username):
         return redirect('/login')
     users = load_users()
     user = users.get(username)
-    if not user:
+    if not user or user.get('role') == 'admin_extra':
         return redirect('/login')
     _set_session_for_user(username, user)
     return redirect('/')
@@ -4866,13 +4819,8 @@ def api_create_user():
         return jsonify({"success": False, "message": "Usuario invalido. Use letras, numeros, _ ou . (3-30 chars)."}), 400
     if len(password) < 4:
         return jsonify({"success": False, "message": "Senha deve ter pelo menos 4 caracteres."}), 400
-    if role == 'admin_extra':
-        if request.host.lower().split(':', 1)[0] != _EXTRA_ADMIN_HOST or session.get('username') != 'admin':
-            return jsonify(success=False, message='Somente o admin principal pode criar este perfil.'), 403
-        if not 14 <= len(password) <= 128:
-            return jsonify(success=False, message='Use uma senha de 14 a 128 caracteres para Admin Extra.'), 400
-    elif role not in ('admin', 'client'):
-        role = 'client'
+    if role not in ("admin", "client"):
+        role = "client"
     users = load_users()
     if username in users:
         return jsonify({"success": False, "message": "Usuario ja existe."}), 409
