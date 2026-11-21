@@ -601,10 +601,10 @@ def _admin_live_inbox_session_key():
 
 def _admin_live_inbox_requires_password():
     if (request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
-            and session.get('logged_in') and session.get('role') == 'admin'
-            and session.get('username') == 'admin'
-            and (load_users().get('admin') or {}).get('role') == 'admin'):
-        return False
+            and session.get('logged_in') and session.get('role') == 'admin'):
+        username = str(session.get('username') or '').strip().lower()
+        if username and (load_users().get(username) or {}).get('role') == 'admin':
+            return False
     return is_master_host() and bool(str(ADMIN_LIVE_INBOX_MASTER_PASSWORD or '').strip())
 
 
