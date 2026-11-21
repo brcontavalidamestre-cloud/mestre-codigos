@@ -45,7 +45,8 @@
   if(data.principal){
    const select=el('ep-admin');options(select,[],'Selecione um responsável');
    const group=(label,entries,prefix)=>{const node=document.createElement('optgroup');node.label=label;entries.forEach(({username,name})=>node.append(new Option(name&&name!==username?name+' ('+username+')':username,prefix+username)));select.append(node);};
-   group('Subadmins do painel',data.admins,'');
+   for (const admin of data.admins.filter(item => item.username === 'admin')) select.add(new Option(admin.name, admin.username));
+   group('Subadmins do painel',data.admins.filter(item => item.username !== 'admin'),'');
    if(directory?.accounts.length)group('Acessos restritos',directory.accounts.map(username=>({username})),'restricted:');
    select.value=directoryMode?'restricted:'+restricted:(data.admin_user||'');
   }else options(el('ep-client'),data.clients,'Selecione um dos seus clientes');

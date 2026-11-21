@@ -637,7 +637,6 @@
               <label class="fgrp">Nome do cliente<input class="fi" name="name" required maxlength="100"></label>
               <label class="fgrp">Usuário<input class="fi" name="username" autocomplete="off" required minlength="3" maxlength="30" pattern="[a-zA-Z0-9_.]{3,30}"></label>
               <label class="fgrp">Senha inicial<input class="fi" name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label>
-              <label class="fgrp">Responsável pela lista de e-mails<select id="inbox-client-responsible" class="fi" name="responsible" required></select></label>
             </div>
             <button class="btn-ref" type="submit">Criar acesso</button>
             <p id="inbox-client-status" role="status" aria-live="polite"></p>
@@ -646,6 +645,7 @@
 
         <section id="inbox-client-email-panel" class="panel" style="margin-bottom:18px;" hidden>
           <h3 class="ptit">Adicionar e-mails à bandeja do cliente</h3>
+          <p class="sinfo">Para autorizar endereços para um cliente novo, use a <a href="/admin/emails-subadmins?admin_user=admin">lista do admin principal</a>.</p>
           <form id="inbox-client-email-form" onsubmit="addInboxClientEmails(event)">
             <label class="fgrp">Cliente<select id="inbox-client-target" class="fi" required><option value="">Selecione um cliente</option></select></label>
             <label class="fgrp">E-mails autorizados, um por linha<textarea class="fi" name="emails" rows="4" required maxlength="60000"></textarea></label>
@@ -1783,11 +1783,6 @@
       const current = preferred || select.value;
       const {j} = await fetchJsonNoCache('/api/admin/live-inbox/client-emails');
       if (!j.success) throw new Error(j.message || 'Não foi possível carregar os clientes.');
-      const responsible = document.getElementById('inbox-client-responsible');
-      const previous = responsible.value;
-      responsible.replaceChildren(new Option('Selecione a lista responsável', ''));
-      for (const admin of j.admins || []) responsible.add(new Option(`${admin.name} (@${admin.username})`, admin.username));
-      if ([...responsible.options].some(option => option.value === previous)) responsible.value = previous;
       select.replaceChildren(new Option('Selecione um cliente', ''));
       for (const client of j.clients) select.add(new Option(`${client.name} (@${client.username})`, client.username));
       if ([...select.options].some(option => option.value === current)) select.value = current;

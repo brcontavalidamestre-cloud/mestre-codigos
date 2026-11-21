@@ -183,6 +183,8 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         username = actor();principal = manages_bindings();users = load_users()
         selected = norm(request.args.get('admin_user')) if principal else username
         admins = [dict(username=name,name=user.get('name') or name) for name,user in users.items() if name!='admin' and user.get('role')=='admin'] if principal else []
+        if username == 'admin':
+            admins.insert(0, dict(username='admin', name='Admin principal'))
         if principal and selected and selected not in {r['username'] for r in admins}:
             return jsonify(success=False,message='Subadmin não encontrado.'),404
         subscriptions = load_subscriptions();items = []
@@ -325,9 +327,9 @@ def register_email_delegation(app, data_dir, load_subscriptions, save_subscripti
         if not isinstance(data,dict):
             return jsonify(success=False,message='Dados inválidos.'),400
         target = norm(data.get('admin_user'));users = load_users()
-        if target=='admin' or (users.get(target) or {}).get('role')!='admin':
-            return jsonify(success=False,message='Selecione um subadmin válido.'),400
         username = actor()
+        if (target == 'admin' and username != 'admin') or (users.get(target) or {}).get('role') != 'admin':
+            return jsonify(success=False,message='Selecione um administrador válido.'),400
         if username == 'carlosadm' and target == username:
             return jsonify(success=False, message='Somente o admin principal pode liberar e-mails para a lista do próprio Carlos.'), 403
         try:
