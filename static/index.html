@@ -3752,8 +3752,10 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
         .replace(/"/g, '&quot;');
     }
 
-    // Iniciação do hash (#loja abre direto a loja)
     if (window.location.hash === '#loja') switchView('loja');
+    else if (window.location.hostname === 'consulta-codigos-jr7z.onrender.com' && window.location.hash === '#bandeja') {
+      switchView('bandeja');
+    }
 
     // KEEP-ALIVE: aquece a conexão IMAP em background ao carregar a página
     // Isso faz a primeira busca ser quase instantânea (sem cold-start)

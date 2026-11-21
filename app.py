@@ -4615,6 +4615,13 @@ def index():
         return redirect("/login")
     return send_from_directory("static", "index.html")
 
+def _central_client_start(user):
+    if (request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
+            and user.get('role') == 'client' and user.get('inbox_created')):
+        return '/#bandeja'
+    return '/'
+
+
 @app.route("/login")
 def login_page():
     # InstAddr público: não tem tela de login.
@@ -4626,6 +4633,9 @@ def login_page():
     if session.get("logged_in"):
         if session.get("role") == "admin":
             return redirect("/admin")
+        if (session.get('role') == 'client'
+                and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'):
+            return redirect(_central_client_start(load_users().get(session.get('username'), {})))
         return redirect("/")
     return send_from_directory("static", "login.html")
 
@@ -4690,7 +4700,7 @@ def api_login():
     session["username"]  = username
     session["role"]      = user.get("role", "client")
     session["name"]      = user.get("name", username)
-    redirect_to = "/admin" if user.get("role") == "admin" else "/"
+    redirect_to = "/admin" if user.get("role") == "admin" else _central_client_start(user)
     return jsonify({"success": True, "role": user.get("role", "client"), "redirect": redirect_to})
 
 @app.route("/auto-login/<username>")
