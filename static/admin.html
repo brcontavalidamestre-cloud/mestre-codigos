@@ -1096,6 +1096,7 @@
       showLoja2IfRios();
       showConsultaAdminCodigosIfMaster();
       showAdminLiveInboxIfSupported();
+      setupPrivateInboxShortcut();
     })();
 
     /* ============ BACKUP / RESTORE ============ */
@@ -1672,6 +1673,24 @@
     function showAdminLiveInboxIfSupported() {
       const btn = document.getElementById('admin-live-inbox-launch');
       if (btn) btn.style.display = hostSupportsAdminLiveInbox() ? 'flex' : 'none';
+    }
+
+    function setupPrivateInboxShortcut() {
+      if (location.hostname !== 'consulta-codigos-jr7z.onrender.com' || _meUser?.username !== 'admin') return;
+      const launch = document.getElementById('admin-live-inbox-launch');
+      if (!launch) return;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'btn-ref';
+      button.style.marginTop = '8px';
+      button.textContent = 'Copiar link privado da Caixa de Entrada Admin';
+      button.onclick = async () => {
+        const url = new URL('/admin#caixa-admin', location.origin).href;
+        try { await navigator.clipboard.writeText(url); showToast('Atalho copiado. A caixa mantém a proteção por login e PIN.'); }
+        catch { window.prompt('Copie o atalho privado da caixa:', url); }
+      };
+      launch.after(button);
+      if (location.hash === '#caixa-admin') abrirAdminLiveInbox();
     }
 
     async function ensureAdminLiveInboxUnlocked() {

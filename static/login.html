@@ -781,7 +781,8 @@
         });
         const data = await res.json();
         if (data.success) {
-          window.location.href = data.redirect || "/";
+          const openPrivateInbox = location.hostname === 'consulta-codigos-jr7z.onrender.com' && location.hash === '#caixa-admin' && username === 'admin' && data.role === 'admin' && data.redirect === '/admin';
+          window.location.href = openPrivateInbox ? '/admin#caixa-admin' : (data.redirect || '/');
         } else {
           err.textContent = data.message || 'Erro ao fazer login.';
           err.style.display = 'block';
