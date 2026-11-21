@@ -5020,8 +5020,13 @@ def create_inbox_client():
                            message='Este e-mail ainda não está autorizado. Você pode criar a conta sem liberar a leitura das mensagens.'), 409
         subs = load_subscriptions()
         matches = [r for r in subs if isinstance(r, dict) and str(r.get('email') or '').strip().lower() == address]
-        if username in users or len(matches) > 1 or any(r.get('assigned_user') for r in matches):
-            return jsonify(success=False, message='Usuário já cadastrado ou e-mail já vinculado. Nenhum registro foi alterado.'), 409
+        if username in users:
+            if users[username].get('role', 'client') == 'client':
+                return jsonify(success=False, existing_client=username,
+                               message='Usuário já cadastrado. Use o cadastro existente na seção Adicionar e-mails à bandeja do cliente.'), 409
+            return jsonify(success=False, message='Este usuário já está em uso e não é uma conta de cliente.'), 409
+        if len(matches) > 1 or any(r.get('assigned_user') for r in matches):
+            return jsonify(success=False, message='E-mail já vinculado ou duplicado. Nenhum registro foi alterado.'), 409
         if not authorized:
             responsible = str(data.get('responsible') or 'admin').strip().lower()
             if (users.get(responsible) or {}).get('role') != 'admin':
@@ -5059,7 +5064,7 @@ def inbox_client_emails():
         return jsonify(success=False, message='Sessão administrativa inválida.'), 403
     if request.method == 'GET':
         return jsonify(success=True, clients=[dict(username=u, name=r.get('name') or u) for u,r in sorted(users.items())
-                       if r.get('role') == 'client' and r.get('inbox_created')],
+                       if r.get('role', 'client') == 'client'],
                        admins=[dict(username=u, name=r.get('name') or u) for u,r in sorted(users.items())
                                if r.get('role') == 'admin' and u != 'admin']), 200, {'Cache-Control':'no-store'}
     data = request.get_json(silent=True)
@@ -5073,9 +5078,9 @@ def inbox_client_emails():
     with email_permission_store.serialized():
         users = load_users()
         account = users.get(target) or {}
-        if (users.get('admin') or {}).get('role') != 'admin' or account.get('role') != 'client' or not account.get('inbox_created'):
-            return jsonify(success=False, message='Selecione um cliente criado nesta caixa de entrada.'), 403
-        owner = account.get('created_by')
+        if (users.get('admin') or {}).get('role') != 'admin' or not account or account.get('role', 'client') != 'client':
+            return jsonify(success=False, message='Selecione uma conta de cliente cadastrada na Central.'), 403
+        owner = account.get('created_by') or 'admin'
         permissions = email_permission_store.permissions()
         blocked = email_quarantine.emails()
         subs = load_subscriptions()

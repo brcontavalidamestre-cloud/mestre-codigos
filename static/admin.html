@@ -1767,6 +1767,12 @@
           method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
         });
         const result = await response.json();
+        if (response.status === 409 && result.existing_client) {
+          form.elements.password.value = '';
+          await loadInboxClientTargets(result.existing_client);
+          notice.textContent = result.message;
+          return;
+        }
         if (!response.ok || !result.success) {
           throw new Error(result.message || 'Não foi possível cadastrar.');
         }
