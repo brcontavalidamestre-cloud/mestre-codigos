@@ -337,6 +337,7 @@
                 <select class="fi" id="n-role">
                   <option value="client">👤 Cliente</option>
                   <option value="admin">⭐ Administrador</option>
+                  <option value="admin_extra" id="extra-admin-role" hidden disabled>Admin Extra · acesso restrito</option>
                 </select>
               </div>
             </div>
@@ -1128,6 +1129,14 @@
         if (d.role !== 'admin') { location.href = '/'; return; }
         _meUser = { username: d.username || '', name: d.name || d.username || '', role: d.role || 'admin' };
         document.getElementById('topbar-name').textContent = d.name || d.username;
+        if (location.hostname === 'consulta-codigos-jr7z.onrender.com' && d.username === 'admin') {
+          const option = document.getElementById('extra-admin-role');
+          option.hidden = option.disabled = false;
+          document.getElementById('n-role').addEventListener('change', event => {
+            const input = document.getElementById('n-pass');
+            input.placeholder = event.target.value === 'admin_extra' ? 'Mínimo 14 caracteres' : 'Mínimo 4 caracteres';
+          });
+        }
       } catch { location.href = '/login'; return; }
       loadUsers();
       renderAssinUsuarios();
@@ -3123,7 +3132,7 @@
         <tr>
           <td><strong>${x(u.username)}</strong></td>
           <td>${x(u.name || '—')}</td>
-          <td><span class="bdg ${u.role === 'admin' ? 'badm' : 'bcli'}">${u.role === 'admin' ? '⭐ Admin' : '👤 Cliente'}</span></td>
+          <td><span class="bdg ${u.role === 'admin' ? 'badm' : 'bcli'}">${u.role === 'admin' ? '⭐ Admin' : u.role === 'admin_extra' ? 'Admin Extra' : '👤 Cliente'}</span></td>
           <td style="text-align:center;">
             ${u.reset_pin_custom
               ? `<span class="pin-badge on">🔒 Personalizado</span>`
