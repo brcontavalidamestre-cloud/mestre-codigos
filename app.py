@@ -8,6 +8,7 @@ from email.header import decode_header
 import re
 import os
 import json
+import sqlite3
 import unicodedata
 import time
 import threading
@@ -3945,6 +3946,7 @@ _LICENSE_BYPASS_PATHS = (
     "/api/keepalive",
     "/api/license/status",
     "/api/internal/license-by-domain",
+    "/api/internal/quarantine",
     "/api/internal/loja/",
     "/api/license/renew/",
     "/api/internal/renew-pix",
@@ -4508,6 +4510,45 @@ def api_internal_license_by_domain():
         if _normalize_domain(lic.get("domain", "")) == domain:
             return jsonify({"success": True, "license": lic})
     return jsonify({"success": True, "license": None})
+
+@app.route("/api/internal/quarantine", methods=["GET"])
+def api_internal_quarantine():
+    """Politica de quarentena compartilhada com o painel JMP.
+
+    O JMP consulta esta rota antes de qualquer busca de codigo; se ela falhar,
+    o painel dele responde 503 e a consulta inteira para. Protegida por token
+    compartilhado (QUARANTINE_SYNC_TOKEN) e somente leitura.
+    """
+    expected = os.environ.get("QUARANTINE_SYNC_TOKEN", "")
+    received = request.headers.get("X-Quarantine-Token", "")
+    if not expected or not hmac.compare_digest(expected, received):
+        return jsonify({"success": False, "message": "Acesso não autorizado."}), 403
+
+    def _read(path, query):
+        if not os.path.isfile(path):
+            return []
+        conn = None
+        try:
+            conn = sqlite3.connect(path, timeout=10)
+            return [str(row[0]).strip().lower() for row in conn.execute(query) if row and row[0]]
+        except Exception:
+            return []
+        finally:
+            if conn is not None:
+                conn.close()
+
+    blocked = _read(os.path.join(_data_dir, "quarantine.sqlite3"),
+                    "SELECT email FROM blocked_emails")
+    restricted = _read(os.path.join(_data_dir, "email_admin_permissions.sqlite3"),
+                       "SELECT email FROM permissions")
+
+    resp = jsonify({
+        "success": True,
+        "emails": sorted(set(blocked)),
+        "restricted_emails": sorted(set(restricted)),
+    })
+    resp.headers["Cache-Control"] = "no-store"
+    return resp
 
 @app.route("/api/license/status", methods=["GET"])
 def api_license_status():
