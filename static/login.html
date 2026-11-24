@@ -3,53 +3,33 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <meta name="theme-color" content="#070310"/>
-  <meta name="robots" content="noindex,nofollow"/>
-  <meta name="description" content="Central dos Códigos — acesso restrito à plataforma."/>
   <title>Central dos Códigos ✦ — Login</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preload" as="style"
-        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Raleway:wght@400;500;600;700;800&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Raleway:wght@400;600;700&display=swap"
         onload="this.onload=null;this.rel='stylesheet'" />
-  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Raleway:wght@400;500;600;700;800&display=swap"/></noscript>
+  <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cinzel:wght@700;900&family=Raleway:wght@400;600;700&display=swap"/></noscript>
   <style>
     :root {
       --bg-deep:#06000f; --bg-dark:#0d0020; --bg-card:#130029;
       --purple-deep:#3b0764; --purple-mid:#6d28d9; --purple-bright:#a855f7;
-      --violet:#7c3aed; --fuchsia:#d946ef;
       --gold:#f59e0b; --gold-light:#fcd34d;
       --text-white:#f5f0ff; --text-muted:#c4b5fd;
       --border:rgba(168,85,247,0.25); --border-gold:rgba(245,158,11,0.35);
     }
-
-    *, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
-
-    html { -webkit-text-size-adjust:100%; }
-
-    body{
-      background:var(--bg-deep); color:var(--text-white);
-      font-family:'Raleway', system-ui, -apple-system, 'Segoe UI', sans-serif;
-      min-height:100vh; min-height:100dvh;
-      display:flex; align-items:center; justify-content:center;
-      position:relative; overflow-x:hidden; padding:24px 16px;
-      -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale;
-    }
-
-    /* Camadas decorativas (usadas apenas pelo tema padrão) */
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{background:var(--bg-deep);color:var(--text-white);font-family:'Raleway',sans-serif;
+      min-height:100vh;display:flex;align-items:center;justify-content:center;
+      position:relative;overflow:hidden;}
     .mist{position:fixed;border-radius:50%;filter:blur(120px);opacity:0.12;z-index:0;pointer-events:none;}
     .m1{width:600px;height:600px;background:var(--purple-mid);top:-150px;left:-150px;}
     .m2{width:500px;height:500px;background:var(--gold);bottom:-100px;right:-100px;}
-    .aurora{display:none;}
-
-    .shell{width:100%;display:flex;align-items:center;justify-content:center;position:relative;z-index:1;}
-
-    /* ── BASE (mantida compatível com os temas por domínio) ───────────────── */
     .card{
-      position:relative; z-index:1;
+      position:relative;z-index:1;
       background:linear-gradient(135deg,rgba(19,0,41,0.95),rgba(26,0,53,0.9));
       border:1px solid var(--border-gold);
-      border-radius:20px; padding:48px 40px; width:100%; max-width:420px;
+      border-radius:20px;padding:48px 40px;width:100%;max-width:420px;
       box-shadow:0 0 60px rgba(109,40,217,0.3),0 0 120px rgba(245,158,11,0.1);
     }
     .logo{text-align:center;margin-bottom:32px;}
@@ -58,19 +38,16 @@
       background:linear-gradient(135deg,var(--purple-deep),var(--purple-mid));
       border-radius:50%;display:flex;align-items:center;justify-content:center;
       font-size:36px;border:2px solid var(--border-gold);
-      box-shadow:0 0 30px rgba(109,40,217,0.5); overflow:hidden;
+      box-shadow:0 0 30px rgba(109,40,217,0.5);
     }
-    .logo-icon svg{width:34px;height:34px;}
-    h1{font-family:'Cinzel',serif;font-size:1.8rem;font-weight:900;line-height:1.25;
+    h1{font-family:'Cinzel',serif;font-size:1.8rem;font-weight:900;
       background:linear-gradient(135deg,var(--gold-light),var(--gold),var(--purple-bright));
-      -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
-      color:var(--gold-light);
+      -webkit-background-clip:text;-webkit-text-fill-color:transparent;
       text-align:center;letter-spacing:0.08em;}
     .subtitle{text-align:center;color:var(--text-muted);font-size:0.85rem;margin-top:6px;}
-    .form-group{margin-bottom:18px;position:relative;}
+    .form-group{margin-bottom:18px;}
     label{display:block;font-size:0.8rem;font-weight:600;color:var(--text-muted);
       letter-spacing:0.1em;text-transform:uppercase;margin-bottom:8px;}
-    .field{display:flex;align-items:center;}
     input{
       width:100%;padding:13px 16px;
       background:rgba(109,40,217,0.1);border:1px solid var(--border);
@@ -81,7 +58,6 @@
     input::placeholder{color:rgba(196,181,253,0.4);}
     .btn{
       width:100%;padding:14px;margin-top:8px;
-      display:inline-flex;align-items:center;justify-content:center;gap:8px;
       background:linear-gradient(135deg,var(--purple-deep),var(--purple-mid),var(--purple-bright));
       background-size:200% auto;
       border:none;border-radius:10px;color:#fff;
@@ -104,345 +80,31 @@
     }
     @keyframes spin{to{transform:rotate(360deg);}}
     .footer-txt{text-align:center;margin-top:24px;color:var(--text-muted);font-size:0.78rem;}
-
-    /* Elementos exclusivos do tema padrão (Central) */
-    .js-default-only{display:none;}
-    /* Quando um tema de marca (RIO/ROGER/JMP) injeta imagem no logo, oculta o SVG base */
-    .logo-icon[style*="url("] svg{display:none !important;}
-    html.theme-default .mist{display:none;}
-
-    /* ══════════════════════════════════════════════════════════════════════
-       TEMA PADRÃO / CENTRAL — visual moderno (aurora + glassmorphism)
-       Aplicado somente quando nenhum tema de marca (RIO / ROGER / JMP) casa.
-       ══════════════════════════════════════════════════════════════════════ */
-    html.theme-default body{
-      background:
-        radial-gradient(820px 560px at 10% -8%, rgba(124,58,237,.38), transparent 62%),
-        radial-gradient(680px 520px at 92% 4%, rgba(217,70,239,.22), transparent 64%),
-        radial-gradient(760px 620px at 52% 116%, rgba(251,191,36,.14), transparent 62%),
-        #070310;
-      padding:28px 18px;
-    }
-    html.theme-default .aurora{
-      display:block; position:fixed; inset:0; z-index:0;
-      pointer-events:none; overflow:hidden;
-    }
-    html.theme-default .aurora span{
-      position:absolute; display:block; border-radius:50%; filter:blur(90px);
-      opacity:.42; will-change:transform;
-    }
-    html.theme-default .aurora .b1{
-      width:min(52vw,560px); aspect-ratio:1; left:-12vw; top:-16vh;
-      background:radial-gradient(circle at 40% 40%, #7c3aed, transparent 70%);
-      animation:drift1 22s ease-in-out infinite alternate;
-    }
-    html.theme-default .aurora .b2{
-      width:min(46vw,500px); aspect-ratio:1; right:-10vw; top:8vh;
-      background:radial-gradient(circle at 60% 40%, #d946ef, transparent 70%);
-      animation:drift2 26s ease-in-out infinite alternate;
-    }
-    html.theme-default .aurora .b3{
-      width:min(58vw,620px); aspect-ratio:1; left:22vw; bottom:-30vh;
-      background:radial-gradient(circle at 50% 50%, #f59e0b, transparent 72%);
-      opacity:.20; animation:drift3 30s ease-in-out infinite alternate;
-    }
-    html.theme-default .aurora .grid{
-      position:absolute; inset:0; opacity:.05;
-      background-image:
-        linear-gradient(rgba(196,181,253,.55) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(196,181,253,.55) 1px, transparent 1px);
-      background-size:64px 64px;
-      -webkit-mask-image:radial-gradient(circle at 50% 45%, #000 10%, transparent 72%);
-      mask-image:radial-gradient(circle at 50% 45%, #000 10%, transparent 72%);
-    }
-    @keyframes drift1{from{transform:translate3d(0,0,0) scale(1);}to{transform:translate3d(6vw,5vh,0) scale(1.12);}}
-    @keyframes drift2{from{transform:translate3d(0,0,0) scale(1);}to{transform:translate3d(-7vw,7vh,0) scale(1.08);}}
-    @keyframes drift3{from{transform:translate3d(0,0,0) scale(1);}to{transform:translate3d(4vw,-4vh,0) scale(1.1);}}
-
-    html.theme-default .shell{perspective:1200px;}
-
-    html.theme-default .card{
-      max-width:432px;
-      padding:38px 34px 30px;
-      border-radius:26px;
-      background:linear-gradient(168deg, rgba(32,16,56,.86) 0%, rgba(14,7,27,.94) 58%, rgba(10,5,20,.96) 100%);
-      border:1px solid rgba(255,255,255,.09);
-      -webkit-backdrop-filter:blur(26px) saturate(145%);
-      backdrop-filter:blur(26px) saturate(145%);
-      box-shadow:
-        0 34px 90px -28px rgba(0,0,0,.95),
-        0 0 0 1px rgba(168,85,247,.10),
-        0 0 110px -34px rgba(124,58,237,.75),
-        inset 0 1px 0 rgba(255,255,255,.08);
-      animation:card-in .65s cubic-bezier(.2,.8,.2,1) both;
-    }
-    html.theme-default .card::before{
-      content:''; position:absolute; inset:0; border-radius:inherit; padding:1px;
-      background:linear-gradient(140deg, rgba(252,211,77,.55), rgba(168,85,247,.35) 38%, transparent 62%, rgba(217,70,239,.28));
-      -webkit-mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      -webkit-mask-composite:xor; mask:linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-      mask-composite:exclude; pointer-events:none;
-    }
-    html.theme-default .card::after{
-      content:''; position:absolute; left:16%; right:16%; top:-1px; height:1px;
-      background:linear-gradient(90deg, transparent, rgba(252,211,77,.85), transparent);
-      filter:blur(.4px); pointer-events:none;
-    }
-    @keyframes card-in{
-      from{opacity:0; transform:translateY(18px) scale(.975);}
-      to{opacity:1; transform:translateY(0) scale(1);}
-    }
-
-    html.theme-default .logo{margin-bottom:26px;}
-    html.theme-default .logo-icon{
-      width:64px; height:64px; border-radius:20px; margin:0 auto 18px;
-      font-size:0; border:1px solid rgba(255,255,255,.16);
-      background:linear-gradient(150deg,#8b5cf6 0%,#7c3aed 45%,#c026d3 100%);
-      box-shadow:
-        0 16px 38px -14px rgba(139,92,246,.95),
-        0 0 0 6px rgba(124,58,237,.10),
-        inset 0 1px 0 rgba(255,255,255,.32);
-      transition:transform .35s cubic-bezier(.2,.8,.2,1), box-shadow .35s;
-    }
-    html.theme-default .logo-icon:hover{transform:translateY(-2px) rotate(-2deg);}
-    html.theme-default .logo-icon svg{width:29px;height:29px;filter:drop-shadow(0 1px 3px rgba(0,0,0,.45));}
-
-    html.theme-default h1{
-      font-size:clamp(1.32rem, 4.6vw, 1.62rem);
-      letter-spacing:.13em;
-      background:linear-gradient(120deg,#fde68a 0%,#fbbf24 22%,#f5f3ff 50%,#c4b5fd 72%,#e879f9 100%);
-      background-size:200% auto;
-      -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
-      animation:shine 9s linear infinite;
-      text-wrap:balance;
-    }
-    @keyframes shine{to{background-position:200% center;}}
-    html.theme-default .subtitle{
-      display:inline-block; margin-top:14px; padding:5px 13px;
-      border-radius:999px; font-size:.68rem; font-weight:600;
-      letter-spacing:.13em; text-transform:uppercase;
-      color:#ddcdfb; background:rgba(168,85,247,.11);
-      border:1px solid rgba(168,85,247,.26);
-    }
-
-    /* No tema padrão o container do campo é a referência dos ícones.
-       Nos temas de marca .field fica estático para os ícones continuarem
-       posicionados pelo .form-group, como no layout original. */
-    html.theme-default .field{position:relative;}
-
-    html.theme-default .form-group{margin-bottom:16px;}
-    html.theme-default label{
-      font-size:.66rem; font-weight:700; letter-spacing:.16em;
-      color:#a99cd1; margin-bottom:9px;
-    }
-    html.theme-default .field input{
-      height:52px; padding:0 48px 0 44px;
-      border-radius:14px; font-size:.96rem; font-weight:500; letter-spacing:.01em;
-      background:rgba(255,255,255,.045);
-      border:1px solid rgba(255,255,255,.10);
-      color:#f7f2ff;
-      transition:border-color .18s ease, background .18s ease, box-shadow .22s ease;
-    }
-    html.theme-default .field input::placeholder{color:rgba(196,181,253,.38);font-weight:400;}
-    html.theme-default .field input:hover{border-color:rgba(255,255,255,.18);}
-    html.theme-default .field input:focus{
-      border-color:rgba(168,85,247,.85);
-      background:rgba(255,255,255,.07);
-      box-shadow:0 0 0 4px rgba(124,58,237,.16), 0 10px 26px -14px rgba(139,92,246,.95);
-    }
-    html.theme-default .field input:-webkit-autofill,
-    html.theme-default .field input:-webkit-autofill:hover,
-    html.theme-default .field input:-webkit-autofill:focus{
-      -webkit-text-fill-color:#f7f2ff;
-      -webkit-box-shadow:0 0 0 1000px #1b0f30 inset;
-      caret-color:#f7f2ff;
-      transition:background-color 9999s ease-out 0s;
-    }
-    html.theme-default .field-icon{
-      display:flex; align-items:center; justify-content:center;
-      position:absolute; left:15px; top:50%; transform:translateY(-50%);
-      width:18px; height:18px; pointer-events:none;
-      color:rgba(196,181,253,.62);
-      transition:color .18s ease, transform .18s ease;
-    }
-    html.theme-default .field-icon svg{width:100%;height:100%;}
-    html.theme-default .field:focus-within .field-icon{
-      color:#c4b5fd; transform:translateY(-50%) scale(1.06);
-    }
-    html.theme-default .pw-toggle{
-      display:flex; align-items:center; justify-content:center;
-      position:absolute; right:8px; top:50%; transform:translateY(-50%);
-      width:36px; height:36px; padding:0;
-      background:transparent; border:0; border-radius:10px;
-      color:rgba(196,181,253,.62); cursor:pointer;
-      transition:color .16s ease, background .16s ease;
-    }
-    html.theme-default .pw-toggle:hover{color:#e9d5ff; background:rgba(168,85,247,.14);}
-    html.theme-default .pw-toggle:focus-visible{outline:2px solid rgba(168,85,247,.8);outline-offset:2px;}
-    html.theme-default .pw-toggle svg{width:19px;height:19px;}
-    html.theme-default .pw-toggle .eye-off{display:none;}
-    html.theme-default .pw-toggle.is-visible .eye-on{display:none;}
-    html.theme-default .pw-toggle.is-visible .eye-off{display:block;}
-
-    html.theme-default .field-hint{
-      display:none; margin-top:7px; font-size:.7rem; font-weight:600;
-      letter-spacing:.05em; color:#fbbf24;
-    }
-    html.theme-default .field-hint.show{display:block;}
-
-    html.theme-default .btn{
-      position:relative;
-      height:52px; margin-top:12px; padding:0 20px;
-      border-radius:14px; font-family:'Raleway',sans-serif;
-      font-size:.9rem; font-weight:800; letter-spacing:.14em; text-transform:uppercase;
-      background:linear-gradient(120deg,#7c3aed 0%,#a855f7 48%,#d946ef 100%);
-      background-size:190% auto;
-      border:1px solid rgba(255,255,255,.18);
-      color:#fff;
-      box-shadow:
-        0 16px 34px -16px rgba(168,85,247,.95),
-        inset 0 1px 0 rgba(255,255,255,.26);
-      overflow:hidden;
-      transition:transform .18s ease, box-shadow .28s ease, background-position .55s ease;
-    }
-    html.theme-default .btn::after{
-      content:''; position:absolute; top:0; bottom:0; width:42%;
-      left:-60%; transform:skewX(-18deg);
-      background:linear-gradient(90deg, transparent, rgba(255,255,255,.34), transparent);
-      transition:left .55s ease; pointer-events:none;
-    }
-    html.theme-default .btn:hover{
-      background-position:right center;
-      transform:translateY(-1px);
-      box-shadow:0 22px 44px -18px rgba(217,70,239,.95), inset 0 1px 0 rgba(255,255,255,.32);
-    }
-    html.theme-default .btn:hover::after{left:120%;}
-    html.theme-default .btn:active{transform:translateY(0) scale(.994);}
-    html.theme-default .btn:focus-visible{outline:2px solid #f0abfc;outline-offset:3px;}
-    html.theme-default .btn:disabled{opacity:.72;transform:none;box-shadow:0 10px 24px -18px rgba(168,85,247,.9);}
-    html.theme-default .btn:disabled::after{display:none;}
-
-    html.theme-default .error-msg{
-      display:none; margin-top:14px; padding:11px 14px;
-      border-radius:12px; font-size:.83rem; font-weight:600; line-height:1.4;
-      color:#fecaca; text-align:center;
-      background:rgba(239,68,68,.12);
-      border:1px solid rgba(248,113,113,.35);
-      -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
-      animation:shake .38s ease;
-    }
-    @keyframes shake{
-      0%,100%{transform:translateX(0);}
-      22%{transform:translateX(-5px);}
-      55%{transform:translateX(4px);}
-      78%{transform:translateX(-2px);}
-    }
-
-    html.theme-default .footer-txt{
-      margin-top:22px; padding-top:16px; font-size:.68rem; font-weight:600;
-      letter-spacing:.15em; text-transform:uppercase;
-      color:rgba(196,181,253,.42);
-      border-top:1px solid rgba(255,255,255,.06);
-    }
-
-    @media (max-width:480px){
-      html.theme-default body{padding:18px 14px;}
-      html.theme-default .card{padding:32px 22px 24px;border-radius:22px;}
-      html.theme-default .logo-icon{width:58px;height:58px;border-radius:18px;}
-      html.theme-default .field input,
-      html.theme-default .btn{height:50px;}
-    }
-    @media (max-height:640px){
-      html.theme-default .logo{margin-bottom:18px;}
-      html.theme-default .logo-icon{margin-bottom:12px;}
-    }
-
-    @media (prefers-reduced-motion: reduce){
-      *, *::before, *::after{
-        animation-duration:.001s !important;
-        animation-iteration-count:1 !important;
-        transition-duration:.001s !important;
-      }
-      html.theme-default .aurora span{animation:none !important;}
-    }
   </style>
 </head>
 <body>
   <div class="mist m1"></div>
   <div class="mist m2"></div>
-  <div class="aurora" aria-hidden="true">
-    <span class="b1"></span>
-    <span class="b2"></span>
-    <span class="b3"></span>
-    <div class="grid"></div>
-  </div>
-
-  <main class="shell">
   <div class="card">
     <div class="logo">
-      <div class="logo-icon" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M12 2.6l2.06 5.35L19.5 10l-5.44 2.05L12 17.4l-2.06-5.35L4.5 10l5.44-2.05L12 2.6z"
-                fill="#fff" fill-opacity="0.95"/>
-          <path d="M18.4 14.9l.86 2.24 2.24.86-2.24.86-.86 2.24-.86-2.24-2.24-.86 2.24-.86.86-2.24z"
-                fill="#FDE68A" fill-opacity="0.9"/>
-        </svg>
-      </div>
+      <div class="logo-icon">✦</div>
       <h1 id="site-title-h1">CENTRAL DOS CÓDIGOS</h1>
-      <p class="subtitle">Acesso restrito</p>
+      <p class="subtitle">Acesso restrito — faça login para continuar</p>
     </div>
     <form id="login-form" onsubmit="doLogin(event)">
       <div class="form-group">
-        <label for="username">Usuário</label>
-        <div class="field">
-          <span class="field-icon js-default-only" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                 stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-1.6a4.4 4.4 0 0 0-4.4-4.4H8.4A4.4 4.4 0 0 0 4 19.4V21"/>
-              <circle cx="12" cy="7.6" r="3.8"/>
-            </svg>
-          </span>
-          <input type="text" id="username" placeholder="Digite seu usuário"
-                 autocomplete="username" autocapitalize="none" spellcheck="false" required/>
-        </div>
+        <label for="username">👤 Usuário</label>
+        <input type="text" id="username" placeholder="Digite seu usuário" autocomplete="username" required/>
       </div>
       <div class="form-group">
-        <label for="password">Senha</label>
-        <div class="field">
-          <span class="field-icon js-default-only" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"
-                 stroke-linecap="round" stroke-linejoin="round">
-              <rect x="4" y="10.5" width="16" height="10.5" rx="2.6"/>
-              <path d="M7.8 10.5V7.4a4.2 4.2 0 0 1 8.4 0v3.1"/>
-              <circle cx="12" cy="15.7" r="1.25" fill="currentColor" stroke="none"/>
-            </svg>
-          </span>
-          <input type="password" id="password" placeholder="Digite sua senha"
-                 autocomplete="current-password" required/>
-          <button type="button" class="pw-toggle js-default-only" id="toggle-password"
-                  aria-label="Mostrar senha" aria-pressed="false" tabindex="-1">
-            <svg class="eye-on" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M2.2 12S5.6 5.8 12 5.8 21.8 12 21.8 12 18.4 18.2 12 18.2 2.2 12 2.2 12z"/>
-              <circle cx="12" cy="12" r="3.1"/>
-            </svg>
-            <svg class="eye-off" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                 stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M3 3l18 18"/>
-              <path d="M10.6 6.1A9.9 9.9 0 0 1 12 6c6.4 0 9.8 6 9.8 6a17.7 17.7 0 0 1-3.4 4.1"/>
-              <path d="M6.4 7.7A17.4 17.4 0 0 0 2.2 12s3.4 6 9.8 6a9.7 9.7 0 0 0 4.2-.9"/>
-              <path d="M9.9 9.9a3.1 3.1 0 0 0 4.3 4.3"/>
-            </svg>
-          </button>
-        </div>
-        <p class="field-hint js-default-only" id="caps-hint">Caps Lock está ativado</p>
+        <label for="password">🔒 Senha</label>
+        <input type="password" id="password" placeholder="Digite sua senha" autocomplete="current-password" required/>
       </div>
       <button type="submit" class="btn" id="btn-login">✦ Entrar</button>
     </form>
     <div class="error-msg" id="error-msg"></div>
     <p class="footer-txt">✦ Plataforma exclusiva ✦</p>
   </div>
-  </main>
   <script>
     // ── NOME E IMAGENS DINÂMICAS BASEADOS NO DOMÍNIO ──
     (function() {
@@ -1100,55 +762,6 @@
           document.body.appendChild(waBtn);
         }
       }
-
-      // ── TEMA PADRÃO (Central e demais hosts) — visual moderno ──
-      // Só é ativado quando nenhum tema de marca casou com o domínio.
-      if (!isRios && !isRoger && !isJmp) {
-        document.documentElement.classList.add('theme-default');
-
-        // Alternância mostrar/ocultar senha
-        const pwInput = document.getElementById('password');
-        const pwBtn = document.getElementById('toggle-password');
-        if (pwInput && pwBtn) {
-          pwBtn.addEventListener('click', function () {
-            const showing = pwInput.type === 'text';
-            pwInput.type = showing ? 'password' : 'text';
-            pwBtn.classList.toggle('is-visible', !showing);
-            pwBtn.setAttribute('aria-pressed', String(!showing));
-            pwBtn.setAttribute('aria-label', showing ? 'Mostrar senha' : 'Ocultar senha');
-            try {
-              pwInput.focus({ preventScroll: true });
-              const v = pwInput.value;
-              pwInput.setSelectionRange(v.length, v.length);
-            } catch (_) {}
-          });
-          // Mantém o ícone coerente caso o campo seja alterado por outro script
-          pwInput.addEventListener('blur', function () {
-            if (pwInput.type === 'text') {
-              pwInput.type = 'password';
-              pwBtn.classList.remove('is-visible');
-              pwBtn.setAttribute('aria-pressed', 'false');
-              pwBtn.setAttribute('aria-label', 'Mostrar senha');
-            }
-          });
-        }
-
-        // Aviso de Caps Lock no campo de senha
-        const capsHint = document.getElementById('caps-hint');
-        if (pwInput && capsHint) {
-          const syncCaps = function (ev) {
-            let on = false;
-            if (ev && typeof ev.getModifierState === 'function') {
-              on = ev.getModifierState('CapsLock');
-            }
-            capsHint.classList.toggle('show', !!on && document.activeElement === pwInput);
-          };
-          pwInput.addEventListener('keydown', syncCaps);
-          pwInput.addEventListener('keyup', syncCaps);
-          pwInput.addEventListener('focus', syncCaps);
-          pwInput.addEventListener('blur', function () { capsHint.classList.remove('show'); });
-        }
-      }
     })();
 
     async function doLogin(e) {
@@ -1157,11 +770,8 @@
       const err = document.getElementById('error-msg');
       const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
-      const originalLabel = btn.getAttribute('data-label') || btn.innerHTML;
-      btn.setAttribute('data-label', originalLabel);
       err.style.display = 'none';
       btn.disabled = true;
-      btn.setAttribute('aria-busy', 'true');
       btn.innerHTML = '<span class="spinner"></span> Entrando...';
       try {
         const res = await fetch('/api/auth/login', {
@@ -1184,8 +794,7 @@
         err.style.display = 'block';
       } finally {
         btn.disabled = false;
-        btn.removeAttribute('aria-busy');
-        btn.innerHTML = originalLabel;
+        btn.innerHTML = '✦ Entrar';
       }
     }
   </script>
