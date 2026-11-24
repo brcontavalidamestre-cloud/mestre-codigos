@@ -1,16 +1,21 @@
-"""Read-only multi-filter Netflix lookup for individual bearer links only.
-Reuse the application's registered subject/body filters and exact-email guard,
-but use private IMAP connections so simultaneous clients cannot switch folders
-on one shared cached connection.
+"""Read-only multi-filter streaming lookup for individual bearer links only.
+
+Generalized to any streaming service: the sender domain and search window are
+passed in, so Netflix and Disney+ can each use their own sender. Reuse the
+application's registered subject/body filters and exact-email guard, but use
+private IMAP connections so simultaneous clients cannot switch folders on one
+shared cached connection.
 """
 import imaplib
 import time
 from datetime import datetime, timedelta, timezone
 
 
-def make_netflix_batch_search(configs, get_accounts, batch_search, fetch_extract, spam_boxes, body_extract):
+def make_batch_search(configs, get_accounts, batch_search, fetch_extract, spam_boxes, body_extract,
+                      from_keyword='netflix.com'):
+    """Build a collector bound to one sender domain."""
     def collect(user_email, platforms):
-        allowed = [p for p in platforms if p in configs and configs[p].get('from_keyword') == 'netflix.com']
+        allowed = [p for p in platforms if p in configs and configs[p].get('from_keyword') == from_keyword]
         found, errors = {}, []
         successful_accounts = 0
         accounts, seen_accounts = [], set()
@@ -42,7 +47,7 @@ def make_netflix_batch_search(configs, get_accounts, batch_search, fetch_extract
                 for box in boxes:
                     if not missing or time.monotonic() - started > 60:
                         break
-                    matched = batch_search(mail, box, 'netflix.com', missing, seen_ids,
+                    matched = batch_search(mail, box, from_keyword, missing, seen_ids,
                                            use_date_filter=True, since_date=since,
                                            max_age_minutes=15, max_emails=120)
                     for mailbox, platform, eid in matched:
@@ -59,7 +64,7 @@ def make_netflix_batch_search(configs, get_accounts, batch_search, fetch_extract
                     for platform, cfg in list(missing.items()):
                         if not cfg.get('body_keywords'):
                             continue
-                        code, link = body_extract(mail, 'INBOX', 'netflix.com', platform, user_email,
+                        code, link = body_extract(mail, 'INBOX', from_keyword, platform, user_email,
                                                   since_date=since, max_emails=20)
                         if code or link:
                             found[platform] = {'platform': platform, 'code': code, 'link': link}
@@ -78,3 +83,15 @@ def make_netflix_batch_search(configs, get_accounts, batch_search, fetch_extract
         # successful lookup in the configured mailboxes into a service error.
         return [found[p] for p in allowed if p in found], errors if found or not successful_accounts else []
     return collect
+
+
+def make_netflix_batch_search(configs, get_accounts, batch_search, fetch_extract, spam_boxes, body_extract):
+    """Backwards-compatible Netflix collector (sender netflix.com)."""
+    return make_batch_search(configs, get_accounts, batch_search, fetch_extract,
+                            spam_boxes, body_extract, from_keyword='netflix.com')
+
+
+def make_disney_batch_search(configs, get_accounts, batch_search, fetch_extract, spam_boxes, body_extract):
+    """Disney+ collector (sender disneyplus.com)."""
+    return make_batch_search(configs, get_accounts, batch_search, fetch_extract,
+                            spam_boxes, body_extract, from_keyword='disneyplus.com')

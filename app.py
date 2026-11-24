@@ -9147,12 +9147,18 @@ def api_keepalive():
         return jsonify({"success": False, "error": str(e)[:200]})
     return jsonify({"success": True, "imap_ready": False})
 
-# Isolated Netflix access links: central host only; no changes to existing flows.
-from netflix_links import register_netflix_links, strict_email_context, exact_email_match
-from netflix_search import make_netflix_batch_search
-register_netflix_links(app, _data_dir, search_code_unified,
-    search_all=make_netflix_batch_search(PLATFORM_CONFIG, get_imap_accounts,
-        _batch_search_mailbox, _fetch_and_extract, _get_spam_boxes, _targeted_body_extract))
+# Isolated per-service access links (Netflix, Disney+): central host only.
+from netflix_links import register_links, strict_email_context, exact_email_match
+from netflix_search import make_batch_search
+register_links(app, _data_dir, search_code_unified,
+    search_alls={
+        'netflix': make_batch_search(PLATFORM_CONFIG, get_imap_accounts,
+            _batch_search_mailbox, _fetch_and_extract, _get_spam_boxes, _targeted_body_extract,
+            from_keyword='netflix.com'),
+        'disney': make_batch_search(PLATFORM_CONFIG, get_imap_accounts,
+            _batch_search_mailbox, _fetch_and_extract, _get_spam_boxes, _targeted_body_extract,
+            from_keyword='disneyplus.com'),
+    })
 
 # Central stock report reads the store's authoritative sales without altering delivery.
 from stock_ledger import register_stock_ledger
