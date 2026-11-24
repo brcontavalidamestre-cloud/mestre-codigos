@@ -2451,6 +2451,15 @@ def email_matches_user(msg, html_body, user_email):
     guard = app.config.get("EMAIL_POOL_MESSAGE_ALLOWED")
     if guard and not guard(msg, html_body):
         return False
+    # Exact recipient matching only for the isolated bearer-link flow.
+    # Without this, a client link could return codes belonging to another email.
+    try:
+        from netflix_links import strict_email_context, exact_email_match
+        strict_target = strict_email_context.get()
+        if strict_target is not None:
+            return exact_email_match(msg, html_body, strict_target)
+    except Exception:
+        pass
     user_lower = user_email.lower()
     user_lower = user_lower.strip()
 
@@ -9138,6 +9147,19 @@ from jmp_quarantine import register_jmp_quarantine
 register_jmp_quarantine(app, _pending_reset_links)
 from jmp_registry import register_jmp_registry
 register_jmp_registry(app, load_subscriptions, load_users)
+
+# Isolated per-service access links (Netflix, Disney+): JMP host only.
+from netflix_links import register_links
+from netflix_search import make_batch_search
+register_links(app, _data_dir, search_code_unified,
+    search_alls={
+        'netflix': make_batch_search(PLATFORM_CONFIG, get_imap_accounts,
+            _batch_search_mailbox, _fetch_and_extract, _get_spam_boxes, _targeted_body_extract,
+            from_keyword='netflix.com'),
+        'disney': make_batch_search(PLATFORM_CONFIG, get_imap_accounts,
+            _batch_search_mailbox, _fetch_and_extract, _get_spam_boxes, _targeted_body_extract,
+            from_keyword='disneyplus.com'),
+    })
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
