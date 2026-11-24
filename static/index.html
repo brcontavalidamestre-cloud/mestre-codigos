@@ -3111,78 +3111,29 @@
     }
 
     let _bdLast = null;
-    let _bdEmailFilter = '';
-    const _bdCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com';
-    if (_bdCentral) {
-      document.getElementById('btn-view-bandeja')?.remove();
-      document.getElementById('view-bandeja')?.remove();
-      if (location.hash === '#bandeja' || /(?:^|[&])(?:bandeja|caixa)=/.test(location.hash.slice(1))) {
-        history.replaceState(null, '', location.pathname + location.search);
-      }
-    }
-    function filterBandejaEmail(email) {
-      _bdEmailFilter = email || '';
-      if (_bdLast) renderBandeja(_bdLast);
-    }
-    if (_bdCentral && document.getElementById('view-bandeja')) {
-      const tray = document.getElementById('view-bandeja');
-      tray.classList.add('bd-red', 'central-inbox-modern');
-      const css = document.createElement('link');
-      css.rel = 'stylesheet'; css.href = '/static/central-inbox.css?v=1'; document.head.append(css);
-      const theme = document.createElement('link');
-      theme.rel = 'stylesheet'; theme.href = '/static/inbox-modern.css?v=2'; document.head.append(theme);
-      document.getElementById('bd-status').setAttribute('role', 'status');
-      const heading = tray.querySelector('.section-title');
-      const header = document.createElement('div'); header.className = 'bd-heading';
-      heading.before(header); header.append(heading);
-      const live = document.createElement('span'); live.className = 'bd-live'; live.textContent = 'AUTOATUALIZAÇÃO'; header.append(live);
-      document.getElementById('bd-status').parentElement.classList.add('bd-toolbar');
-      document.querySelector('#view-bandeja .section-subtitle').textContent = 'Mensagens dos e-mails vinculados, conforme os filtros ativos · últimos 15 minutos';
-      document.getElementById('bd-list').addEventListener('click', async event => {
-        const button = event.target.closest('button[data-bd-email]');
-        if (button) filterBandejaEmail(button.dataset.bdEmail);
-      });
-    }
 
     function renderBandeja(j) {
       const list = document.getElementById('bd-list');
-      const all = j.items || [];
-      if (_bdCentral && !all.length && (j.refreshing || j.errors?.length) && !j.inbox_issue) {
-        list.innerHTML = '<div class="bd-empty" role="status">' + (j.refreshing ? 'Consultando as caixas de e-mail…' : 'Não foi possível consultar todas as caixas. Aguarde a próxima atualização ou clique em Atualizar agora.') + '</div>';
-        return;
-      }
-      const items = _bdCentral && _bdEmailFilter ? all.filter(it => it.email === _bdEmailFilter) : all;
-      const filterBar = _bdCentral && _bdEmailFilter
-        ? '<div style="overflow-wrap:anywhere">Mensagens de <strong>' + _esc(_bdEmailFilter) + '</strong> · <button type="button" class="btn-primary" data-bd-email="">Ver todos</button></div>' : '';
+      const items = j.items || [];
       if (!items.length) {
-        list.innerHTML = filterBar + '<div style="padding:22px;text-align:center;color:var(--text-muted,#9ca3af);border:1px dashed #4c1d95;border-radius:12px">' + _esc(j.quarantine_message || (_bdCentral ? 'Nenhuma mensagem encontrada para os e-mails e filtros selecionados.' : 'Nenhum código recebido nos últimos 2 dias nos seus emails vinculados.')) + '</div>';
+        list.innerHTML = '<div style="padding:22px;text-align:center;color:var(--text-muted,#9ca3af);border:1px dashed #4c1d95;border-radius:12px">Nenhum código recebido nos últimos 2 dias nos seus emails vinculados.</div>';
         return;
       }
-      if (_bdCentral) {
-        const rows = items.map(it => `<tr><td>${_esc(it.email)}</td><td>${_esc(it.platform)}</td><td>${_esc(it.subject || 'Mensagem recebida')}</td><td>${_esc(_fmtDate(it.date_ts))}</td></tr>`).join('');
-        list.innerHTML = filterBar + '<h3>📨 E-mails recebidos em tempo real</h3><div class="bd-table-scroll" tabindex="0" role="region" aria-label="E-mails recebidos em tempo real"><table class="bd-table"><thead><tr><th scope="col">E-mail vinculado</th><th scope="col">Filtro</th><th scope="col">Mensagem</th><th scope="col">Data</th></tr></thead><tbody>' + rows + '</tbody></table></div>';
-        return;
-      }
-      const centralInbox = false;
-      const openMessages = new Set(Array.from(list.querySelectorAll('details[data-bd-message][open]'), el => el.dataset.bdMessage));
-      list.innerHTML = filterBar + items.map(it => {
-        const messageKey = JSON.stringify([it.email, it.subject, it.date_ts, it.platform]);
+      list.innerHTML = items.map(it => {
         const badge = it.code
           ? '<span style="background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-weight:800;letter-spacing:1px;padding:5px 12px;border-radius:8px;font-size:1rem">' + _esc(it.code) + '</span>'
           : '<span style="color:#9ca3af;font-size:.78rem">sem código</span>';
         const btns = [];
         if (it.code) btns.push('<button class="btn-primary" style="padding:5px 12px;font-size:.75rem" onclick="copyBandeja(\'' + _esc(it.code) + '\', this)">📋 Copiar</button>');
-        if (_bdCentral && it.email) btns.push('<button type="button" class="btn-primary" style="padding:5px 12px;font-size:.75rem" data-bd-email="' + _esc(it.email) + '">📥 Ver mensagens</button>');
-        if (!_bdCentral && it.link) btns.push('<a href="' + _esc(it.link) + '" target="_blank" rel="noopener" style="padding:5px 12px;font-size:.75rem;background:#059669;color:#fff;border-radius:8px;text-decoration:none">🔗 Abrir link</a>');
-        return (centralInbox ? '<div class="bd-record">' : '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(23,6,42,.85);border:1px solid #4c1d95;border-radius:12px">')
-          + (centralInbox ? '<div class="bd-record-mark">' : '<div style="min-width:110px">') + badge + '</div>'
-          + (centralInbox ? '<div class="bd-record-main">' : '<div style="flex:1;min-width:0">')
+        if (it.link) btns.push('<a href="' + _esc(it.link) + '" target="_blank" rel="noopener" style="padding:5px 12px;font-size:.75rem;background:#059669;color:#fff;border-radius:8px;text-decoration:none">🔗 Abrir link</a>');
+        return '<div style="display:flex;align-items:center;gap:12px;padding:12px 14px;background:rgba(23,6,42,.85);border:1px solid #4c1d95;border-radius:12px">'
+          + '<div style="min-width:110px">' + badge + '</div>'
+          + '<div style="flex:1;min-width:0">'
           +   '<div style="font-size:.82rem;color:#e9d5ff;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + _esc(it.subject) + '</div>'
           +   '<div style="font-size:.72rem;color:var(--text-muted,#9ca3af);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📧 ' + _esc(it.email) + ' · ' + _esc(it.from) + '</div>'
           +   '<div style="font-size:.7rem;color:var(--text-muted,#9ca3af)">' + _fmtDate(it.date_ts) + ' · ' + _esc(it.platform) + '</div>'
-          + (centralInbox && it.message_preview ? '<details data-bd-message="' + _esc(messageKey) + '"' + (openMessages.has(messageKey) ? ' open' : '') + ' style="margin-top:8px"><summary style="cursor:pointer;color:#c4b5fd">Ver mensagem</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere;margin-top:6px;font-size:.8rem">' + _esc(it.message_preview) + '</div></details>' : '')
           + '</div>'
-          + (centralInbox ? '<div class="bd-record-actions">' : '<div style="display:flex;gap:6px;flex-shrink:0">') + btns.join('') + '</div>'
+          + '<div style="display:flex;gap:6px;flex-shrink:0">' + btns.join('') + '</div>'
           + '</div>';
       }).join('');
     }
@@ -3194,12 +3145,9 @@
       const status = document.getElementById('bd-status');
       try {
         if (manual && status) status.textContent = 'Atualizando...';
-        const params = new URLSearchParams();
-        if (manual) params.set('fresh','1');
-        const r = await fetch('/api/live-inbox/messages' + (params.size ? '?' + params : ''));
+        const r = await fetch('/api/live-inbox/messages' + (manual ? '?fresh=1' : ''));
         const j = await r.json();
         if (!j.success) {
-          if (j.quarantined && list) list.textContent = j.message || 'Esse email está na lista que não pode receber códigos.';
           if (status) status.textContent = j.message || 'Erro ao carregar.';
           return;
         }
@@ -3215,7 +3163,7 @@
         }
         _bdLast = j;
         renderBandeja(j);
-        if (status) status.textContent = (j.quarantine_message ? j.quarantine_message + ' · ' : '') + (_bdCentral && j.errors?.length ? 'Uma ou mais caixas não responderam · ' : '') + (j.refreshing ? 'Consultando caixas…' : 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR')) + ' · automático a cada 12s';
+        if (status) status.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR') + ' · automático a cada 12s';
       } catch (e) {
         if (status) status.textContent = 'Erro de conexão. Tentando novamente...';
       } finally {
@@ -3235,7 +3183,6 @@
     }
 
     function switchView(name) {
-      if (_bdCentral && name === 'bandeja') return;
       document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
       document.getElementById('view-' + name).classList.add('active');
       document.querySelectorAll('.top-menu button').forEach(b => b.classList.remove('active'));
@@ -3764,6 +3711,7 @@ Senha: ${escapeHtml(o.delivered_password)}</textarea>
         .replace(/"/g, '&quot;');
     }
 
+    // Iniciação do hash (#loja abre direto a loja)
     if (window.location.hash === '#loja') switchView('loja');
 
     // KEEP-ALIVE: aquece a conexão IMAP em background ao carregar a página

@@ -1,7 +1,5 @@
 """Isolated bearer links for Netflix; enabled on the central host only."""
 import hashlib
-import tempfile
-from cryptography.fernet import Fernet, InvalidToken
 import html
 import quopri
 from contextvars import ContextVar
@@ -69,45 +67,6 @@ def register_netflix_links(app, data_dir, search, search_all=None):
     schema_lock = Lock()
     dummy_hash = generate_password_hash(secrets.token_urlsafe(24))
 
-    purge_lock = Lock()
-    purge_done = False
-
-    def purge_individual_links():
-        nonlocal purge_done
-        with purge_lock:
-            if purge_done:
-                return
-            for path, tables in ((db_path, ('links', 'restricted_status_links')),
-                                 (os.path.join(data_dir, 'inbox_shortcuts.sqlite3'), ('shortcuts',))):
-                if not os.path.isfile(path):
-                    continue
-                conn = sqlite3.connect(path, timeout=15)
-                try:
-                    with conn:
-                        conn.execute('PRAGMA secure_delete=ON')
-                        conn.execute('BEGIN IMMEDIATE')
-                        present = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-                        for table in tables:
-                            if table in present:
-                                conn.execute('DELETE FROM ' + table)
-                finally:
-                    conn.close()
-            purge_done = True
-
-    def status_cipher():
-        path=os.path.join(data_dir,'.restricted-status-copy.key')
-        try:
-            with open(path,'rb') as handle: return Fernet(handle.read())
-        except FileNotFoundError:
-            fd,tmp=tempfile.mkstemp(dir=data_dir)
-            try:
-                with os.fdopen(fd,'wb') as handle:
-                    handle.write(Fernet.generate_key());handle.flush();os.fsync(handle.fileno())
-                try: os.link(tmp,path)
-                except FileExistsError: pass
-            finally: os.unlink(tmp)
-        with open(path,'rb') as handle: return Fernet(handle.read())
-
     @contextmanager
     def db():
         nonlocal schema_ready
@@ -132,13 +91,6 @@ def register_netflix_links(app, data_dir, search, search_all=None):
                                 name TEXT NOT NULL, password_hash TEXT NOT NULL,
                                 created_at INTEGER NOT NULL, version INTEGER NOT NULL DEFAULT 1,
                                 active INTEGER NOT NULL DEFAULT 1)''')
-                            conn.execute('''CREATE TABLE IF NOT EXISTS restricted_email_directory (
-                                email TEXT PRIMARY KEY, account_id TEXT NOT NULL,
-                                FOREIGN KEY(account_id) REFERENCES netflix_admins(id))''')
-                            conn.execute('CREATE INDEX IF NOT EXISTS restricted_directory_owner ON restricted_email_directory(account_id)')
-                            conn.execute('''CREATE TABLE IF NOT EXISTS restricted_status_links (email TEXT PRIMARY KEY, owner TEXT NOT NULL, digest TEXT UNIQUE NOT NULL, expires INTEGER NOT NULL, version INTEGER NOT NULL, checked INTEGER NOT NULL DEFAULT 0)''')
-                            if 'sealed_token' not in {r['name'] for r in conn.execute('PRAGMA table_info(restricted_status_links)')}:
-                                conn.execute('ALTER TABLE restricted_status_links ADD COLUMN sealed_token BLOB')
                             conn.execute('CREATE INDEX IF NOT EXISTS links_owner_idx ON links(owner)')
                             conn.execute('''CREATE TABLE IF NOT EXISTS netflix_login_attempts (
                                 key TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires INTEGER NOT NULL)''')
@@ -153,21 +105,10 @@ def register_netflix_links(app, data_dir, search, search_all=None):
         # Do not use a caller-supplied X-Forwarded-Host for authorization.
         return request.host.lower().split(':', 1)[0] == HOST
 
-    @app.before_request
-    def retire_individual_links():
-        if host_allowed() and request.path in ('/admin', '/api/health', '/status-mensagem', '/netflix'):
-            purge_individual_links()
-
     @bp.before_request
     def isolated_host():
         if not host_allowed():
             abort(404)
-        if request.endpoint in {'netflix_links.client_page', 'netflix_links.client_access',
-                                'netflix_links.client_reset', 'netflix_links.client_code',
-                                'netflix_links.admin_links', 'netflix_links.admin_reset', 'netflix_links.admin_delete',
-                                'netflix_links.status_link_page', 'netflix_links.read_status_link',
-                                'netflix_links.create_status_link', 'netflix_links.manage_status_link'}:
-            return jsonify(success=False, message='Os links individuais da Central foram desativados.'), 410
 
     def admin_only(fn):
         @wraps(fn)
@@ -189,11 +130,6 @@ def register_netflix_links(app, data_dir, search, search_all=None):
     def actor():
         if principal():
             return {'principal': True, 'id': '', 'username': 'admin', 'name': 'Administrador principal'}
-        panel_actor = app.config.get('EMAIL_POOL_PANEL_LINK_ACTOR')
-        if panel_actor:
-            current = panel_actor()
-            if current:
-                return current
         account_id = session.get('netflix_admin_id')
         if not account_id or int(session.get('netflix_admin_expires') or 0) <= int(time.time()):
             return None
@@ -237,9 +173,7 @@ def register_netflix_links(app, data_dir, search, search_all=None):
         token = auth[7:] if auth.startswith('Bearer ') else ''
         if not re.fullmatch(r'[A-Za-z0-9_-]{43}', token):
             return None
-        row = conn.execute('SELECT * FROM links WHERE digest=?', (digest(token),)).fetchone()
-        access_guard = app.config.get('EMAIL_POOL_LINK_ACCESS')
-        return row if row and (not access_guard or access_guard(row)) else None
+        return conn.execute('SELECT * FROM links WHERE digest=?', (digest(token),)).fetchone()
 
     @bp.after_request
     def private_response(response):
@@ -256,6 +190,12 @@ def register_netflix_links(app, data_dir, search, search_all=None):
             response.headers['Cache-Control'] = 'no-store, max-age=0'
             response.headers.pop('ETag', None)
             response.headers.pop('Last-Modified', None)
+            if response.status_code == 200 and session.get('logged_in') and session.get('role') == 'admin' and session.get('username') == 'admin':
+                response.direct_passthrough = False
+                page = response.get_data(as_text=True)
+                entry = '<a id="nfl-nav-link" href="/admin/netflix-links" style="display:block;margin:16px 0;padding:22px;border:2px solid #ed4168;border-radius:16px;color:#ffd3de;background:#291327;text-decoration:none;font-size:1.15rem;font-weight:800;">🔗 Links Netflix — criar e gerenciar</a>'
+                page = page.replace('<div class="main">', '<div class="main">' + entry, 1)
+                response.set_data(page)
         return response
 
     @bp.get('/netflix-admin/login')
@@ -363,151 +303,6 @@ def register_netflix_links(app, data_dir, search, search_all=None):
             conn.execute('UPDATE netflix_admins SET version=version+1 WHERE id=?', (account_id,))
         return jsonify(success=True, message='Acesso atualizado. As sessões anteriores foram encerradas.')
 
-    @bp.get('/api/netflix-admin/email-directory')
-    @manager_only
-    def directory_list():
-        current = g.netflix_manager
-        with db() as conn:
-            if current['principal']:
-                rows = conn.execute('SELECT d.email,a.username,EXISTS(SELECT 1 FROM restricted_status_links l WHERE l.email=d.email AND l.owner=d.account_id) AS has_status_link FROM restricted_email_directory d JOIN netflix_admins a ON a.id=d.account_id ORDER BY d.email').fetchall()
-                accounts = conn.execute('SELECT username FROM netflix_admins ORDER BY username').fetchall()
-            else:
-                rows = conn.execute('SELECT d.email,a.username,EXISTS(SELECT 1 FROM restricted_status_links l WHERE l.email=d.email AND l.owner=d.account_id) AS has_status_link FROM restricted_email_directory d JOIN netflix_admins a ON a.id=d.account_id WHERE d.account_id=? AND a.active=1 ORDER BY d.email', (current['id'],)).fetchall()
-                accounts = []
-        return jsonify(success=True, principal=current['principal'], items=[dict(r) for r in rows], accounts=[r['username'] for r in accounts]), 200, {'Cache-Control':'no-store'}
-
-    @bp.post('/api/netflix-admin/email-directory')
-    @admin_only
-    def directory_change():
-        data = request.get_json(silent=True)
-        if not isinstance(data, dict):
-            return jsonify(success=False,message='Dados inválidos.'),400
-        username = data.get('username')
-        raw = data.get('emails')
-        action = data.get('action')
-        if not isinstance(username,str) or not isinstance(raw,str) or len(raw)>55000 or action not in ('assign','remove'):
-            return jsonify(success=False,message='Dados inválidos.'),400
-        emails = sorted(set(re.split(r'[\s,;]+',raw.strip().lower())))
-        if not 1<=len(emails)<=200 or any(len(e)>254 or not re.fullmatch(r"[a-z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+",e) for e in emails):
-            return jsonify(success=False,message='Informe de 1 a 200 emails válidos.'),400
-        with db() as conn:
-            conn.execute('BEGIN IMMEDIATE')
-            account = conn.execute('SELECT id FROM netflix_admins WHERE username=?',(username,)).fetchone()
-            if not account:
-                return jsonify(success=False,message='Acesso restrito não encontrado.'),404
-            owner = account['id']
-            if action=='assign':
-                conflicts=[]
-                for addr in emails:
-                    existing=conn.execute('SELECT a.username,d.account_id FROM restricted_email_directory d JOIN netflix_admins a ON a.id=d.account_id WHERE d.email=?',(addr,)).fetchone()
-                    if existing and existing['account_id']!=owner:
-                        conflicts.append(addr+' — '+existing['username'])
-                if conflicts:
-                    return jsonify(success=False,message='Remova os vínculos anteriores antes de transferir:\n'+'\n'.join(conflicts)),409
-                conn.executemany('INSERT OR IGNORE INTO restricted_email_directory(email,account_id) VALUES(?,?)',[(e,owner) for e in emails])
-            else:
-                conn.executemany('DELETE FROM restricted_email_directory WHERE email=? AND account_id=?',[(e,owner) for e in emails])
-                conn.executemany('DELETE FROM restricted_status_links WHERE email=? AND owner=?',[(e,owner) for e in emails])
-        return jsonify(success=True)
-
-    @bp.post('/api/netflix-admin/status-link')
-    @manager_only
-    def create_status_link():
-        current = g.netflix_manager
-        if current['principal'] or current.get('kind') == 'panel':
-            return jsonify(message='Use o acesso restrito.'),403
-        data = request.get_json(silent=True) or {}
-        addr = data.get('email') if isinstance(data,dict) else None
-        if not isinstance(addr,str) or len(addr)>254:
-            return jsonify(message='Informe um email válido.'),400
-        addr = addr.strip().lower()
-        blocked = app.config.get('RESTRICTED_STATUS_BLOCKED')
-        if not blocked:
-            return jsonify(message='Serviço indisponível.'),503
-        token = secrets.token_urlsafe(32)
-        with db() as conn:
-            conn.execute('BEGIN IMMEDIATE')
-            row = conn.execute('SELECT a.version FROM restricted_email_directory d JOIN netflix_admins a ON a.id=d.account_id WHERE d.email=? AND d.account_id=? AND a.active=1',(addr,current['id'])).fetchone()
-            if not row or row['version']!=session.get('netflix_admin_version') or blocked(addr):
-                return jsonify(message='Email não autorizado ou em quarentena.'),403
-            inserted=conn.execute('INSERT OR IGNORE INTO restricted_status_links(email,owner,digest,expires,version,checked,sealed_token) VALUES (?,?,?,?,?,0,?)',(addr,current['id'],digest(token),0,row['version'],status_cipher().encrypt(token.encode()))).rowcount
-            if not inserted:
-                return jsonify(message='Já existe um link. Use Redefinir ou Apagar na sua lista.'),409
-        return jsonify(success=True,url='https://'+HOST+'/status-mensagem#'+token)
-
-    @bp.post('/api/netflix-admin/status-link/manage')
-    @manager_only
-    def manage_status_link():
-        current = g.netflix_manager
-        if current.get('kind') == 'panel':
-            return jsonify(message='Sem permissão para gerenciar este link.'),403
-        data=request.get_json(silent=True)
-        if not isinstance(data,dict) or data.get('action') not in ('copy','reset','delete') or not isinstance(data.get('email'),str) or len(data['email'])>254:
-            return jsonify(message='Dados inválidos.'),400
-        addr=data['email'].strip().lower()
-        reset=data['action']=='reset'
-        token=secrets.token_urlsafe(32) if reset else None
-        with db() as conn:
-            conn.execute('BEGIN IMMEDIATE')
-            row=conn.execute('SELECT l.owner,l.digest,l.sealed_token,l.version AS link_version,a.version,a.active FROM restricted_status_links l JOIN restricted_email_directory d ON d.email=l.email AND d.account_id=l.owner JOIN netflix_admins a ON a.id=l.owner WHERE l.email=? AND (?=1 OR (l.owner=? AND a.active=1 AND a.version=?))',(addr,int(current['principal']),current['id'],session.get('netflix_admin_version'))).fetchone()
-            if not row: return jsonify(message='Link não encontrado.'),404
-            if data['action']=='copy':
-                blocked=app.config.get('RESTRICTED_STATUS_BLOCKED')
-                if not row['active'] or row['link_version']!=row['version'] or not blocked or blocked(addr):
-                    return jsonify(message='Link indisponível.'),403
-                try:
-                    original=status_cipher().decrypt(row['sealed_token']).decode() if row['sealed_token'] else ''
-                except (OSError,ValueError,InvalidToken):
-                    original=''
-                if not original or digest(original)!=row['digest']:
-                    return jsonify(message='A URL deste link antigo não pode ser recuperada. Use o link que já foi compartilhado ou redefina para criar um novo.'),409
-                return jsonify(success=True,url='https://'+HOST+'/status-mensagem#'+original)
-            if reset:
-                blocked=app.config.get('RESTRICTED_STATUS_BLOCKED')
-                if not row['active'] or not blocked or blocked(addr):
-                    return jsonify(message='Acesso indisponível ou email em quarentena.'),403
-                conn.execute('UPDATE restricted_status_links SET digest=?,expires=0,version=?,checked=0,sealed_token=? WHERE email=?',(digest(token),row['version'],status_cipher().encrypt(token.encode()),addr))
-            else:
-                conn.execute('DELETE FROM restricted_status_links WHERE email=?',(addr,))
-        return jsonify(success=True,**({'url':'https://'+HOST+'/status-mensagem#'+token} if reset else {}))
-
-    @bp.get('/status-mensagem')
-    def status_link_page():
-        return send_from_directory(app.static_folder,'restricted-status.html')
-
-    @bp.route('/api/message-status', methods=['GET','POST'])
-    def read_status_link():
-        if request.headers.get('Origin') not in (None,'https://'+HOST): abort(403)
-        auth = request.headers.get('Authorization','')
-        if not re.fullmatch(r'Bearer [A-Za-z0-9_-]{43}',auth): abort(404)
-        blocked = app.config.get('RESTRICTED_STATUS_BLOCKED')
-        lookup = app.config.get('RESTRICTED_STATUS_LOOKUP')
-        if not blocked or not lookup:
-            return jsonify(status='unavailable',received_at=None),503
-        key=digest(auth[7:])
-        def valid(conn):
-            row=conn.execute('SELECT l.email,l.checked FROM restricted_status_links l JOIN restricted_email_directory d ON d.email=l.email AND d.account_id=l.owner JOIN netflix_admins a ON a.id=l.owner AND a.version=l.version WHERE l.digest=? AND a.active=1',(key,)).fetchone()
-            return row if row and not blocked(row['email']) else None
-        if request.method == 'GET':
-            with db() as conn:
-                row=valid(conn)
-            if not row: return jsonify(status='blocked'),404
-            return jsonify(email=row['email'])
-        with db() as conn:
-            conn.execute('BEGIN IMMEDIATE')
-            row=valid(conn)
-            if not row: return jsonify(status='blocked',received_at=None),404
-            now=int(time.time())
-            remaining=20-(now-row['checked'])
-            if remaining>0: return jsonify(status='retry',received_at=None),429,{'Retry-After':str(min(20,remaining))}
-            conn.execute('UPDATE restricted_status_links SET checked=? WHERE digest=?',(now,key))
-        result=lookup(row['email'])
-        with db() as conn:
-            if not valid(conn): return jsonify(status='blocked',received_at=None),404
-        from restricted_message_status import STATUS_FILTERS
-        filters={key:result.get('filters',{})[key] for key in STATUS_FILTERS if key in result.get('filters',{})}
-        return jsonify(status=result['status'],received_at=result['received_at'], **({'filters':filters} if filters else {}))
-
     @bp.get('/admin/netflix-links')
     @manager_only
     def admin_panel():
@@ -519,12 +314,9 @@ def register_netflix_links(app, data_dir, search, search_all=None):
         if request.method == 'GET':
             with db() as conn:
                 if g.netflix_manager['principal']:
-                    rows = conn.execute("SELECT l.*,CASE WHEN l.owner LIKE 'panel:%' THEN substr(l.owner,7) ELSE coalesce(a.username,'admin') END AS manager FROM links l LEFT JOIN netflix_admins a ON a.id=l.owner ORDER BY l.updated_at DESC,l.email").fetchall()
+                    rows = conn.execute("SELECT l.*,coalesce(a.username,'admin') AS manager FROM links l LEFT JOIN netflix_admins a ON a.id=l.owner ORDER BY l.updated_at DESC,l.email").fetchall()
                 else:
                     rows = conn.execute('SELECT l.*,? AS manager FROM links l WHERE owner=? ORDER BY updated_at DESC,email', (g.netflix_manager['username'], g.netflix_manager['id'])).fetchall()
-            visible = app.config.get('EMAIL_POOL_VISIBLE_LINK')
-            if visible:
-                rows = [row for row in rows if visible(row['email'], g.netflix_manager)]
             return jsonify(success=True, items=[row_payload(r) for r in rows])
         data = request.get_json(silent=True) or {}
         if not isinstance(data, dict):
@@ -564,10 +356,8 @@ def register_netflix_links(app, data_dir, search, search_all=None):
                     result['created'] = False
                 else:
                     token = secrets.token_urlsafe(32)
-                    owner_picker = app.config.get('EMAIL_POOL_LINK_OWNER')
-                    owner = owner_picker(email, g.netflix_manager) if owner_picker else g.netflix_manager['id']
                     conn.execute('INSERT INTO links(email,token,digest,created_at,updated_at,owner) VALUES(?,?,?,?,?,?)',
-                                 (email, token, digest(token), now, now, owner))
+                                 (email, token, digest(token), now, now, g.netflix_manager['id']))
                     row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()
                     result = row_payload(row)
                     result['created'] = True
@@ -587,11 +377,8 @@ def register_netflix_links(app, data_dir, search, search_all=None):
             if not owns(current):
                 return jsonify(success=False, message='Email não cadastrado neste acesso.'), 404
             token = secrets.token_urlsafe(32)
-            owner_picker = app.config.get('EMAIL_POOL_LINK_OWNER')
-            reserved = app.config.get('EMAIL_POOL_RESERVED_EMAIL')
-            owner = owner_picker(email, g.netflix_manager) if owner_picker and reserved and reserved(email) else current['owner']
-            result = conn.execute('UPDATE links SET token=?,digest=?,updated_at=?,last_query=0,owner=? WHERE email=?',
-                                  (token, digest(token), int(time.time()), owner, email))
+            result = conn.execute('UPDATE links SET token=?,digest=?,updated_at=?,last_query=0 WHERE email=?',
+                                  (token, digest(token), int(time.time()), email))
             if not result.rowcount:
                 return jsonify(success=False, message='Email não cadastrado.'), 404
             row = conn.execute('SELECT * FROM links WHERE email=?', (email,)).fetchone()

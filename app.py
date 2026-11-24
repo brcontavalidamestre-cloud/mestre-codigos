@@ -40,7 +40,6 @@ AUTO_LOGIN_TTL = int(os.environ.get("AUTO_LOGIN_TTL", "600"))  # segundos
 def _set_pending_reset_link(username, link):
     _pending_reset_links[username] = {
         "link": link,
-        "email": str((request.get_json(silent=True) or {}).get("email") or "").strip().lower() if has_request_context() else "",
         "expires_at": time.time() + _PENDING_RESET_TTL
     }
 
@@ -179,10 +178,8 @@ def save_users(users):
                 json.dump(users, f, indent=2)
             os.replace(tmp_path, USERS_FILE)
         print(f"[users] salvo em {USERS_FILE} ({len(users)} usuarios)")
-        return True
     except Exception as e:
         print(f"[users] ERRO ao salvar: {e}")
-        return False
 
 # ─── CONFIGURACOES IMAP ────────────────────────────────────────────────────────
 IMAP_SERVER = os.environ.get("IMAP_SERVER", "imap.hostinger.com")
@@ -600,11 +597,6 @@ def _admin_live_inbox_session_key():
 
 
 def _admin_live_inbox_requires_password():
-    if (request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
-            and session.get('logged_in') and session.get('role') == 'admin'):
-        username = str(session.get('username') or '').strip().lower()
-        if username and (load_users().get(username) or {}).get('role') == 'admin':
-            return False
     return is_master_host() and bool(str(ADMIN_LIVE_INBOX_MASTER_PASSWORD or '').strip())
 
 
@@ -672,12 +664,12 @@ ADMIN_LIVE_INBOX_FILTER_GROUPS = {
 }
 
 
-def _admin_live_inbox_filters_file(admin_username=None):
+def _admin_live_inbox_filters_file():
     try:
         host = _normalize_domain(request.host or "")
     except Exception:
         host = "default"
-    current_admin = str(admin_username or session.get("username") or "").strip().lower() or "default"
+    current_admin = str(session.get("username") or "").strip().lower() or "default"
     if "mestre-codigos-production" in host:
         suffix = "mestre"
     elif "jmp" in host:
@@ -703,8 +695,8 @@ def _normalize_admin_live_inbox_filters(filters_list):
     return out
 
 
-def load_admin_live_inbox_filters(admin_username=None):
-    path = _admin_live_inbox_filters_file(admin_username)
+def load_admin_live_inbox_filters():
+    path = _admin_live_inbox_filters_file()
     if not os.path.exists(path):
         return [item["key"] for item in ADMIN_LIVE_INBOX_FILTER_OPTIONS]
     data = _read_json_file(path, [])
@@ -743,7 +735,7 @@ def _admin_live_inbox_visible_user_entries(selected_user=None):
                 continue
             email_addr = str(sub.get("email") or "").strip().lower()
             assigned_user = str(sub.get("assigned_user") or "").strip().lower()
-            if not email_addr or not assigned_user or sub.get('self_verified_binding'):
+            if not email_addr or not assigned_user:
                 continue
             if selected_user and assigned_user != selected_user:
                 continue
@@ -839,20 +831,6 @@ def _admin_inbox_strip_html(text):
     return text
 
 
-def _admin_inbox_message_preview(body, code=None):
-    from html import unescape
-    text = re.sub(r"(?is)<(script|style|head)\b[^>]*>.*?</\1\s*>", "", str(body or ""))
-    text = re.sub(r"(?i)<br\b[^>]*>|</(?:div|p|li|tr|h[1-6])\s*>", "\n", text)
-    text = unescape(re.sub(r"(?s)<[^>]+>", " ", text))
-    text = re.sub(r"(?i)(?:https?://|www\.)\S+", "[link ocultado]", text)
-    if code:
-        text = re.sub(r"(?<!\w)" + re.escape(str(code).strip()) + r"(?!\w)", "[código ocultado]", text, flags=re.I)
-    text = re.sub(r"(?<!\w)\d(?:[ -]?\d){3,9}(?!\w)", "[número ocultado]", text)
-    lines = [re.sub(r"[^\S\n]+", " ", line).strip() for line in text.splitlines()]
-    text = "\n".join(line for line in lines if line)
-    return text[:3000] + ("…" if len(text) > 3000 else "")
-
-
 def _admin_inbox_date_ts(msg):
     try:
         from email.utils import parsedate_to_datetime
@@ -914,17 +892,8 @@ def _admin_live_inbox_match_platform(from_value, subject, body, selected_platfor
     return None
 
 
-def _live_inbox_recent_ids(mail, cutoff_ts, limit):
-    since_date = time.strftime("%d-%b-%Y", time.gmtime(max(cutoff_ts - 86400, 0)))
-    status, messages = mail.search(None, "SINCE", since_date)
-    if status != "OK" or not messages or not messages[0]:
-        status, messages = mail.search(None, "ALL")
-    return messages[0].split()[-limit:] if status == "OK" and messages and messages[0] else []
-
-
 def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=None):
-    visible_entries = [entry for entry in _admin_live_inbox_visible_user_entries(selected_user=selected_user)
-                       if not email_quarantine.is_blocked(entry.get('email'))]
+    visible_entries = _admin_live_inbox_visible_user_entries(selected_user=selected_user)
     allowed = sorted({str(item.get('email') or '').strip().lower() for item in visible_entries if str(item.get('email') or '').strip()})
     if not allowed:
         return [], []
@@ -965,7 +934,13 @@ def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=N
                     st_sel, _ = mail.select(mailbox, readonly=True)
                     if st_sel != "OK":
                         continue
-                    recent_ids = _live_inbox_recent_ids(mail, cutoff_ts, max_per_box)
+                    since_date = time.strftime("%d-%b-%Y", time.gmtime(max(cutoff_ts - 86400, 0)))
+                    st_search, msgs = mail.search(None, "SINCE", since_date)
+                    if st_search != "OK" or not msgs or not msgs[0]:
+                        st_search, msgs = mail.search(None, "ALL")
+                    if st_search != "OK" or not msgs or not msgs[0]:
+                        continue
+                    recent_ids = msgs[0].split()[-max_per_box:]
                     for eid in reversed(recent_ids):
                         unique_key = (account_cfg.get("name"), mailbox, bytes(eid))
                         if unique_key in seen:
@@ -1014,10 +989,6 @@ def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=N
                         msg = email.message_from_bytes(raw_msg)
                         body = get_html_body(msg) or ""
                         snippet = _admin_inbox_strip_html(body)[:280]
-                        guard = app.config.get("EMAIL_POOL_MESSAGE_ALLOWED")
-                        if guard and not guard(msg, body):
-                            continue
-                        recipients = sorted(delegated_recipients(msg, body))
                         matched_platform = _admin_live_inbox_match_platform(from_value, subject, body, expanded_filters)
                         if not matched_platform:
                             continue
@@ -1059,9 +1030,6 @@ def _fetch_admin_live_inbox_items(max_per_box=12, max_items=120, selected_user=N
                             "date": msg.get("Date", "") or "",
                             "date_ts": msg_ts,
                             "snippet": snippet,
-                            **({"message_preview": _admin_inbox_message_preview(body, code)}
-                               if request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
-                               and session.get('role') == 'admin' and session.get('username') == 'admin' else {}),
                             "code": code,
                             "link": link,
                             "mailbox": mailbox,
@@ -2458,23 +2426,9 @@ def extract_link(html_body, platform):
         return domain_links[0]
     return None
 def email_matches_user(msg, html_body, user_email):
-    # A delegated search can scan messages for other recipients. Discard
-    # nonmatching messages before registering recipient permission checks.
-    exact_target = strict_email_context.get()
-    if exact_target is not None and not exact_email_match(msg, html_body, exact_target):
-        return False
-    guard = app.config.get("EMAIL_POOL_MESSAGE_ALLOWED")
-    if guard and not guard(msg, html_body):
-        return False
-    if email_quarantine.is_blocked(user_email):
-        return False
-    # If a base email allows aliases, still suppress a quarantined specific alias.
-    if has_request_context() and request.host.lower().split(':', 1)[0] == QUARANTINE_HOST:
-        for blocked in email_quarantine.emails():
-            if exact_email_match(msg, html_body, blocked):
-                return False
-    if exact_target is not None:
-        return True
+    # Exact recipient matching only for the new isolated bearer-link flow.
+    if strict_email_context.get() is not None:
+        return exact_email_match(msg, html_body, strict_email_context.get())
     user_lower = user_email.lower()
     user_lower = user_lower.strip()
 
@@ -3730,8 +3684,6 @@ def _search_kuku_webhook(user_email, platform):
 
 
 def search_code_unified(user_email, platform_list):
-    if email_quarantine.is_blocked(user_email):
-        return None, None, None, QUARANTINE_MESSAGE
     """
     Busca múltiplas plataformas do mesmo remetente em UMA ÚNICA passagem IMAP.
     Agora consulta também uma segunda caixa IMAP, se configurada.
@@ -3933,10 +3885,6 @@ def _admin_can_see_assignment(assigned_user):
     assigned_user = str(assigned_user or "").strip().lower()
     current_admin = str(session.get("username") or "").strip().lower()
     if not assigned_user:
-        # Delegated, unlinked emails remain stored. Never expose those rows
-        # (including credentials) to unrelated subadmins through legacy lists.
-        if request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
-            return current_admin == 'admin'
         return True
     if not current_admin:
         return False
@@ -4608,12 +4556,6 @@ def instaddr_admin_sync_page():
         return redirect("/")
     return send_from_directory("static", "instaddr_admin_sync.html")
 
-@app.before_request
-def _disable_retired_admin_extra_session():
-    if session.get('role') == 'admin_extra':
-        session.clear()
-
-
 @app.route("/")
 def index():
     # LOJA SEPARADA e InstAddr público: acesso direto
@@ -4691,7 +4633,7 @@ def api_login():
         except Exception as e:
             print(f"[login license sync] erro: {e}")
 
-    if not user or user.get('role') == 'admin_extra' or not check_password_hash(user["password"], password):
+    if not user or not check_password_hash(user["password"], password):
         return jsonify({"success": False, "message": "Usuario ou senha incorretos."}), 401
     session.permanent = True
     session["logged_in"] = True
@@ -4719,7 +4661,7 @@ def auto_login_user(username):
         return redirect('/login')
     users = load_users()
     user = users.get(username)
-    if not user or user.get('role') == 'admin_extra':
+    if not user:
         return redirect('/login')
     _set_session_for_user(username, user)
     return redirect('/')
@@ -4988,140 +4930,6 @@ def api_check_reset_pin():
         "pending": bool(_peek_pending_reset_link(username))
     })
 
-@app.post('/api/admin/live-inbox/client')
-@admin_required
-def create_inbox_client():
-    host = 'consulta-codigos-jr7z.onrender.com'
-    if request.host.lower().split(':', 1)[0] != host or session.get('username') != 'admin' or request.headers.get('Origin') not in (None, 'https://' + host):
-        return jsonify(success=False, message='Ação exclusiva do administrador principal da Central.'), 403
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return jsonify(success=False, message='Dados inválidos.'), 400
-    username, name, address = (str(data.get(k) or '').strip() for k in ('username', 'name', 'email'))
-    username, address = username.lower(), address.lower()
-    password = data.get('password')
-    create_only = data.get('create_without_binding') is True and not address
-    if not re.fullmatch(r'[a-z0-9_.]{3,30}', username) or not 1 <= len(name) <= 100 or not isinstance(password, str) or not 12 <= len(password) <= 128 or (not create_only and not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', address)) or len(address) > 254:
-        return jsonify(success=False, message='Confira nome, usuário, e-mail e a senha (12 a 128 caracteres).'), 400
-    password_hash = generate_password_hash(password)
-    with email_permission_store.serialized():
-        users = load_users()
-        if (users.get('admin') or {}).get('role') != 'admin':
-            return jsonify(success=False, message='Sessão administrativa inválida.'), 403
-        permission = email_permission_store.permissions().get(address) or {}
-        owner = permission.get('admin_user')
-        if email_quarantine.is_blocked(address):
-            return jsonify(success=False, message='O e-mail está em quarentena. Nenhum registro foi alterado.'), 409
-        authorized = bool(owner and (users.get(owner) or {}).get('role') == 'admin')
-        if not authorized and data.get('create_without_binding') is not True:
-            return jsonify(success=False, can_create_without_binding=True,
-                           message='Este e-mail ainda não está autorizado. Você pode criar a conta sem liberar a leitura das mensagens.'), 409
-        subs = load_subscriptions()
-        matches = [r for r in subs if isinstance(r, dict) and str(r.get('email') or '').strip().lower() == address]
-        if username in users:
-            if users[username].get('role', 'client') == 'client':
-                return jsonify(success=False, existing_client=username,
-                               message='Usuário já cadastrado. Use o cadastro existente na seção Adicionar e-mails à bandeja do cliente.'), 409
-            return jsonify(success=False, message='Este usuário já está em uso e não é uma conta de cliente.'), 409
-        if len(matches) > 1 or any(r.get('assigned_user') for r in matches):
-            return jsonify(success=False, message='E-mail já vinculado ou duplicado. Nenhum registro foi alterado.'), 409
-        if not authorized:
-            responsible = str(data.get('responsible') or 'admin').strip().lower()
-            if (users.get(responsible) or {}).get('role') != 'admin':
-                return jsonify(success=False, message='Selecione um administrador responsável válido.'), 400
-            users[username] = dict(name=name, role='client', password=password_hash, created_by=responsible, inbox_created=True)
-            if not save_users(users):
-                return jsonify(success=False, message='Não foi possível salvar o cliente.'), 503
-            email_permission_store.audit('admin', 'create_inbox_client_without_binding', {'email':address, 'client':username})
-            return jsonify(success=True, linked=False, message='Cliente criado. A bandeja fica vazia até o e-mail ser autorizado e vinculado.', username=username), 201
-        now = int(time.time())
-        row = matches[0] if matches else dict(email=address, created_at=now, start_at=now, expires_at=now+3650*86400, dur_days=3650, plataforma='Caixa de entrada', valor=0)
-        if not matches:
-            subs.append(row)
-        row.update(assigned_user=username, assigned_user_name=name, show_in_panel=False, verified_inbox_only=True)
-        users[username] = dict(name=name, role='client', password=password_hash, created_by=owner, inbox_created=True)
-        if not save_users(users):
-            return jsonify(success=False, message='Não foi possível salvar o cliente.'), 503
-        if not save_subscriptions(subs):
-            users.pop(username)
-            rolled_back = save_users(users)
-            return jsonify(success=False, message='Não foi possível salvar o vínculo.' if rolled_back else 'O cliente foi criado sem vínculo; confira o cadastro antes de tentar novamente.'), 503
-        email_permission_store.audit('admin', 'create_inbox_client', {'email':address, 'client':username})
-    return jsonify(success=True, message='Cliente criado e e-mail vinculado à bandeja.', username=username), 201
-
-
-@app.route('/api/admin/live-inbox/client-emails', methods=['GET', 'POST'])
-@admin_required
-def inbox_client_emails():
-    host = 'consulta-codigos-jr7z.onrender.com'
-    if (request.host.lower().split(':', 1)[0] != host or session.get('username') != 'admin'
-            or request.headers.get('Origin') not in (None, 'https://' + host)):
-        return jsonify(success=False, message='Ação exclusiva do administrador principal da Central.'), 403
-    users = load_users()
-    if (users.get('admin') or {}).get('role') != 'admin':
-        return jsonify(success=False, message='Sessão administrativa inválida.'), 403
-    if request.method == 'GET':
-        return jsonify(success=True, clients=[dict(username=u, name=r.get('name') or u) for u,r in sorted(users.items())
-                       if r.get('role', 'client') == 'client'],
-                       admins=[dict(username=u, name=r.get('name') or u) for u,r in sorted(users.items())
-                               if r.get('role') == 'admin' and u != 'admin']), 200, {'Cache-Control':'no-store'}
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict) or not isinstance(data.get('emails'), str) or len(data['emails']) > 60000:
-        return jsonify(success=False, message='Informe os e-mails, um por linha.'), 400
-    target = str(data.get('username') or '').strip().lower()
-    emails = list(dict.fromkeys(line.strip().lower() for line in data['emails'].splitlines() if line.strip()))
-    if not 1 <= len(emails) <= 200:
-        return jsonify(success=False, message='Informe de 1 a 200 e-mails.'), 400
-    results, added, retry = [], [], []
-    with email_permission_store.serialized():
-        users = load_users()
-        account = users.get(target) or {}
-        if (users.get('admin') or {}).get('role') != 'admin' or not account or account.get('role', 'client') != 'client':
-            return jsonify(success=False, message='Selecione uma conta de cliente cadastrada na Central.'), 403
-        owner = account.get('created_by') or 'admin'
-        permissions = email_permission_store.permissions()
-        blocked = email_quarantine.emails()
-        subs = load_subscriptions()
-        by_email = {}
-        for row in subs:
-            if isinstance(row, dict):
-                by_email.setdefault(str(row.get('email') or '').strip().lower(), []).append(row)
-        now = int(time.time())
-        for address in emails:
-            rows = by_email.get(address, [])
-            if len(address) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', address):
-                status = 'Endereço inválido'
-            elif email_quarantine.matches(address, blocked):
-                status = 'Em quarentena'
-            elif len(rows) == 1 and rows[0].get('assigned_user') == target:
-                results.append(dict(email=address, status='Já vinculado a este cliente'))
-                continue
-            elif len(rows) > 1 or any(row.get('assigned_user') for row in rows):
-                status = 'Já vinculado ou duplicado'
-            elif permissions.get(address, {}).get('admin_user') != owner or (users.get(owner) or {}).get('role') != 'admin':
-                status = 'Sem autorização na lista do responsável'
-            else:
-                row = rows[0] if rows else dict(email=address, created_at=now, start_at=now,
-                           expires_at=now+3650*86400, dur_days=3650, plataforma='Caixa de entrada', valor=0)
-                if not rows:
-                    subs.append(row)
-                row.update(assigned_user=target, assigned_user_name=account.get('name') or target,
-                           show_in_panel=False, verified_inbox_only=True)
-                results.append(dict(email=address, status='Vinculado à bandeja'))
-                added.append(address)
-                continue
-            retry.append(address)
-            results.append(dict(email=address, status=status))
-        if added and not save_subscriptions(subs):
-            return jsonify(success=False, message='Não foi possível salvar os vínculos.'), 503
-        if added:
-            email_permission_store.audit('admin', 'add_inbox_client_emails', {'client':target, 'emails':added})
-    invalidate = app.config.get('EMAIL_POOL_BINDINGS_CHANGED')
-    if added and invalidate:
-        invalidate({target})
-    return jsonify(success=True, added=added, results=results, retry=retry)
-
-
 @app.route("/api/admin/live-inbox/access-status", methods=["GET"])
 @admin_required
 def api_admin_live_inbox_access_status():
@@ -5271,49 +5079,15 @@ def _extract_msg_text(msg):
     return "\n".join(texts)
 
 
-def _central_inbox_route_recipients(msg, found, allowed, mailbox_user):
-    # Only ignore the configured collection address when it is a delivery
-    # hop, not when it is itself a primary recipient of the message.
-    from email.utils import getaddresses
-    address = str(mailbox_user or '').strip().lower()
-    direct = {a.strip().lower() for _, a in getaddresses([
-        str(v) for name in ('To', 'Cc', 'Bcc', 'Resent-To') for v in msg.get_all(name, [])
-    ]) if a}
-    found = set(found)
-    if address and address not in direct and direct and direct.issubset(allowed):
-        found.discard(address)
-    return found
-
-
-_CENTRAL_INBOX_WINDOW_SECONDS = 15 * 60
-
-
-def _connect_extra_inbox(account):
-    import ssl
-    conn = imaplib.IMAP4_SSL(account['server'], int(account['port']), timeout=8,
-                            ssl_context=ssl.create_default_context())
-    try:
-        conn.login(account['user'], account['password'])
-        return conn
-    except Exception:
-        try:
-            conn.shutdown()
-        except Exception:
-            pass
-        raise
-
-
-def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48, central=False, *, extra_address=None):
+def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookback_hours=48):
     """Varredura leve nas caixas IMAP procurando emails endereçados aos emails
     vinculados do usuário (INBOX + Spam), extraindo código/link."""
-    emails = [email for email in _user_live_inbox_emails(username) if not email_quarantine.is_blocked(email)]
-    if central and extra_address is not None:
-        emails = [extra_address] if extra_address in emails else []
+    emails = _user_live_inbox_emails(username)
     if not emails:
         return [], []
     # REGRA: bandeja so mostra emails que batem com os FILTROS cadastrados
     # (mesma lista de plataformas ativadas no painel admin).
-    selected_filters = load_admin_live_inbox_filters('admin' if central else None)
+    selected_filters = load_admin_live_inbox_filters()
     expanded_filters = _expand_admin_live_inbox_filters(selected_filters)
     if not expanded_filters:
         return [], []
@@ -5331,14 +5105,12 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
     errors = []
     seen = set()
     accounts = get_imap_accounts()
-    now = time.time()
-    cutoff = now - (_CENTRAL_INBOX_WINDOW_SECONDS if central else lookback_hours * 3600)
-    since_date = time.strftime("%d-%b-%Y", time.gmtime(cutoff))
+    since_date = time.strftime("%d-%b-%Y", time.gmtime(time.time() - lookback_hours * 3600))
 
     for account_cfg in accounts:
         mail = None
         try:
-            mail = _connect_extra_inbox(account_cfg) if extra_address is not None else connect_imap(account_cfg)
+            mail = connect_imap(account_cfg)
             spam_boxes = _get_spam_boxes(mail, account_cfg)
             boxes = ["INBOX"] + [b for b in spam_boxes if b and b.upper() != "INBOX"]
             for mailbox in boxes:
@@ -5346,13 +5118,10 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                     st_sel, _ = mail.select(mailbox, readonly=True)
                     if st_sel != "OK":
                         continue
-                    if central:
-                        recent_ids = _live_inbox_recent_ids(mail, cutoff, 12)
-                    else:
-                        st_search, msgs = mail.search(None, "SINCE", since_date)
-                        if st_search != "OK" or not msgs or not msgs[0]:
-                            continue
-                        recent_ids = msgs[0].split()[-80:]
+                    st_search, msgs = mail.search(None, "SINCE", since_date)
+                    if st_search != "OK" or not msgs or not msgs[0]:
+                        continue
+                    recent_ids = msgs[0].split()[-80:]
                     for eid in reversed(recent_ids):
                         key = (account_cfg.get("name"), mailbox, bytes(eid))
                         if key in seen:
@@ -5369,13 +5138,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         if not raw_h:
                             continue
                         head = email.message_from_bytes(bytes(raw_h))
-                        if central and not cutoff <= _admin_inbox_date_ts(head) <= now:
-                            continue
                         recipients = _admin_inbox_extract_recipients(head)
-                        if central:
-                            recipients = sorted(_central_inbox_route_recipients(head, recipients, allowed_set, account_cfg.get('user')))
-                            if not recipients or not set(recipients).issubset(allowed_set):
-                                continue
                         matched_email = None
                         for rc in recipients:
                             rc2 = str(rc or "").strip().lower()
@@ -5389,7 +5152,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                                     break
                         if not matched_email:
                             continue
-                        st_f, data_f = mail.fetch(eid, "(BODY.PEEK[])" if central else "(RFC822)")
+                        st_f, data_f = mail.fetch(eid, "(RFC822)")
                         raw_full = None
                         for part in (data_f or []):
                             if isinstance(part, tuple) and len(part) >= 2 and isinstance(part[1], (bytes, bytearray)):
@@ -5400,21 +5163,7 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         msg = email.message_from_bytes(bytes(raw_full))
                         subject = _decode_mime_value(msg.get("Subject", ""))
                         from_v = _decode_mime_value(msg.get("From", ""))
-                        guard = app.config.get("EMAIL_POOL_MESSAGE_ALLOWED")
-                        if guard and extra_address is None and not guard(msg, _extract_msg_text(msg)):
-                            continue
-                        actual_recipients = sorted(delegated_recipients(msg, _extract_msg_text(msg)))
-                        if central:
-                            actual_recipients = sorted(_central_inbox_route_recipients(msg, actual_recipients, allowed_set, account_cfg.get('user')))
-                        msg_ts = _admin_inbox_date_ts(msg)
-                        if central and (msg_ts < cutoff or matched_email not in actual_recipients or not set(actual_recipients).issubset(allowed_set)):
-                            continue
                         body_text = _admin_inbox_strip_html(_extract_msg_text(msg))
-                        if email_quarantine.is_blocked(matched_email):
-                            continue
-                        if has_request_context() and request.host.lower().split(':', 1)[0] == QUARANTINE_HOST:
-                            if any(exact_email_match(msg, _extract_msg_text(msg), blocked) for blocked in email_quarantine.emails()):
-                                continue
 
                         plat = None
                         try:
@@ -5422,15 +5171,6 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                         except Exception:
                             plat = None
                         if not plat:
-                            continue
-
-                        if central:
-                            items.append({
-                                'email': matched_email, 'recipients': actual_recipients,
-                                'subject': 'Mensagem recebida', 'platform': plat, 'date_ts': msg_ts,
-                            })
-                            if len(items) >= max_items:
-                                break
                             continue
 
                         code = None
@@ -5458,7 +5198,6 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
 
                         items.append({
                             "email": matched_email,
-                            "recipients": actual_recipients,
                             "from": from_v,
                             "subject": subject or "(sem assunto)",
                             "code": code,
@@ -5475,16 +5214,11 @@ def _fetch_user_live_inbox_items(username, max_per_box=10, max_items=60, lookbac
                 except Exception as box_err:
                     errors.append(f"[{account_cfg.get('name')}/{mailbox}] {box_err}")
                     continue
+            _safe_logout(mail)
         except Exception as e:
             errors.append(f"[{account_cfg.get('name')}] {e}")
-            if extra_address is None:
-                _force_logout(mail)
-        finally:
-            if extra_address is not None and mail is not None:
-                try:
-                    mail.logout()
-                except Exception:
-                    pass
+            _force_logout(mail)
+            continue
         if len(items) >= max_items:
             break
 
@@ -5498,65 +5232,17 @@ _bd_refreshing = set()
 _BD_CACHE_TTL = 60  # segundos
 
 
-def _bd_refresh_background(username, central=False):
+def _bd_refresh_background(username):
     """Varredura IMAP em segundo plano — atualiza o cache sem travar a tela."""
     try:
-        linked_emails = tuple(_user_live_inbox_emails(username))
-        items, errors = _fetch_user_live_inbox_items(username, central=True) if central else _fetch_user_live_inbox_items(username)
-        if linked_emails != tuple(_user_live_inbox_emails(username)):
-            return
+        items, errors = _fetch_user_live_inbox_items(username)
         with _bd_cache_lock:
-            _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors, "linked_emails": linked_emails}
+            _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors}
     except Exception as e:
         print(f"[bandeja] refresh erro ({username}): {e}")
     finally:
         with _bd_cache_lock:
             _bd_refreshing.discard(username)
-
-
-@app.after_request
-def scope_central_inbox_to_current_filters(response):
-    if request.path != '/api/live-inbox/messages' or response.status_code != 200 or not response.is_json:
-        return response
-    data = response.get_json(silent=True)
-    if not isinstance(data, dict) or not data.get('success'):
-        return response
-    if request.host.lower().split(':', 1)[0] != 'consulta-codigos-jr7z.onrender.com':
-        if not any('message_preview' in item for item in data.get('items', [])):
-            return response
-        for item in data['items']:
-            item.pop('message_preview', None)
-    else:
-        enabled = set(_expand_admin_live_inbox_filters(load_admin_live_inbox_filters('admin')))
-        owned = set(_user_live_inbox_emails(session.get('username')))
-        items = []
-        now = time.time()
-        cutoff = now - _CENTRAL_INBOX_WINDOW_SECONDS
-        selected = request.args.get('inbox_email', '').strip().lower()
-        for item in data.get('items', []):
-            if not cutoff <= (item.get('date_ts') or 0) <= now:
-                continue
-            address = item.get('email')
-            if selected and address != selected:
-                continue
-            if address not in owned or item.get('platform') not in enabled or email_quarantine.is_blocked(address):
-                continue
-            row = {key: item[key] for key in ('email', 'recipients', 'subject', 'platform', 'date_ts') if key in item}
-            row['subject'] = 'Mensagem recebida'
-            recipients = row.get('recipients') or []
-            if not recipients or not set(recipients).issubset(owned) or any(email_quarantine.is_blocked(e) for e in recipients):
-                continue
-            if selected:
-                row = {key: row[key] for key in ('email', 'recipients', 'platform', 'date_ts')}
-            elif recipients != [address]:
-                row.pop('message_preview', None)
-            items.append(row)
-        data['items'] = items
-        data['errors'] = ['Uma ou mais caixas não responderam.'] if data.get('errors') else []
-    data['count'] = len(data['items'])
-    response.set_data(app.json.dumps(data))
-    response.headers['Cache-Control'] = 'no-store'
-    return response
 
 
 @app.route("/api/live-inbox/messages", methods=["GET"])
@@ -5567,9 +5253,6 @@ def api_user_live_inbox_messages():
     if not session.get("logged_in"):
         return jsonify({"success": False, "message": "Faça login para ver sua bandeja."}), 401
     username = str(session.get("username") or "").strip().lower()
-    central = request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com'
-    if central:
-        return jsonify(success=False, message='A bandeja do perfil foi desativada na Central.'), 410, {'Cache-Control': 'no-store'}
     emails = _user_live_inbox_emails(username)
     if not emails:
         return jsonify({"success": True, "items": [], "emails": [], "count": 0,
@@ -5579,15 +5262,9 @@ def api_user_live_inbox_messages():
     with _bd_cache_lock:
         cached = _bd_cache.get(username)
 
-    # Each worker validates the cache against current bindings. A new email
-    # must not inherit the old empty/stale inbox for another 60 seconds.
-    if cached and tuple(cached.get("linked_emails") or ()) != tuple(emails):
-        cached = None
-        with _bd_cache_lock:
-            _bd_cache.pop(username, None)
     fresh = request.args.get("fresh") == "1"
 
-    if cached and (now - cached["ts"] < (10 if central else _BD_CACHE_TTL)) and not fresh:
+    if cached and (now - cached["ts"] < _BD_CACHE_TTL) and not fresh:
         return jsonify({"success": True, "items": cached["items"], "emails": emails,
                         "count": len(cached["items"]), "cached": True,
                         "errors": cached.get("errors") or []})
@@ -5600,14 +5277,7 @@ def api_user_live_inbox_messages():
             _bd_refreshing.add(username)
     if not already:
         try:
-            if central:
-                from flask import copy_current_request_context
-                @copy_current_request_context
-                def refresh():
-                    _bd_refresh_background(username, central=True)
-                threading.Thread(target=refresh, daemon=True).start()
-            else:
-                threading.Thread(target=_bd_refresh_background, args=(username,), daemon=True).start()
+            threading.Thread(target=_bd_refresh_background, args=(username,), daemon=True).start()
         except Exception:
             with _bd_cache_lock:
                 _bd_refreshing.discard(username)
@@ -5617,22 +5287,10 @@ def api_user_live_inbox_messages():
                         "count": len(cached["items"]), "cached": True, "refreshing": True,
                         "errors": cached.get("errors") or []})
 
-    # Central already started the background scan; do not open a second IMAP
-    # connection or wait for the mailbox before responding to a cold inbox.
-    if central:
-        with _bd_cache_lock:
-            initial = _bd_cache.get(username)
-            pending = username in _bd_refreshing
-        if initial and initial.get('linked_emails') == tuple(emails):
-            return jsonify(success=True, items=initial['items'], emails=emails,
-                           count=len(initial['items']), errors=initial.get('errors') or [])
-        return jsonify(success=True, items=[], emails=emails, count=0, refreshing=pending,
-                       errors=[] if pending else ['Não foi possível iniciar a consulta.'])
-
-    # Other deployments retain their existing first-load behavior.
+    # Primeira vez de todos (sem cache nenhum): faz a varredura agora.
     items, errors = _fetch_user_live_inbox_items(username)
     with _bd_cache_lock:
-        _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors, "linked_emails": tuple(emails)}
+        _bd_cache[username] = {"ts": time.time(), "items": items, "errors": errors}
         _bd_refreshing.discard(username)
     return jsonify({"success": True, "items": items, "emails": emails,
                     "count": len(items), "errors": errors})
@@ -7420,10 +7078,6 @@ def api_admin_list_vinculos_emails():
             "expires_at": exp,
             "active": (now < exp) if exp else False,
         })
-    pending = app.config.get('EMAIL_POOL_PENDING_BINDINGS')
-    if pending and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
-        existing = {item['email'] for item in items}
-        items.extend(row for row in pending(assigned_user) if row['email'] not in existing)
     items.sort(key=lambda x: (x.get("assigned_user") or "", x.get("email") or ""))
     return jsonify({"success": True, "items": items})
 
@@ -7533,9 +7187,7 @@ def api_admin_import_vinculos_emails():
             })
             created += 1
 
-    saved = save_subscriptions(subs)
-    if saved is False and data.get('partial') is True and request.host.lower().split(':', 1)[0] == 'consulta-codigos-jr7z.onrender.com':
-        return jsonify(success=False, message='Não foi possível salvar os vínculos. Tente novamente.'), 503
+    save_subscriptions(subs)
     msg = f"Emails vinculados com sucesso ao usuário {assigned_user_name}."
     if skipped:
         msg += " Este email já está vinculado a outro cliente. Remova o vínculo antigo antes de continuar."
@@ -9455,12 +9107,6 @@ def api_keepalive():
     return jsonify({"success": True, "imap_ready": False})
 
 # Isolated Netflix access links: central host only; no changes to existing flows.
-from flask import has_request_context
-from quarantine import QuarantineStore, register_quarantine, HOST as QUARANTINE_HOST, MESSAGE as QUARANTINE_MESSAGE
-email_quarantine = QuarantineStore(_data_dir)
-from restricted_message_status import lookup as lookup_restricted_message_status
-app.config['RESTRICTED_STATUS_BLOCKED'] = email_quarantine.is_blocked
-app.config['RESTRICTED_STATUS_LOOKUP'] = lambda address: lookup_restricted_message_status(get_imap_accounts(), address)
 from netflix_links import register_netflix_links, strict_email_context, exact_email_match
 from netflix_search import make_netflix_batch_search
 register_netflix_links(app, _data_dir, search_code_unified,
@@ -9470,58 +9116,6 @@ register_netflix_links(app, _data_dir, search_code_unified,
 # Central stock report reads the store's authoritative sales without altering delivery.
 from stock_ledger import register_stock_ledger
 register_stock_ledger(app, _data_dir, load_stock, load_products, _LOJAMESTRE_ADMIN_URL)
-from quarantine_registry import search_jmp_registrations
-register_quarantine(app, email_quarantine, _data_dir, _pending_reset_links,
-    load_subscriptions=load_subscriptions, save_subscriptions=save_subscriptions, load_users=load_users,
-    remote_search=search_jmp_registrations)
-
-def _invalidate_binding_inboxes(usernames):
-    with _bd_cache_lock:
-        for username in usernames:
-            _bd_cache.pop(str(username or '').strip().lower(), None)
-
-app.config['EMAIL_POOL_BINDINGS_CHANGED'] = _invalidate_binding_inboxes
-
-from email_delegation import register_email_delegation
-email_permission_store = register_email_delegation(app, _data_dir, load_subscriptions,
-    save_subscriptions, load_users, email_quarantine)
-from email_binding_confirmation import register_binding_confirmation
-register_binding_confirmation(app, email_permission_store, load_users, load_subscriptions, save_subscriptions, email_quarantine)
-
-from delegated_access import register_delegated_access
-from delegated_recipients import recipients as delegated_recipients
-register_delegated_access(app, email_permission_store, load_users, load_subscriptions, _pending_reset_links)
-
-from email_uniqueness import register_email_uniqueness
-app.config['EMAIL_UNIQUENESS_INTERNAL_TOKEN'] = MASTER_API_TOKEN
-register_email_uniqueness(app, _data_dir, load_subscriptions)
-
-from purchase_code_links import register_purchase_code_links
-from purchase_code_search import make_purchase_code_search
-register_purchase_code_links(app, _data_dir, email_quarantine,
-    make_purchase_code_search(PLATFORM_CONFIG, get_imap_accounts, _batch_search_mailbox,
-        _fetch_and_extract, _get_spam_boxes, _targeted_body_extract))
-
-def _extra_inbox_scope(address):
-    if email_quarantine.is_blocked(address):
-        return None
-    rows = [row for row in load_subscriptions() if isinstance(row, dict)
-            and str(row.get('email') or '').strip().lower() == address]
-    if len(rows) != 1 or not rows[0].get('assigned_user'):
-        return None
-    username = rows[0]['assigned_user']
-    account = load_users().get(username) or {}
-    permission = email_permission_store.permissions().get(address) or {}
-    if not account or account.get('role', 'client') != 'client' or permission.get('admin_user') != (account.get('created_by') or 'admin'):
-        return None
-    if rows[0].get('expires_at') and float(rows[0]['expires_at']) <= time.time():
-        return None
-    return username
-
-
-from extra_inbox import register_extra_inbox
-register_extra_inbox(app, _data_dir, _extra_inbox_scope,
-    lambda owner, address: _fetch_user_live_inbox_items(owner, central=True, extra_address=address))
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))

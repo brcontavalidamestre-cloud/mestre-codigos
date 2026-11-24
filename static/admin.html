@@ -448,6 +448,10 @@
                 <label class="flbl">🔑 Senha</label>
                 <input class="fi" id="stk-pass" placeholder="senha de acesso" required/>
               </div>
+              <div class="fgrp">
+                <label class="flbl">🧑 Usuário vinculado</label>
+                <select class="fi" id="stk-user"><option value="">Sem vínculo específico</option></select>
+              </div>
               <div class="fgrp" style="grid-column:1/-1;">
                 <label class="flbl">📝 Observação (opcional)</label>
                 <input class="fi" id="stk-note" placeholder="perfil 1 / pin 0000 / etc."/>
@@ -568,7 +572,7 @@
       <div style="font-size:2.4rem;">🛡️</div>
       <div style="flex:1;">
         <div style="font-weight:800;font-size:1.15rem;color:#f9a8d4;">Consulta Livre de Códigos</div>
-        <div style="font-size:.9rem;color:#fbcfe8;opacity:.9;">Admin principal: qualquer email permitido. Subadmin: somente emails liberados pelo principal — clique para abrir</div>
+        <div style="font-size:.9rem;color:#fbcfe8;opacity:.9;">Somente admin: consultar código de qualquer email sem depender de vínculo — clique para abrir</div>
       </div>
       <div style="font-size:1.6rem;color:#f9a8d4;">→</div>
     </div>
@@ -592,9 +596,9 @@
 
         <div class="panel" style="margin-bottom:24px;border:2px solid #f472b6;">
           <div class="phdr">
-            <div class="ptit">📬 Consultar códigos de email</div>
+            <div class="ptit">📬 Consultar qualquer email</div>
           </div>
-          <div class="sinfo" style="margin-bottom:10px;">O admin principal pode consultar qualquer email fora da quarentena. Subadmins consultam somente os emails exatos liberados pelo principal na sua lista, mesmo quando atribuídos aos seus clientes. A consulta normal dos clientes continua exigindo vínculo.</div>
+          <div class="sinfo" style="margin-bottom:10px;">Esta área existe somente no painel admin. Aqui o administrador pode consultar códigos de qualquer email. A consulta normal dos clientes continua exigindo vínculo.</div>
           <form id="admin-code-form" onsubmit="buscarCodigoAdminLivre(event)" style="margin-bottom:16px;background:rgba(244,114,182,0.08);padding:14px;border-radius:10px;">
             <div class="fgrid">
               <div class="fgrp">
@@ -625,50 +629,11 @@
     <div id="admin-live-inbox-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(7,15,28,0.95);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 14px;flex-direction:column;align-items:center;">
       <div style="width:100%;max-width:1200px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;position:sticky;top:0;background:rgba(7,15,28,0.97);padding:8px 0;z-index:2;">
-          <div class="ib-admin-title" style="font-weight:800;font-size:1.4rem;color:#93c5fd;">📥 Caixa de Entrada Admin</div>
-          <button class="ib-close" onclick="fecharAdminLiveInbox()" style="background:#ff5252;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:1rem;">✕ Fechar</button>
+          <div style="font-weight:800;font-size:1.4rem;color:#93c5fd;">📥 Caixa de Entrada Admin</div>
+          <button onclick="fecharAdminLiveInbox()" style="background:#ff5252;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:1rem;">✕ Fechar</button>
         </div>
 
-        <details id="inbox-client-create" class="panel" style="margin-bottom:18px;" hidden>
-          <summary style="cursor:pointer;font-weight:800;color:#93c5fd;">Criar cliente com caixa de entrada</summary>
-          <p class="sinfo">Primeiro crie o usuário e a senha. Depois, adicione os e-mails autorizados na seção abaixo.</p>
-          <form id="inbox-client-form" onsubmit="createInboxClient(event)">
-            <div class="fgrid">
-              <label class="fgrp">Nome do cliente<input class="fi" name="name" required maxlength="100"></label>
-              <label class="fgrp">Usuário<input class="fi" name="username" autocomplete="off" required minlength="3" maxlength="30" pattern="[a-zA-Z0-9_.]{3,30}"></label>
-              <label class="fgrp">Senha inicial<input class="fi" name="password" type="password" autocomplete="new-password" required minlength="12" maxlength="128"></label>
-            </div>
-            <button class="btn-ref" type="submit">Criar acesso</button>
-            <p id="inbox-client-status" role="status" aria-live="polite"></p>
-          </form>
-        </details>
-
-        <details id="extra-inbox-admin" class="panel" style="margin-bottom:18px" hidden>
-          <summary>Criar login extra para uma bandeja individual</summary>
-          <p>Use um e-mail autorizado que já esteja vinculado a um cliente. Este acesso não altera o login atual.</p>
-          <form onsubmit="manageExtraInbox(event)">
-            <label class="fgrp">E-mail<input class="fi" name="email" type="email" required maxlength="254"></label>
-            <button class="btn-ref" type="submit" value="issue">Gerar ou renovar senha</button>
-            <button class="btn-ref" type="button" onclick="const field=this.form.elements.extra_password; field.closest('label').hidden=false; this.form.querySelector('[value=change]').hidden=false; field.focus()">Alterar senha</button>
-            <button class="btn-ref" type="submit" value="revoke">Revogar acesso</button>
-            <label hidden>Nova senha <input class="fi" type="password" name="extra_password" maxlength="128" autocomplete="new-password" placeholder="14 caracteres ou mais"></label>
-            <button class="btn-ref" type="submit" value="change" hidden>Salvar nova senha</button>
-            <pre id="extra-inbox-result" role="status" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre>
-          </form>
-        </details>
-
-        <section id="inbox-client-email-panel" class="panel" style="margin-bottom:18px;" hidden>
-          <h3 class="ptit">Adicionar e-mails à bandeja do cliente</h3>
-          <p class="sinfo">Para autorizar endereços para um cliente novo, use a <a href="/admin/emails-subadmins?admin_user=admin">lista do admin principal</a>.</p>
-          <form id="inbox-client-email-form" onsubmit="addInboxClientEmails(event)">
-            <label class="fgrp">Cliente<select id="inbox-client-target" class="fi" required><option value="">Selecione um cliente</option></select></label>
-            <label class="fgrp">E-mails autorizados, um por linha<textarea class="fi" name="emails" rows="4" required maxlength="60000"></textarea></label>
-            <button class="btn-ref" type="submit">Adicionar e-mails</button>
-            <p id="inbox-client-email-status" class="sinfo" role="status" style="white-space:pre-wrap"></p>
-          </form>
-        </section>
-
-        <div id="admin-live-inbox-legacy-panel" class="panel" style="margin-bottom:18px;border:2px solid #60a5fa;">
+        <div class="panel" style="margin-bottom:18px;border:2px solid #60a5fa;">
           <div class="phdr">
             <div class="ptit">📌 Emails vinculados na central de usuários</div>
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -734,7 +699,7 @@
     <div id="vinculos-modal" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(2,10,20,0.94);backdrop-filter:blur(6px);overflow-y:auto;padding:24px 14px;flex-direction:column;align-items:center;">
       <div style="width:100%;max-width:1100px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;position:sticky;top:0;background:rgba(2,10,20,0.96);padding:8px 0;z-index:2;">
-          <div style="font-weight:800;font-size:1.4rem;color:#7dd3fc;">📩 <span id="ve-dialog-title">Vincular Emails por Usuário</span></div>
+          <div style="font-weight:800;font-size:1.4rem;color:#7dd3fc;">📩 Vincular Emails por Usuário</div>
           <button onclick="fecharVinculosEmails()" style="background:#ff5252;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-weight:700;cursor:pointer;font-size:1rem;">✕ Fechar</button>
         </div>
 
@@ -743,7 +708,6 @@
             <div class="ptit">📩 Liberar recebimento de códigos</div>
             <button class="btn-ref" onclick="loadVinculosEmails()">🔄 Atualizar</button>
           </div>
-          <p id="ve-inbox-help" class="sinfo" hidden>Escolha a conta do cliente e vincule os e-mails. A caixa individual usa esses vínculos automaticamente. Na lista, copie o atalho da caixa para o cliente entrar com a própria conta e ver os registros dos filtros ativos dos últimos 15 minutos.</p>
           <div class="sinfo" style="margin-bottom:10px;">Aqui você vincula os emails e também visualiza cada cliente/usuário com todos os emails atribuídos. Ao salvar, esses emails ficam liberados para o usuário receber/consultar códigos.</div>
           <form id="vinculos-form" onsubmit="importVinculosEmails(event)" style="margin-bottom:16px;background:rgba(56,189,248,0.08);padding:14px;border-radius:10px;">
             <div class="fgrid">
@@ -760,7 +724,6 @@
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
               <button type="submit" class="btn-p">✅ Vincular Emails</button>
               <button type="button" class="btn-ref" onclick="document.getElementById('ve-bulk-list').value=''">🧹 Limpar lista</button>
-              <div id="ve-import-status" role="status" aria-live="polite" style="width:100%;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.5;"></div>
             </div>
           </form>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin:0 0 12px 0;align-items:center;">
@@ -1135,7 +1098,6 @@
       showLoja2IfRios();
       showConsultaAdminCodigosIfMaster();
       showAdminLiveInboxIfSupported();
-      setupPrivateInboxShortcut();
     })();
 
     /* ============ BACKUP / RESTORE ============ */
@@ -1246,6 +1208,8 @@
             <div>
               <label class="flbl">Preço R$</label>
               <input class="fi" type="number" step="0.01" value="${Number(p.price).toFixed(2)}" id="pp-${p.id}"/>
+              <label class="flbl" style="margin-top:6px">🧑 Usuário vinculado</label>
+              <select class="fi" id="pu-${p.id}">${getUsersSelectOptions(p.assigned_user || '', 'Sem vínculo específico')}</select>
               <div style="margin-top:8px;font-size:0.75rem;color:var(--tm)">
                 Estoque: <b style="color:${p.available>0?'#4ade80':'#f87171'}">${p.available||0}</b> / ${p.total||0}
               </div>
@@ -1265,15 +1229,16 @@
       const name  = document.getElementById('pn-'+pid).value.trim();
       const desc  = document.getElementById('pd-'+pid).value.trim();
       const price = document.getElementById('pp-'+pid).value;
+      const assigned_user = document.getElementById('pu-'+pid)?.value || '';
       try {
         const r = await fetch('/api/admin/loja/produtos/'+pid, {
           method:'PUT',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ name, description:desc, price })
+          body: JSON.stringify({ name, description:desc, price, assigned_user })
         });
         const j = await r.json();
-        if (j.success) toast('✓ Produto atualizado'); else toast(j.message||'Erro');
-      } catch(e){ toast('Erro de conexão'); }
+        if (j.success) showToast('✓ Produto atualizado'); else showToast(j.message||'Erro');
+      } catch(e){ showToast('Erro de conexão'); }
     }
 
     /* ============ LOJA: ESTOQUE ============ */
@@ -1353,23 +1318,24 @@
       const email = document.getElementById('stk-email').value.trim();
       const password = document.getElementById('stk-pass').value.trim();
       const note = document.getElementById('stk-note').value.trim();
+      const assigned_user = document.getElementById('stk-user').value;
       try {
         const r = await fetch('/api/admin/loja/estoque/'+pid, {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email, password, note })
+          body: JSON.stringify({ email, password, note, assigned_user })
         });
         const j = await r.json();
         if (j.success) {
           document.getElementById('stk-email').value = '';
           document.getElementById('stk-pass').value = '';
           document.getElementById('stk-note').value = '';
-          toast('✓ Acesso adicionado');
+          showToast('✓ Acesso adicionado');
           await loadLojaProdutos();
           await loadStock();
           scrollToText('stk-tbody', email);
-        } else { toast(j.message||'Erro'); }
-      } catch(e){ toast('Erro de conexão'); }
+        } else { showToast(j.message||'Erro'); }
+      } catch(e){ showToast('Erro de conexão'); }
     }
 
     async function deleteStock(pid, iid) {
@@ -1659,10 +1625,10 @@
       }
       html += `<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">`;
       if (data.code) {
-        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.code || '').replace(/'/g, "\'")}').then(()=>toast('📋 Código copiado')).catch(()=>toast('✗ Falha ao copiar'))">📋 Copiar código</button>`;
+        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.code || '').replace(/'/g, "\'")}').then(()=>showToast('📋 Código copiado')).catch(()=>showToast('✗ Falha ao copiar'))">📋 Copiar código</button>`;
       }
       if (data.link) {
-        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.link || '').replace(/'/g, "\'")}').then(()=>toast('📋 Link copiado')).catch(()=>toast('✗ Falha ao copiar'))">📋 Copiar link</button>`;
+        html += `<button class="btn-ref" onclick="navigator.clipboard.writeText('${String(data.link || '').replace(/'/g, "\'")}').then(()=>showToast('📋 Link copiado')).catch(()=>showToast('✗ Falha ao copiar'))">📋 Copiar link</button>`;
       }
       html += `</div>`;
       box.innerHTML = html;
@@ -1676,7 +1642,7 @@
       const st = document.getElementById('admin-code-status');
       const box = document.getElementById('admin-code-result');
       if (!email) {
-        toast('✗ Informe o email');
+        showToast('✗ Informe o email');
         return;
       }
       if (st) st.textContent = 'Consultando...';
@@ -1694,10 +1660,10 @@
           return;
         }
         if (st) st.textContent = j.message || 'Nada encontrado.';
-        toast('✗ ' + (j.message || 'Nada encontrado'));
+        showToast('✗ ' + (j.message || 'Nada encontrado'));
       } catch(e) {
         if (st) st.textContent = 'Erro de conexão.';
-        toast('Erro de conexão');
+        showToast('Erro de conexão');
       }
     }
 
@@ -1711,36 +1677,7 @@
 
     function showAdminLiveInboxIfSupported() {
       const btn = document.getElementById('admin-live-inbox-launch');
-      const supported = hostSupportsAdminLiveInbox();
-      if (btn) btn.style.display = supported ? 'flex' : 'none';
-      if (!supported) return;
-      const inbox = document.getElementById('admin-live-inbox-modal');
-      const title = inbox?.querySelector('.ib-admin-title');
-      if (!title || inbox.classList.contains('central-inbox-modern')) return;
-      inbox.classList.add('central-inbox-modern');
-      title.parentElement.classList.add('ib-admin-head');
-      const label = document.createElement('span');
-      label.className = 'ib-eyebrow'; label.textContent = 'Central · Administração'; title.prepend(label);
-      const css = document.createElement('link');
-      css.rel = 'stylesheet'; css.href = '/static/inbox-modern.css?v=2'; document.head.append(css);
-    }
-
-    function setupPrivateInboxShortcut() {
-      if (location.hostname !== 'consulta-codigos-jr7z.onrender.com' || _meUser?.username !== 'admin') return;
-      const launch = document.getElementById('admin-live-inbox-launch');
-      if (!launch) return;
-      const button = document.createElement('button');
-      button.type = 'button';
-      button.className = 'btn-ref';
-      button.style.marginTop = '8px';
-      button.textContent = 'Copiar link privado da Caixa de Entrada Admin';
-      button.onclick = async () => {
-        const url = new URL('/admin#caixa-admin', location.origin).href;
-        try { await navigator.clipboard.writeText(url); showToast('Atalho copiado. A caixa mantém a proteção por login.'); }
-        catch { window.prompt('Copie o atalho privado da caixa:', url); }
-      };
-      launch.after(button);
-      if (location.hash === '#caixa-admin') abrirAdminLiveInbox();
+      if (btn) btn.style.display = hostSupportsAdminLiveInbox() ? 'flex' : 'none';
     }
 
     async function ensureAdminLiveInboxUnlocked() {
@@ -1767,104 +1704,13 @@
       }
     }
 
-    async function createInboxClient(event) {
-      event.preventDefault();
-      const form = event.currentTarget;
-      const buttons = [...form.querySelectorAll('button[type="submit"]')];
-      const notice = document.getElementById('inbox-client-status');
-      if (buttons.some(button => button.disabled)) return;
-      const data = Object.fromEntries(new FormData(form));
-      data.create_without_binding = true;
-      buttons.forEach(button => button.disabled = true);
-      notice.textContent = 'Salvando…';
-      try {
-        const response = await fetch('/api/admin/live-inbox/client', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)
-        });
-        const result = await response.json();
-        if (response.status === 409 && result.existing_client) {
-          form.elements.password.value = '';
-          await loadInboxClientTargets(result.existing_client);
-          notice.textContent = result.message;
-          return;
-        }
-        if (!response.ok || !result.success) {
-          throw new Error(result.message || 'Não foi possível cadastrar.');
-        }
-        form.reset();
-        notice.textContent = result.message + ' Usuário: ' + result.username + '.';
-        await Promise.allSettled([loadInboxClientTargets(result.username), loadUsers()]);
-      } catch (error) {
-        notice.textContent = error.message || 'Não foi possível cadastrar.';
-      } finally { buttons.forEach(button => button.disabled = false); }
-    }
-
-    async function loadInboxClientTargets(preferred) {
-      const select = document.getElementById('inbox-client-target');
-      const current = preferred || select.value;
-      const {j} = await fetchJsonNoCache('/api/admin/live-inbox/client-emails');
-      if (!j.success) throw new Error(j.message || 'Não foi possível carregar os clientes.');
-      select.replaceChildren(new Option('Selecione um cliente', ''));
-      for (const client of j.clients) select.add(new Option(`${client.name} (@${client.username})`, client.username));
-      if ([...select.options].some(option => option.value === current)) select.value = current;
-      if (preferred && select.value === preferred) select.focus();
-    }
-
-    async function addInboxClientEmails(event) {
-      event.preventDefault();
-      const form = event.currentTarget, button = form.querySelector('button'), field = form.elements.emails;
-      const select = document.getElementById('inbox-client-target');
-      const notice = document.getElementById('inbox-client-email-status');
-      if (button.disabled) return;
-      const emails = field.value, username = select.value;
-      button.disabled = true; select.disabled = true; notice.textContent = 'Salvando…';
-      try {
-        const response = await fetch('/api/admin/live-inbox/client-emails', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({username, emails})});
-        const data = await response.json();
-        if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível adicionar os e-mails.');
-        notice.textContent = data.results.map(row => `${row.email} — ${row.status}`).join('\n');
-        if (field.value === emails) field.value = data.retry.join('\n');
-        if (data.added.length) await Promise.allSettled([loadUsers(), loadAdminLiveInboxMessages()]);
-      } catch (error) { notice.textContent = error.message; }
-      finally { button.disabled = false; select.disabled = false; }
-    }
-
-    async function manageExtraInbox(event) {
-      event.preventDefault();
-      const form = event.currentTarget, result = document.getElementById('extra-inbox-result');
-      const revoke = event.submitter?.value === 'revoke';
-      const change = event.submitter?.value === 'change';
-      const email = form.elements.email.value.trim();
-      const password = form.elements.extra_password.value;
-      if (change && password.length < 14) { result.textContent = 'Digite uma senha com pelo menos 14 caracteres.'; form.elements.extra_password.focus(); return; }
-      if (!confirm((revoke ? 'Revogar o acesso extra de ' : change ? 'Alterar a senha de ' : 'Gerar uma senha para ')+email+'? A senha extra anterior, se houver, será invalidada.')) return;
-      const buttons = [...form.querySelectorAll('button')];
-      buttons.forEach(button => button.disabled = true);
-      result.textContent = 'Salvando…';
-      try {
-        const res = await fetch('/api/admin/extra-inbox', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(change ? {email,action:'change_password',password} : {email,revoke})});
-        const data = await res.json();
-        if (data.success) form.elements.extra_password.value = '';
-        result.textContent = data.success && data.password ? `Login: ${data.email}\nSenha: ${data.password}\nEndereço: ${data.url}` : data.message || 'Não foi possível salvar.';
-      } catch { result.textContent = 'Não foi possível concluir.'; }
-      finally { buttons.forEach(button => button.disabled = false); }
-    }
-
     async function abrirAdminLiveInbox() {
       const ok = await ensureAdminLiveInboxUnlocked();
       if (!ok) return;
       const m = document.getElementById('admin-live-inbox-modal');
-      const create = document.getElementById('inbox-client-create');
-      const principalCentral = location.hostname === 'consulta-codigos-jr7z.onrender.com' && _meUser?.username === 'admin';
-      if (create) create.hidden = !principalCentral;
-      document.getElementById('extra-inbox-admin').hidden = !principalCentral;
-      const linkedPanel = document.getElementById('admin-live-inbox-legacy-panel');
-      linkedPanel.hidden = principalCentral;
-      linkedPanel.querySelector('.ptit').textContent = '📌 E-mails vinculados';
-      document.getElementById('inbox-client-email-panel').hidden = !principalCentral;
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
       await Promise.all([
-        principalCentral ? loadInboxClientTargets().catch(error => { document.getElementById('inbox-client-email-status').textContent = error.message; }) : loadAdminLiveInboxAllowed(),
+        loadAdminLiveInboxAllowed(),
         loadAdminLiveInboxFilters()
       ]);
       await loadAdminLiveInboxMessages();
@@ -1872,8 +1718,6 @@
     }
 
     function fecharAdminLiveInbox() {
-      document.getElementById('extra-inbox-result').textContent = '';
-      document.querySelector('#extra-inbox-admin input[name=extra_password]').value = '';
       const m = document.getElementById('admin-live-inbox-modal');
       if (m) { m.style.display = 'none'; document.body.style.overflow = ''; }
       stopAdminLiveInboxAutoRefresh();
@@ -2040,9 +1884,7 @@
           const result = (code || linkOpen || linkCopy)
             ? `${code}<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:${code ? '6px' : '0'};">${linkOpen}${linkCopy}</div>`
             : '<span style="color:#888;">—</span>';
-          const snippet = it.message_preview
-            ? `<details style="margin-top:8px;max-width:420px;"><summary style="cursor:pointer;color:#93c5fd;">Ver mensagem</summary><div style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:.82rem;margin-top:6px;">${escapeHtml(it.message_preview)}</div></details>`
-            : (it.snippet ? `<div style="font-size:.73rem;color:var(--tm);margin-top:4px;max-width:420px;">${escapeHtml(it.snippet)}</div>` : '');
+          const snippet = it.snippet ? `<div style="font-size:.73rem;color:var(--tm);margin-top:4px;max-width:420px;">${escapeHtml(it.snippet)}</div>` : '';
           const cx = `<div style="font-size:.78rem;color:#bfdbfe;">${escapeHtml(it.account_name || '')}</div><div style="font-size:.72rem;color:var(--tm);">${escapeHtml(it.mailbox || '')}</div>`;
           const platform = `<div style="font-weight:700;color:#dbeafe;">${escapeHtml(it.matched_platform_name || it.matched_platform || '—')}</div><div style="font-size:.72rem;color:var(--tm);">${escapeHtml(it.matched_platform || '')}</div>`;
           const owner = it.assigned_users_label ? `<div style="font-size:.72rem;color:#93c5fd;margin-top:4px;">${escapeHtml(it.assigned_users_label)}</div>` : '';
@@ -2069,9 +1911,7 @@
       _adminLiveInboxLoading = false;
     }
 
-    async function abrirVinculosEmails(individual = false) {
-      document.getElementById('ve-dialog-title').textContent = individual === true ? 'Caixa de Entrada Individual' : 'Vincular Emails por Usuário';
-      document.getElementById('ve-inbox-help').hidden = individual !== true;
+    async function abrirVinculosEmails() {
       const m = document.getElementById('vinculos-modal');
       if (m) { m.style.display = 'flex'; document.body.style.overflow = 'hidden'; }
       showVinculosTab('lista');
@@ -2241,7 +2081,7 @@
             return String(a.email || '').localeCompare(String(b.email || ''), 'pt-BR');
           })
           .map(it => {
-            const badge = it.pending_confirmation ? '<span style="color:#fcd34d;">Aguardando confirmação</span>' : it.active
+            const badge = it.active
               ? '<span style="color:#4caf50;">✓ liberado</span>'
               : '<span style="color:#ff5252;">✗ inativo</span>';
             const safeEmail = String(it.email || '').replace(/'/g, "\'");
@@ -2253,7 +2093,7 @@
             return `<tr>
               <td>
                 <div style="display:flex;gap:10px;align-items:flex-start;">
-                  ${it.pending_confirmation ? '' : `<input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>`}
+                  <input type="checkbox" class="ve-select-email" data-email="${x(normalizedEmail)}" ${isChecked} onchange="toggleVinculoSelecionado('${safeEmail}', this.checked)" style="margin-top:4px;accent-color:#22c55e;transform:scale(1.12);"/>
                   <div>
                     <div style="font-weight:800;color:#fff;">${x(it.assigned_user_name || it.assigned_user || '-')}</div>
                     <div style="font-size:.82rem;color:#93c5fd;">@${x(it.assigned_user || '-')}</div>
@@ -2269,7 +2109,7 @@
               <td>
                 <div style="display:flex;gap:8px;flex-wrap:wrap;">
                   <button class="btn-ref" onclick="document.getElementById('ve-user').value='${x(it.assigned_user || '')}'; loadVinculosEmails();">🎯 Ver só este</button>
-                  ${it.pending_confirmation ? '' : `<button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>`}
+                  <button class="btn-ref" style="border-color:#ff5252;color:#ff5252;white-space:nowrap;" onclick="deleteVinculoEmail('${safeEmail}')">🗑️ Remover</button>
                 </div>
               </td>
             </tr>`;
@@ -2286,88 +2126,38 @@
       }
     }
 
-
-    function vinculosImportFeedback(message, failed=false) {
-      const status = document.getElementById('ve-import-status');
-      if (status) { status.textContent = message; status.style.color = failed ? '#ffb4ab' : '#86efac'; }
-      toast(failed ? '✗ Confira o aviso abaixo de Vincular Emails.' : '✓ Vínculos atualizados.', failed ? '#b91c1c' : '#15803d');
-    }
-
     async function importVinculosEmails(ev) {
       if (ev) ev.preventDefault();
       const assignedUser = (document.getElementById('ve-user')?.value || '').trim();
-      const field = document.getElementById('ve-bulk-list');
-      const txt = (field?.value || '').trim();
-      if (!assignedUser) { vinculosImportFeedback('Selecione o usuário para vincular.', true); return; }
-      if (!txt) { vinculosImportFeedback('Cole a lista de emails.', true); return; }
-      const linhas = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
-      const button = document.querySelector('#vinculos-form button[type="submit"]');
-      if (button?.disabled) return;
-      if (button) { button.disabled = true; button.textContent = 'Vinculando…'; }
-      try {
-        const r = await fetch('/api/admin/vinculos-emails/import', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ assigned_user: assignedUser, emails: linhas, partial: true, admin_session: _meUser?.username || '' })
-        });
-        let j;
-        try { j = await r.json(); } catch (_) { throw new Error('O servidor não respondeu corretamente. Sua lista foi mantida; tente novamente.'); }
-        if (r.status === 401 || (r.status === 403 && j.message === 'Acesso restrito ao administrador.')) {
-          vinculosImportFeedback('A sessão atual não é de administrador. Entre novamente com a conta que gerencia este cliente. Nenhum vínculo foi alterado; sua lista foi mantida.', true);
-          return;
-        }
-        if (j.batch_results) {
-          const groups = j.batch_results;
-          const labels = {
-            linked: 'Vinculados agora', confirmation_sent: 'Confirmação enviada — aguardando o titular',
-            registered: 'Já cadastrados — sem alteração', blocked: 'Bloqueados pela quarentena',
-            already_pending: 'Já aguardavam confirmação', invalid: 'Endereços inválidos',
-            limited: 'Não enviados — limite de confirmações atingido',
-            send_failed: 'Falha no envio da confirmação', retry: 'Não foi possível concluir — tente novamente'
-          };
-          const sections = Object.entries(labels).filter(([key]) => groups[key]?.length).map(([key, label]) => {
-            const rows = groups[key].map(email => {
-              const details = key === 'registered' && Object.hasOwn(j.conflicts || {}, email) ? j.conflicts[email] : null;
-              return email + (details?.assigned_users?.length ? ' — vinculado a: ' + details.assigned_users.join(', ') : '');
-            });
-            return label + ' (' + rows.length + '):\n' + rows.join('\n');
-          });
-          const retry = ['invalid', 'limited', 'send_failed', 'retry'].flatMap(key => groups[key] || []);
-          if (field.value.trim() === txt) field.value = retry.join('\n');
-          vinculosImportFeedback(sections.join('\n\n') || j.message, !j.success);
-          if (groups.linked?.length) {
-            await refreshSavedBindings(groups.linked[0]);
-          } else if (groups.confirmation_sent?.length || groups.already_pending?.length) {
-            await loadVinculosEmails();
-          }
-          return;
-        }
-        if (!r.ok || !j.success) {
-          const details = Array.isArray(j.conflicts) ? j.conflicts : [];
-          const emails = [...new Set([...(j.duplicate_emails || []), ...(j.conflict_emails || [])])];
-          const lines = details.length ? details.map(item => item.email + ' — ' + (item.assigned_users?.length ? 'vinculado a: ' + item.assigned_users.join(', ') : item.has_link ? 'já possui link individual' : 'cadastro existente')) : emails;
-          vinculosImportFeedback((j.message || 'Não foi possível vincular os emails.') + (lines.length ? '\n\nEmails que precisam de revisão:\n' + lines.join('\n') : '') + '\n\nNenhum vínculo desta tentativa foi criado. Sua lista foi mantida.', true);
-          return;
-        }
-        if (r.status === 202 && j.pending) {
-          document.getElementById('ve-import-status').textContent = j.message;
-          if (!j.skipped) field.value = '';
-          return;
-        }
-        const pending = (j.invalid || 0) + (j.skipped || 0);
-        if (!pending) field.value = '';
-        vinculosImportFeedback((j.message || 'Emails vinculados com sucesso.') + '\n' + (j.created || 0) + ' criado(s), ' + (j.updated || 0) + ' atualizado(s), ' + (j.invalid || 0) + ' inválido(s), ' + (j.skipped || 0) + ' não vinculado(s).' + (pending ? '\nSua lista foi mantida para revisão.' : ''), !!pending);
-        await refreshSavedBindings(linhas[0] || assignedUser);
-      } catch (error) {
-        vinculosImportFeedback(error.message || 'Erro de conexão. Sua lista foi mantida; confira a tabela antes de tentar novamente.', true);
-      } finally {
-        if (button) { button.disabled = false; button.textContent = '✅ Vincular Emails'; }
+      const txt = (document.getElementById('ve-bulk-list')?.value || '').trim();
+      if (!assignedUser) {
+        showToast('✗ Selecione o usuário para vincular');
+        return;
       }
-    }
-
-    async function refreshSavedBindings(firstEmail) {
-      await Promise.all([loadVinculosEmails(), loadUsers(true)]);
-      scrollToText('ve-tbody', firstEmail);
-      try { await loadComprasPorData(); } catch (_) { /* Saving has already succeeded. */ }
+      if (!txt) {
+        showToast('✗ Cole a lista de emails');
+        return;
+      }
+      const linhas = txt.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+      if (!linhas.length) {
+        showToast('✗ Nenhum email válido na lista');
+        return;
+      }
+      const r = await fetch('/api/admin/vinculos-emails/import', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ assigned_user: assignedUser, emails: linhas })
+      });
+      const j = await r.json();
+      if (!j.success) {
+        showToast('✗ ' + (j.message || 'Erro ao vincular emails'));
+        return;
+      }
+      document.getElementById('ve-bulk-list').value = '';
+      showToast(`✓ ${j.created || 0} criado(s), ${j.updated || 0} atualizado(s), ${j.invalid || 0} inválido(s)`);
+      await loadVinculosEmails();
+      await loadComprasPorData();
+      scrollToText('ve-tbody', linhas[0] || assignedUser);
     }
 
     async function deleteVinculoEmail(email) {
@@ -2379,7 +2169,7 @@
         if (j.success) {
           _vinculosSelecionados.delete(String(email || '').trim().toLowerCase());
           updateVinculosSelectionInfo();
-          toast('✓ Email removido');
+          showToast('✓ Email removido');
           await loadVinculosEmails();
           await loadComprasPorData();
           const liveModal = document.getElementById('admin-live-inbox-modal');
@@ -2388,10 +2178,10 @@
             await loadAdminLiveInboxMessages();
           }
         } else {
-          toast('✗ ' + (j.message || 'Erro ao remover email'));
+          showToast('✗ ' + (j.message || 'Erro ao remover email'));
         }
       } catch(e) {
-        toast('Erro de conexão');
+        showToast('Erro de conexão');
       }
     }
 
@@ -2447,6 +2237,7 @@
 
     function renderAssinUsuarios() {
       renderUserSelect('as-user');
+      renderUserSelect('stk-user');
       renderUserSelect('lic-assigned-user');
       renderUserSelect('ve-user', 'Todos os usuários');
     }
@@ -3145,7 +2936,6 @@
     }
 
     function renderTable(list) {
-      const principalEmailScope = location.hostname !== 'consulta-codigos-jr7z.onrender.com' || (_meUser && _meUser.username === 'admin');
       const tb = document.getElementById('tbody');
       if (!list.length) {
         tb.innerHTML = `<tr><td colspan="6"><div class="empty"><div class="eico">👤</div>Nenhum usuário encontrado.</div></td></tr>`;
@@ -3170,7 +2960,6 @@
           </td>
           <td>
             ${linkedBox}
-            ${(location.hostname === 'consulta-codigos-jr7z.onrender.com' && principalEmailScope && u.role === 'admin' && u.username !== 'admin') ? `<a class="btn-ref" style="display:inline-block;margin:6px 0;font-size:.74rem;" href="/admin/emails-subadmins?admin_user=${encodeURIComponent(u.username)}">📋 Lista permitida de emails</a>` : ''}
             <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap;">
               <button class="btn-ref" style="font-size:.74rem;padding:5px 8px;" onclick="openUserVinculos('${x(u.username)}')">📩 Abrir vínculos</button>
               <button class="btn-ref" style="font-size:.74rem;padding:5px 8px;" onclick="const si=document.getElementById('s-in'); if(si){si.value='${x((Array.isArray(u.linked_emails) && u.linked_emails[0]) ? u.linked_emails[0] : '')}'; filterUsers(si.value); si.focus();}">🔎 Buscar email</button>
@@ -3181,7 +2970,7 @@
               <button class="bsm bpw" onclick="openPw('${x(u.username)}')">🔑 Alterar Senha</button>
               <button class="bsm bpin locked" onclick="openPin('${x(u.username)}', ${u.reset_pin_custom})">${u.reset_pin_custom ? '🔒 PIN Personalizado' : '🔒 PIN Padrão 1995'}</button>
               <button class="bsm" onclick="openDirectLogin('${x(u.username)}')">🚀 Entrar Direto</button>
-              ${principalEmailScope ? `<button class="bsm bdel" onclick="openDel('${x(u.username)}')">🗑️ Remover</button>` : ''}
+              <button class="bsm bdel" onclick="openDel('${x(u.username)}')">🗑️ Remover</button>
             </div>
           </td>
         </tr>`;
@@ -3241,13 +3030,13 @@
       }
     }
 
-    async function loadUsers(keepSearch = false) {
+    async function loadUsers() {
       document.getElementById('tbody').innerHTML =
         `<tr><td colspan="6"><div class="empty"><span class="sp"></span> Carregando...</div></td></tr>`;
       const si = document.getElementById('s-in');
-      if (si && !keepSearch) si.value = '';
+      if (si) si.value = '';
       const sei = document.getElementById('s-email-in');
-      if (sei && !keepSearch) sei.value = '';
+      if (sei) sei.value = '';
       document.getElementById('s-info').textContent = '';
       try {
         const { j: d } = await fetchJsonNoCache('/api/admin/users');
@@ -3262,8 +3051,7 @@
         document.getElementById('st-total').textContent = _users.length;
         document.getElementById('st-cli').textContent   = _users.filter(u => u.role === 'client').length;
         document.getElementById('st-adm').textContent   = _users.filter(u => u.role === 'admin').length;
-        if (keepSearch && si?.value) filterUsers(si.value);
-        else renderTable(_users);
+        renderTable(_users);
       } catch { showTblErr('Erro de conexão.'); }
     }
 
@@ -3514,7 +3302,6 @@
     }
 
   </script>
-<script src="/static/netflix-links-admin.js?v=14" defer></script>
-<script src="/static/email-delegation-launcher.js?v=5" defer></script>
+<script src="/static/netflix-links-admin.js?v=5" defer></script>
 </body>
 </html>

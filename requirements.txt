@@ -4,4 +4,3 @@ gunicorn==21.2.0
 Werkzeug==3.0.1
 efipay==1.0.7
 cloudscraper==1.2.71
-cryptography>=44,<52
