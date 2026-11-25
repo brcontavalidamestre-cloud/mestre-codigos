@@ -9164,6 +9164,14 @@ register_links(app, _data_dir, search_code_unified,
 from stock_ledger import register_stock_ledger
 register_stock_ledger(app, _data_dir, load_stock, load_products, _LOJAMESTRE_ADMIN_URL)
 
+# Paid Loja Mestre accounts: the /compra link delivered after a Pix payment.
+# Independent from panel ownership, admin links and email bindings.
+from purchase_code_links import register_purchase_code_links
+from purchase_code_search import make_purchase_code_search
+register_purchase_code_links(app, _data_dir, None,
+    make_purchase_code_search(PLATFORM_CONFIG, get_imap_accounts, _batch_search_mailbox,
+        _fetch_and_extract, _get_spam_boxes, _targeted_body_extract))
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(debug=False, host="0.0.0.0", port=port)
