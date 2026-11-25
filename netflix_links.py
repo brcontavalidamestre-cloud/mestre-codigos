@@ -502,12 +502,25 @@ def register_links(app, data_dir, search, search_alls=None):
         data = request.get_json(silent=True) or {}
         service = requested_service(data)
         email = str((data or {}).get('email', '')).strip().lower()
+        # Reativa um link ja entregue ao cliente: em vez de gerar outro token,
+        # reaproveita o token informado para o mesmo email e servico.
+        keep = str(data.get('token') or '').strip()
+        if keep and not re.fullmatch(r'[A-Za-z0-9_-]{43}', keep):
+            return jsonify(success=False, message='O link informado não tem o formato esperado.'), 400
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
             current = conn.execute('SELECT * FROM links WHERE email=? AND service=?', (email, service)).fetchone()
             if not owns(current):
                 return jsonify(success=False, message='Email não cadastrado neste acesso.'), 404
-            token = secrets.token_urlsafe(32)
+            if keep:
+                other = conn.execute(
+                    'SELECT email FROM links WHERE digest=? AND NOT (email=? AND service=?)',
+                    (digest(keep), email, service)).fetchone()
+                if other:
+                    return jsonify(success=False, message='Este link já está em uso por outro email.'), 409
+                token = keep
+            else:
+                token = secrets.token_urlsafe(32)
             result = conn.execute(
                 'UPDATE links SET token=?,digest=?,updated_at=?,last_query=0 WHERE email=? AND service=?',
                 (token, digest(token), int(time.time()), email, service))
