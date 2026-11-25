@@ -146,6 +146,7 @@ def register_links(app, data_dir, search, search_alls=None):
             token TEXT NOT NULL, digest TEXT NOT NULL UNIQUE,
             created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
             last_query REAL NOT NULL DEFAULT 0, owner TEXT NOT NULL DEFAULT '',
+            expires_at INTEGER NOT NULL DEFAULT 0,
             PRIMARY KEY (email, service))''')
 
     def rebuild_links_table(conn, columns):
@@ -160,8 +161,9 @@ def register_links(app, data_dir, search, search_alls=None):
         create_links_table(conn)
         owner = "coalesce(owner,'')" if 'owner' in columns else "''"
         last_query = 'coalesce(last_query,0)' if 'last_query' in columns else '0'
-        conn.execute(f'''INSERT INTO links(email,service,token,digest,created_at,updated_at,last_query,owner)
-            SELECT email,'netflix',token,digest,created_at,updated_at,{last_query},{owner}
+        expires = 'coalesce(expires_at,0)' if 'expires_at' in columns else '0'
+        conn.execute(f'''INSERT INTO links(email,service,token,digest,created_at,updated_at,last_query,owner,expires_at)
+            SELECT email,'netflix',token,digest,created_at,updated_at,{last_query},{owner},{expires}
             FROM links_legacy''')
         conn.execute('DROP TABLE links_legacy')
 
@@ -185,6 +187,10 @@ def register_links(app, data_dir, search, search_alls=None):
                                 primary = [row[1] for row in info if row[5]]
                                 if 'service' not in columns or primary != ['email', 'service']:
                                     rebuild_links_table(conn, columns)
+                            # Validade do link: 0 = nunca expira (padrao dos links existentes).
+                            current_columns = {row[1] for row in conn.execute('PRAGMA table_info(links)')}
+                            if 'expires_at' not in current_columns:
+                                conn.execute('ALTER TABLE links ADD COLUMN expires_at INTEGER NOT NULL DEFAULT 0')
                             conn.execute('''CREATE TABLE IF NOT EXISTS netflix_admins (
                                 id TEXT PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
                                 name TEXT NOT NULL, password_hash TEXT NOT NULL,
@@ -261,13 +267,57 @@ def register_links(app, data_dir, search, search_alls=None):
     def digest(token):
         return hashlib.sha256(token.encode()).hexdigest()
 
+    # Validade do link: 0 = nunca expira (só é revogado ao redefinir/excluir).
+    MAX_EXPIRY_DAYS = 3650
+
+    def expires_at_of(row):
+        try:
+            return int(row['expires_at'] or 0)
+        except (KeyError, IndexError, TypeError, ValueError):
+            return 0
+
+    def is_expired(row):
+        expires = expires_at_of(row)
+        return bool(expires and expires <= int(time.time()))
+
+    def expiry_payload(row):
+        expires = expires_at_of(row)
+        if not expires:
+            return {'expires_at': 0, 'expires_in_days': None, 'expired': False,
+                    'expiry_label': 'Nunca expira'}
+        remaining = expires - int(time.time())
+        days = max(0, -(-remaining // 86400)) if remaining > 0 else 0
+        label = ('Expirado' if remaining <= 0
+                 else ('Expira hoje' if days <= 0 else 'Expira em ' + str(days) + ' dia(s)'))
+        return {'expires_at': expires, 'expires_in_days': days,
+                'expired': remaining <= 0, 'expiry_label': label}
+
+    def parse_expiry(data):
+        """Retorna (expires_at, erro). Ausente = nunca expira."""
+        raw_days = data.get('expires_days')
+        if raw_days is None or raw_days == '':
+            if data.get('never_expire'):
+                return 0, None
+            return 0, None
+        try:
+            days = int(str(raw_days).strip())
+        except (TypeError, ValueError):
+            return None, 'Informe a validade em dias (número inteiro) ou escolha nunca expirar.'
+        if days < 0 or days > MAX_EXPIRY_DAYS:
+            return None, 'A validade deve ficar entre 1 e ' + str(MAX_EXPIRY_DAYS) + ' dias, ou nunca expirar.'
+        if days == 0:
+            return 0, None
+        return int(time.time()) + days * 86400, None
+
     def row_payload(row):
         cfg = SERVICES[normalize_service(row['service'] if 'service' in row.keys() else DEFAULT_SERVICE)]
-        return {'email': row['email'], 'service': normalize_service(row['service']),
-                'service_name': cfg['name'],
-                'url': 'https://' + HOST + cfg['path'] + '#' + row['token'],
-                'created_at': row['created_at'], 'updated_at': row['updated_at'],
-                'manager': row['manager'] if 'manager' in row.keys() else ('admin' if not row['owner'] else '')}
+        payload = {'email': row['email'], 'service': normalize_service(row['service']),
+                   'service_name': cfg['name'],
+                   'url': 'https://' + HOST + cfg['path'] + '#' + row['token'],
+                   'created_at': row['created_at'], 'updated_at': row['updated_at'],
+                   'manager': row['manager'] if 'manager' in row.keys() else ('admin' if not row['owner'] else '')}
+        payload.update(expiry_payload(row))
+        return payload
 
     def authorized_row(conn, service):
         if not host_allowed():
@@ -278,6 +328,8 @@ def register_links(app, data_dir, search, search_alls=None):
             return None
         return conn.execute('SELECT * FROM links WHERE digest=? AND service=?',
                             (digest(token), service)).fetchone()
+
+    EXPIRED_MESSAGE = 'Este link expirou. Solicite um novo link ao administrador.'
 
     def requested_service(payload=None):
         source = payload if isinstance(payload, dict) else {}
@@ -447,6 +499,9 @@ def register_links(app, data_dir, search, search_alls=None):
             return jsonify(success=False, message='Informe a lista de emails.'), 400
         service = requested_service(data)
         cfg = SERVICES[service]
+        expiry_at, expiry_error = parse_expiry(data)
+        if expiry_error:
+            return jsonify(success=False, message=expiry_error), 400
         batch = 'emails' in data
         raw = data.get('emails') if batch else data.get('email', '')
         if isinstance(raw, list):
@@ -483,8 +538,10 @@ def register_links(app, data_dir, search, search_alls=None):
                 else:
                     token = secrets.token_urlsafe(32)
                     conn.execute(
-                        'INSERT INTO links(email,service,token,digest,created_at,updated_at,owner) VALUES(?,?,?,?,?,?,?)',
-                        (email, service, token, digest(token), now, now, g.netflix_manager['id']))
+                        'INSERT INTO links(email,service,token,digest,created_at,updated_at,owner,expires_at) '
+                        'VALUES(?,?,?,?,?,?,?,?)',
+                        (email, service, token, digest(token), now, now,
+                         g.netflix_manager['id'], expiry_at))
                     row = conn.execute('SELECT * FROM links WHERE email=? AND service=?', (email, service)).fetchone()
                     result = row_payload(row)
                     result['created'] = True
@@ -502,6 +559,10 @@ def register_links(app, data_dir, search, search_alls=None):
         data = request.get_json(silent=True) or {}
         service = requested_service(data)
         email = str((data or {}).get('email', '')).strip().lower()
+        # Redefinir gera um token novo e aplica a validade escolhida agora.
+        expiry_at, expiry_error = parse_expiry(data)
+        if expiry_error:
+            return jsonify(success=False, message=expiry_error), 400
         with db() as conn:
             conn.execute('BEGIN IMMEDIATE')
             current = conn.execute('SELECT * FROM links WHERE email=? AND service=?', (email, service)).fetchone()
@@ -509,8 +570,9 @@ def register_links(app, data_dir, search, search_alls=None):
                 return jsonify(success=False, message='Email não cadastrado neste acesso.'), 404
             token = secrets.token_urlsafe(32)
             result = conn.execute(
-                'UPDATE links SET token=?,digest=?,updated_at=?,last_query=0 WHERE email=? AND service=?',
-                (token, digest(token), int(time.time()), email, service))
+                'UPDATE links SET token=?,digest=?,updated_at=?,last_query=0,expires_at=? '
+                'WHERE email=? AND service=?',
+                (token, digest(token), int(time.time()), expiry_at, email, service))
             if not result.rowcount:
                 return jsonify(success=False, message='Email não cadastrado.'), 404
             row = conn.execute('SELECT * FROM links WHERE email=? AND service=?', (email, service)).fetchone()
@@ -548,8 +610,12 @@ def register_links(app, data_dir, search, search_alls=None):
             row = authorized_row(conn, service)
         if not row:
             return jsonify(success=False, message='Link inválido ou redefinido. Solicite o link atual ao administrador.'), 403
-        return jsonify(success=True, email=row['email'], service=service, service_name=cfg['name'],
-                       filters=[{'key': p, 'label': cfg['labels'][p]} for p in cfg['platforms']])
+        if is_expired(row):
+            return jsonify(success=False, expired=True, message=EXPIRED_MESSAGE), 403
+        payload = {'success': True, 'email': row['email'], 'service': service, 'service_name': cfg['name'],
+                   'filters': [{'key': p, 'label': cfg['labels'][p]} for p in cfg['platforms']]}
+        payload.update(expiry_payload(row))
+        return jsonify(**payload)
 
     def client_reset(service):
         # Deny old client pages too; only the authenticated principal admin resets.
@@ -563,6 +629,8 @@ def register_links(app, data_dir, search, search_alls=None):
             row = authorized_row(conn, service)
             if not row:
                 return jsonify(success=False, message='Link inválido ou redefinido.'), 403
+            if is_expired(row):
+                return jsonify(success=False, expired=True, message=EXPIRED_MESSAGE), 403
             supplied = request.get_json(silent=True) or {}
             if not isinstance(supplied, dict):
                 return jsonify(success=False, message='Consulta inválida.'), 400
@@ -589,11 +657,14 @@ def register_links(app, data_dir, search, search_alls=None):
                 strict_email_context.reset(marker)
         except Exception:
             return jsonify(success=False, message='Não foi possível consultar agora. Tente novamente.'), 503
-        # A reset during IMAP lookup must revoke even the in-flight response.
+        # A reset or an expiry during the IMAP lookup must revoke even the
+        # in-flight response.
         with db() as conn:
             current = authorized_row(conn, service)
         if not current:
             return jsonify(success=False, message='Este link foi redefinido. Use o novo link.'), 403
+        if is_expired(current):
+            return jsonify(success=False, expired=True, message=EXPIRED_MESSAGE), 403
         results = []
         seen = set()
         for item in raw_results or []:

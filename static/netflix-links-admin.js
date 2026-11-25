@@ -13,6 +13,18 @@
   let currentService = new URLSearchParams(location.search).get('service');
   if (!byKey[currentService]) currentService = 'netflix';
 
+  // Presets de validade. 0 = nunca expira.
+  const PRESETS = [
+    { days: 0, label: 'Nunca expira' },
+    { days: 1, label: '1 dia' },
+    { days: 7, label: '7 dias' },
+    { days: 15, label: '15 dias' },
+    { days: 30, label: '30 dias' },
+    { days: 60, label: '60 dias' },
+    { days: 90, label: '90 dias' }
+  ];
+  const MAX_DAYS = 3650;
+
   let identity;
   try {
     identity = await (await fetch('/api/netflix-admin/me', { cache: 'no-store' })).json();
@@ -27,7 +39,7 @@
 
   const css = document.createElement('link');
   css.rel = 'stylesheet';
-  css.href = '/static/netflix-links.css?v=7';
+  css.href = '/static/netflix-links.css?v=8';
   document.head.append(css);
 
   const section = document.createElement('section');
@@ -40,6 +52,16 @@
       <label for="nfl-add-email" id="nfl-add-label">Adicionar vários emails de uma vez</label>
       <textarea id="nfl-add-email" rows="6" maxlength="60000" required placeholder="cliente1@exemplo.com&#10;cliente2@exemplo.com&#10;cliente3@exemplo.com" aria-label="Emails dos clientes"></textarea>
       <small id="nfl-add-help">Até 200 emails por vez. Use um por linha ou separe por vírgula ou ponto e vírgula. Emails já cadastrados mantêm seu link atual.</small>
+      <fieldset class="nfl-expiry">
+        <legend>Validade do link</legend>
+        <p class="nfl-expiry-note">Depois do prazo o link para de funcionar sozinho. Com "Nunca expira", ele só é revogado quando você redefinir ou excluir.</p>
+        <div class="nfl-expiry-presets" id="nfl-expiry-presets"></div>
+        <div class="nfl-expiry-custom">
+          <label for="nfl-expiry-days">Outro prazo (em dias)</label>
+          <input id="nfl-expiry-days" type="number" min="1" max="3650" step="1" inputmode="numeric" placeholder="ex.: 45" autocomplete="off">
+        </div>
+        <p class="nfl-expiry-summary" id="nfl-expiry-summary"></p>
+      </fieldset>
       <button type="submit" id="nfl-create-button">Gerar links para os emails</button>
     </form>
     <label for="nfl-search">Pesquisar email</label>
@@ -52,7 +74,7 @@
     </div>
     <div class="nfl-scroll">
       <table>
-        <thead><tr><th>Email</th><th>Criado em</th><th>Última redefinição</th><th>Responsável</th><th>Ações</th></tr></thead>
+        <thead><tr><th>Email</th><th>Validade</th><th>Criado em</th><th>Última redefinição</th><th>Responsável</th><th>Ações</th></tr></thead>
         <tbody id="nfl-rows"></tbody>
       </table>
     </div>
@@ -77,6 +99,7 @@
   const tabBar = section.querySelector('.nfl-tabs');
   let items = [];
   let generatedItems = [];
+  let selectedDays = 0;
 
   const tabButtons = SERVICES.map(cfg => {
     const button = document.createElement('button');
@@ -100,6 +123,60 @@
     const cfg = byKey[currentService];
     el('nfl-create-button').textContent = 'Gerar links ' + cfg.name + ' para os emails';
     el('nfl-add-help').textContent = 'Até 200 emails por vez. Use um por linha ou separe por vírgula ou ponto e vírgula. Emails já cadastrados mantêm seu link atual. Os links gerados aqui são ' + cfg.hint + '.';
+  }
+
+  // ── Validade: presets + prazo livre ──────────────────────────────────────
+  const presetBox = el('nfl-expiry-presets');
+  const presetButtons = PRESETS.map(preset => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'nfl-preset';
+    button.dataset.days = String(preset.days);
+    button.textContent = preset.label;
+    button.onclick = () => selectDays(preset.days);
+    presetBox.append(button);
+    return button;
+  });
+
+  el('nfl-expiry-days').addEventListener('input', () => {
+    const raw = el('nfl-expiry-days').value.trim();
+    if (!raw) { selectDays(0); return; }
+    const parsed = Number(raw);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_DAYS) { paintExpiry(); return; }
+    selectedDays = parsed;
+    paintExpiry();
+  });
+
+  function selectDays(days) {
+    selectedDays = days;
+    if (days === 0) el('nfl-expiry-days').value = '';
+    paintExpiry();
+  }
+
+  function expirySummary() {
+    if (selectedDays > 0) {
+      const until = new Date(Date.now() + selectedDays * 86400000);
+      return 'O link vale por ' + selectedDays + ' dia(s), até ' + until.toLocaleDateString('pt-BR') + '.';
+    }
+    const custom = el('nfl-expiry-days').value.trim();
+    if (customInvalid(custom)) return 'Informe um número inteiro entre 1 e ' + MAX_DAYS + '.';
+    return 'O link nunca expira. Ele só é bloqueado quando você redefinir ou excluir.';
+  }
+
+  function customInvalid(custom) {
+    if (!custom) return false;
+    const parsed = Number(custom);
+    return !Number.isInteger(parsed) || parsed < 1 || parsed > MAX_DAYS;
+  }
+
+  function paintExpiry() {
+    presetButtons.forEach(button => {
+      const active = selectedDays === Number(button.dataset.days);
+      button.classList.toggle('nfl-preset-active', active);
+      button.setAttribute('aria-pressed', String(active));
+    });
+    el('nfl-expiry-summary').textContent = expirySummary();
+    el('nfl-expiry-summary').classList.toggle('nfl-expiry-warn', customInvalid(el('nfl-expiry-days').value.trim()));
   }
 
   async function api(path = '', body) {
@@ -127,7 +204,29 @@
   function showLinks(generated) {
     generatedItems = generated.slice();
     el('nfl-generated').hidden = generatedItems.length === 0;
-    el('nfl-generated-url').value = generatedItems.map(item => item.email + '\n' + item.url).join('\n\n');
+    el('nfl-generated-url').value = generatedItems.map(item => {
+      const validade = item.expires_at ? 'vale até ' + new Date(item.expires_at * 1000).toLocaleDateString('pt-BR') : 'nunca expira';
+      return item.email + '\n' + item.url + '\n(' + validade + ')';
+    }).join('\n\n');
+  }
+
+  function expiryCell(item) {
+    const td = document.createElement('td');
+    const span = document.createElement('span');
+    if (item.expired) {
+      span.textContent = 'Expirado';
+      span.className = 'nfl-expiry-badge nfl-expiry-expired';
+    } else if (!item.expires_at) {
+      span.textContent = 'Nunca expira';
+      span.className = 'nfl-expiry-badge nfl-expiry-never';
+    } else {
+      const until = new Date(item.expires_at * 1000).toLocaleDateString('pt-BR');
+      span.textContent = until + ' (' + item.expiry_label.replace('Expira em ', '').replace('Expira hoje', 'hoje') + ')';
+      span.className = 'nfl-expiry-badge' + (item.expires_in_days !== null && item.expires_in_days <= 3 ? ' nfl-expiry-soon' : '');
+    }
+    span.title = item.expires_at ? new Date(item.expires_at * 1000).toLocaleString('pt-BR') : 'Sem prazo de validade';
+    td.append(span);
+    return td;
   }
 
   function render() {
@@ -138,14 +237,17 @@
     if (!visible.length) {
       const tr = document.createElement('tr');
       const td = document.createElement('td');
-      td.colSpan = 5;
+      td.colSpan = 6;
       td.textContent = 'Nenhum email encontrado.';
       tr.append(td);
       rows.append(tr);
     }
     visible.forEach(item => {
       const tr = document.createElement('tr');
-      [item.email, new Date(item.created_at * 1000).toLocaleString('pt-BR'),
+      const emailTd = document.createElement('td');
+      emailTd.textContent = item.email;
+      tr.append(emailTd, expiryCell(item));
+      [new Date(item.created_at * 1000).toLocaleString('pt-BR'),
        new Date(item.updated_at * 1000).toLocaleString('pt-BR'),
        item.manager || identity.username].forEach(text => {
         const td = document.createElement('td');
@@ -162,13 +264,16 @@
       reset.className = 'nfl-secondary';
       reset.textContent = 'Redefinir link';
       reset.onclick = async () => {
-        if (!confirm('Redefinir o link de ' + item.email + '? O link anterior deixará de funcionar.')) return;
+        const prazo = selectedDays > 0 ? selectedDays + ' dia(s)' : 'nunca expirar';
+        if (!confirm('Redefinir o link de ' + item.email + ' com validade: ' + prazo + '?\n\nO link anterior deixará de funcionar imediatamente.')) return;
         reset.disabled = true;
         try {
-          const data = await api('/reset', { email: item.email });
+          const body = { email: item.email };
+          if (selectedDays > 0) body.expires_days = selectedDays;
+          const data = await api('/reset', body);
           showLinks([data.item]);
           await load();
-          message('Link redefinido. Envie o novo link ao cliente.');
+          message('Link redefinido (' + data.item.expiry_label + '). Envie o novo link ao cliente.');
         } catch (error) { message(error.message); } finally { reset.disabled = false; }
       };
       const remove = document.createElement('button');
@@ -220,22 +325,28 @@
   el('nfl-generated-copy').onclick = () => copy(el('nfl-generated-url').value);
   el('nfl-create').addEventListener('submit', async event => {
     event.preventDefault();
-    const button = event.currentTarget.querySelector('button');
+    const custom = el('nfl-expiry-days').value.trim();
+    if (customInvalid(custom)) { message('Informe um número inteiro entre 1 e ' + MAX_DAYS + ' dias, ou escolha nunca expirar.'); return; }
+    const button = event.currentTarget.querySelector('button[type="submit"]');
     button.disabled = true;
     const serviceName = byKey[currentService].name;
     try {
-      const data = await api('', { emails: el('nfl-add-email').value });
+      const body = { emails: el('nfl-add-email').value };
+      if (selectedDays > 0) body.expires_days = selectedDays;
+      const data = await api('', body);
       showLinks(data.items);
       el('nfl-add-email').value = '';
       await load();
+      const prazo = selectedDays > 0 ? selectedDays + ' dia(s)' : 'nunca expira';
       const notes = [data.created + ' link(s) ' + serviceName + ' novo(s)', data.existing + ' já cadastrado(s) mantido(s)'];
       if (data.duplicates) notes.push(data.duplicates + ' repetido(s) ignorado(s)');
       if (data.invalid_emails.length) notes.push('Inválidos não adicionados: ' + data.invalid_emails.join(', '));
       if (data.conflict_emails && data.conflict_emails.length) notes.push('Já pertencem a outro acesso e não foram adicionados: ' + data.conflict_emails.join(', '));
-      message(notes.join(' · ') + '. Copie os links e envie cada um ao respectivo cliente.');
+      message(notes.join(' · ') + '. Validade: ' + prazo + '. Copie os links e envie cada um ao respectivo cliente.');
     } catch (error) { message(error.message); } finally { button.disabled = false; }
   });
 
   paintTabs();
+  paintExpiry();
   try { await load(); } catch (error) { message(error.message); }
 })();

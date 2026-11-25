@@ -66,6 +66,15 @@
       const data = await api('access'); el('nfl-email').textContent = data.email;
       const filters = el('nfl-filter-list');
       if (filters && Array.isArray(data.filters)) filters.textContent = 'Filtros: ' + data.filters.map(item => item.label).join(' · ');
+      const expiry = el('nfl-expiry');
+      if (expiry) {
+        if (data.expires_at) {
+          const until = new Date(data.expires_at * 1000).toLocaleDateString('pt-BR');
+          expiry.textContent = 'Este link vale até ' + until + '.';
+        } else {
+          expiry.textContent = 'Este link não tem prazo de validade.';
+        }
+      }
       el('nfl-controls').hidden = false; status('');
     } catch (error) { el('nfl-email').textContent = ''; status(error.message); }
   }
