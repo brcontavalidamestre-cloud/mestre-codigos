@@ -27,7 +27,7 @@
 
   const css = document.createElement('link');
   css.rel = 'stylesheet';
-  css.href = '/static/netflix-links.css?v=7';
+  css.href = '/static/netflix-links.css?v=8';
   document.head.append(css);
 
   const section = document.createElement('section');
@@ -56,7 +56,22 @@
         <tbody id="nfl-rows"></tbody>
       </table>
     </div>
-    <button id="nfl-refresh" type="button" class="nfl-secondary">Atualizar lista</button>`;
+    <button id="nfl-refresh" type="button" class="nfl-secondary">Atualizar lista</button>
+    <div id="nfl-block-box">
+      <h3>🚫 Bloquear recebimento de emails</h3>
+      <p>Escolha o cliente, adicione o email abaixo e ele para de receber os códigos. A lista vale para todos os serviços e também para a consulta do painel principal. Para liberar, use "Liberar" na lista.</p>
+      <form id="nfl-block-form">
+        <textarea id="nfl-block-emails" rows="4" maxlength="60000" required placeholder="cliente1@exemplo.com&#10;cliente2@exemplo.com" aria-label="Emails que não podem receber códigos"></textarea>
+        <small>Um email por linha (ou separados por vírgula). Bloquear o endereço base também bloqueia os apelidos com +tag.</small>
+        <button type="submit" id="nfl-block-button">Bloquear recebimento</button>
+      </form>
+      <div class="nfl-scroll">
+        <table>
+          <thead><tr><th>Email bloqueado</th><th>Bloqueado em</th><th>Por</th><th>Ações</th></tr></thead>
+          <tbody id="nfl-blocked-rows"></tbody>
+        </table>
+      </div>
+    </div>`;
 
   const main = document.querySelector('.main');
   if (!main) return;
@@ -77,6 +92,7 @@
   const tabBar = section.querySelector('.nfl-tabs');
   let items = [];
   let generatedItems = [];
+  let blockedItems = [];
 
   const tabButtons = SERVICES.map(cfg => {
     const button = document.createElement('button');
@@ -130,6 +146,31 @@
     el('nfl-generated-url').value = generatedItems.map(item => item.email + '\n' + item.url).join('\n\n');
   }
 
+  function isBlocked(email) {
+    const target = String(email || '').trim().toLowerCase();
+    if (!target) return false;
+    const set = new Set(blockedItems.map(item => String(item.email || '').toLowerCase()));
+    if (set.has(target)) return true;
+    const at = target.indexOf('@');
+    if (at < 0) return false;
+    const local = target.slice(0, at);
+    const domain = target.slice(at + 1);
+    if (!local.includes('+')) return false;
+    return set.has(local.split('+')[0] + '@' + domain);
+  }
+
+  async function blockEmails(text) {
+    const data = await blockApi('', { emails: text });
+    blockedItems = data.items || [];
+    renderBlocked();
+    render();
+    const notes = [];
+    if (data.added) notes.push(data.added + ' email(s) bloqueado(s)');
+    if (data.already) notes.push(data.already + ' já estava(m) na lista');
+    if (data.invalid_emails && data.invalid_emails.length) notes.push('Inválidos ignorados: ' + data.invalid_emails.join(', '));
+    return (notes.join(' · ') || 'Nada alterado') + '. Esses emails não recebem mais códigos.';
+  }
+
   function render() {
     const query = el('nfl-search').value.trim().toLowerCase();
     const rows = el('nfl-rows');
@@ -144,8 +185,19 @@
       rows.append(tr);
     }
     visible.forEach(item => {
+      const blocked = isBlocked(item.email);
       const tr = document.createElement('tr');
-      [item.email, new Date(item.created_at * 1000).toLocaleString('pt-BR'),
+      if (blocked) tr.className = 'nfl-row-blocked';
+      const emailCell = document.createElement('td');
+      emailCell.textContent = item.email;
+      if (blocked) {
+        const tag = document.createElement('span');
+        tag.className = 'nfl-blocked-tag';
+        tag.textContent = '🚫 bloqueado';
+        emailCell.append(' ', tag);
+      }
+      tr.append(emailCell);
+      [new Date(item.created_at * 1000).toLocaleString('pt-BR'),
        new Date(item.updated_at * 1000).toLocaleString('pt-BR'),
        item.manager || identity.username].forEach(text => {
         const td = document.createElement('td');
@@ -189,10 +241,103 @@
           remove.disabled = false; reset.disabled = false; copyButton.disabled = false;
         }
       };
-      actions.append(copyButton, reset, remove);
+      actions.append(copyButton, reset);
+      if (identity.principal) {
+        if (blocked) {
+          const unblock = document.createElement('button');
+          unblock.type = 'button';
+          unblock.className = 'nfl-secondary';
+          unblock.textContent = 'Liberar recebimento';
+          unblock.onclick = async () => {
+            unblock.disabled = true;
+            try {
+              const data = await blockApi('/remove', { email: item.email });
+              blockedItems = data.items || [];
+              renderBlocked();
+              render();
+              message(data.message);
+            } catch (error) { message(error.message); unblock.disabled = false; }
+          };
+          actions.append(unblock);
+        } else {
+          const block = document.createElement('button');
+          block.type = 'button';
+          block.className = 'nfl-danger';
+          block.textContent = 'Bloquear recebimento';
+          block.onclick = async () => {
+            if (!confirm('Bloquear o recebimento de emails de ' + item.email + '? Ele deixará de receber os códigos até você liberar.')) return;
+            block.disabled = true;
+            try { message(await blockEmails(item.email)); }
+            catch (error) { message(error.message); block.disabled = false; }
+          };
+          actions.append(block);
+        }
+      }
+      actions.append(remove);
       tr.append(actions);
       rows.append(tr);
     });
+  }
+
+  function renderBlocked() {
+    const rows = el('nfl-blocked-rows');
+    rows.replaceChildren();
+    if (!blockedItems.length) {
+      const tr = document.createElement('tr');
+      const td = document.createElement('td');
+      td.colSpan = 4;
+      td.textContent = 'Nenhum email bloqueado no momento.';
+      tr.append(td);
+      rows.append(tr);
+      return;
+    }
+    blockedItems.forEach(item => {
+      const tr = document.createElement('tr');
+      [item.email,
+       item.created_at ? new Date(item.created_at * 1000).toLocaleString('pt-BR') : '—',
+       item.created_by || 'admin'].forEach(text => {
+        const td = document.createElement('td');
+        td.textContent = text;
+        tr.append(td);
+      });
+      const actions = document.createElement('td');
+      const unblock = document.createElement('button');
+      unblock.type = 'button';
+      unblock.className = 'nfl-secondary';
+      unblock.textContent = 'Liberar';
+      unblock.onclick = async () => {
+        if (!confirm('Liberar ' + item.email + '? Ele voltará a receber os códigos.')) return;
+        unblock.disabled = true;
+        try {
+          const data = await blockApi('/remove', { email: item.email });
+          blockedItems = data.items || [];
+          renderBlocked();
+          message(data.message);
+        } catch (error) { message(error.message); unblock.disabled = false; }
+      };
+      actions.append(unblock);
+      tr.append(actions);
+      rows.append(tr);
+    });
+  }
+
+  async function loadBlocked() {
+    const response = await fetch('/api/admin/netflix-links/blocked', { cache: 'no-store' });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível carregar a lista de bloqueio.');
+    blockedItems = data.items || [];
+    renderBlocked();
+  }
+
+  async function blockApi(path = '', body) {
+    const response = await fetch('/api/admin/netflix-links/blocked' + path, {
+      method: body ? 'POST' : 'GET', cache: 'no-store',
+      headers: body ? { 'Content-Type': 'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const data = await response.json();
+    if (!response.ok || !data.success) throw new Error(data.message || 'Não foi possível concluir.');
+    return data;
   }
 
   async function load() {
@@ -236,6 +381,32 @@
     } catch (error) { message(error.message); } finally { button.disabled = false; }
   });
 
+  // Bloqueio de recebimento: exclusivo do administrador principal.
+  const blockBox = el('nfl-block-box');
+  if (!identity.principal) {
+    if (blockBox) blockBox.hidden = true;
+  } else if (blockBox) {
+    el('nfl-block-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = el('nfl-block-button');
+      button.disabled = true;
+      try {
+        const data = await blockApi('', { emails: el('nfl-block-emails').value });
+        el('nfl-block-emails').value = '';
+        blockedItems = data.items || [];
+        renderBlocked();
+        const notes = [];
+        if (data.added) notes.push(data.added + ' email(s) bloqueado(s)');
+        if (data.already) notes.push(data.already + ' já estava(m) na lista');
+        if (data.invalid_emails && data.invalid_emails.length) notes.push('Inválidos ignorados: ' + data.invalid_emails.join(', '));
+        message((notes.join(' · ') || 'Nada alterado') + '. Esses emails não recebem mais códigos.');
+      } catch (error) { message(error.message); } finally { button.disabled = false; }
+    });
+  }
+
   paintTabs();
   try { await load(); } catch (error) { message(error.message); }
+  if (identity.principal) {
+    try { await loadBlocked(); } catch (error) { message(error.message); }
+  }
 })();

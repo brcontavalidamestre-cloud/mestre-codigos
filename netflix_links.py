@@ -74,6 +74,100 @@ NETFLIX_FILTER_LABELS = SERVICES['netflix']['labels']
 
 strict_email_context = ContextVar('netflix_link_exact_email', default=None)
 
+BLOCK_MESSAGE = 'Esse email está na lista que não pode receber códigos.'
+
+# Rotas de consulta de codigos do painel principal (bloqueio de recebimento).
+CONSULT_PATHS = {'/api/get-code', '/api/admin/get-code', '/api/verify-reset-pin'}
+INBOX_PATHS = {'/api/live-inbox/messages', '/api/admin/live-inbox/messages'}
+
+
+class BlockedEmailStore:
+    """Lista de emails que não podem receber códigos (quarantine.sqlite3).
+
+    O mesmo arquivo é lido pelo espelho do painel JMP
+    (/api/internal/quarantine) e pela página de compra (/compra), portanto um
+    bloqueio feito aqui vale para todos os fluxos que consultam essa lista.
+    """
+
+    def __init__(self, data_dir):
+        self.path = os.path.join(data_dir, 'quarantine.sqlite3')
+
+    def connect(self):
+        directory = os.path.dirname(self.path)
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+        conn = sqlite3.connect(self.path, timeout=15)
+        conn.row_factory = sqlite3.Row
+        conn.execute('''CREATE TABLE IF NOT EXISTS blocked_emails (
+            email TEXT PRIMARY KEY, created_at INTEGER NOT NULL,
+            created_by TEXT NOT NULL)''')
+        conn.commit()
+        try:
+            os.chmod(self.path, 0o600)
+        except OSError:
+            pass
+        return conn
+
+    def entries(self):
+        conn = self.connect()
+        try:
+            return [dict(row) for row in conn.execute(
+                'SELECT email,created_at,created_by FROM blocked_emails '
+                'ORDER BY created_at DESC,email')]
+        finally:
+            conn.close()
+
+    def emails(self):
+        return {row['email'] for row in self.entries()}
+
+    @staticmethod
+    def matches(email, blocked):
+        email = str(email or '').strip().lower()
+        if email in blocked:
+            return True
+        local, sep, domain = email.partition('@')
+        # Bloquear o endereco base tambem bloqueia os apelidos +tag, mas um
+        # apelido especifico nunca bloqueia os outros do mesmo endereco.
+        return bool(sep and '+' in local and local.split('+', 1)[0] + '@' + domain in blocked)
+
+    def is_blocked(self, email):
+        return self.matches(email, self.emails())
+
+    def add(self, emails, username):
+        conn = self.connect()
+        try:
+            with conn:
+                before = conn.total_changes
+                conn.executemany(
+                    'INSERT OR IGNORE INTO blocked_emails(email,created_at,created_by) VALUES(?,?,?)',
+                    [(email, int(time.time()), username or 'admin') for email in emails])
+                return conn.total_changes - before
+        finally:
+            conn.close()
+
+    def remove(self, email):
+        conn = self.connect()
+        try:
+            with conn:
+                return conn.execute('DELETE FROM blocked_emails WHERE email=?',
+                                    (email,)).rowcount > 0
+        finally:
+            conn.close()
+
+
+def parse_email_list(raw, limit=200):
+    """Normalize a textarea/list payload into (valid, invalid) email lists."""
+    if isinstance(raw, list):
+        raw = '\n'.join(str(value) for value in raw)
+    if not isinstance(raw, str):
+        return [], []
+    candidates = [s.strip().lower() for s in re.split(r'[\s,;]+', raw) if s.strip()]
+    unique = list(dict.fromkeys(candidates))
+    invalid = [s for s in unique
+               if len(s) > 254 or not re.fullmatch(r'[^\s@]+@[^\s@]+\.[^\s@]+', s)]
+    valid = [s for s in unique if s not in invalid]
+    return valid[:limit], invalid
+
 
 def normalize_service(value):
     """Return a known service key, falling back to the default one."""
@@ -136,6 +230,7 @@ def register_links(app, data_dir, search, search_alls=None):
     search_alls = dict(search_alls or {})
     bp = Blueprint('netflix_links', __name__)
     db_path = os.path.join(data_dir, 'netflix_links.sqlite3')
+    blocked_store = BlockedEmailStore(data_dir)
     schema_ready = False
     schema_lock = Lock()
     dummy_hash = generate_password_hash(secrets.token_urlsafe(24))
@@ -550,6 +645,62 @@ def register_links(app, data_dir, search, search_alls=None):
         return jsonify(success=True, email=email, service=service,
                        message='Email e link excluídos. O acesso por esse link foi bloqueado.')
 
+    def principal_or_403():
+        if not g.netflix_manager['principal']:
+            return jsonify(success=False, message='Somente o administrador principal pode bloquear o recebimento de emails.'), 403
+        return None
+
+    @bp.get('/api/admin/netflix-links/blocked')
+    @manager_only
+    def admin_blocked_list():
+        denied = principal_or_403()
+        if denied:
+            return denied
+        entries = blocked_store.entries()
+        return jsonify(success=True, items=entries, count=len(entries), message=BLOCK_MESSAGE)
+
+    @bp.post('/api/admin/netflix-links/blocked')
+    @manager_only
+    def admin_blocked_add():
+        denied = principal_or_403()
+        if denied:
+            return denied
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify(success=False, message='Informe ao menos um email para bloquear.'), 400
+        valid, invalid = parse_email_list(data.get('emails', data.get('email', '')))
+        if not valid:
+            return jsonify(success=False, message='Informe ao menos um email válido.',
+                           invalid_emails=invalid), 400
+        added = blocked_store.add(valid, g.netflix_manager.get('name') or 'admin')
+        current = blocked_store.emails()
+        return jsonify(success=True, added=added, emails=valid,
+                       already=len(valid) - added, invalid_emails=invalid,
+                       items=blocked_store.entries(), message=BLOCK_MESSAGE), 201
+
+    @bp.post('/api/admin/netflix-links/blocked/remove')
+    @manager_only
+    def admin_blocked_remove():
+        denied = principal_or_403()
+        if denied:
+            return denied
+        data = request.get_json(silent=True) or {}
+        if not isinstance(data, dict):
+            return jsonify(success=False, message='Informe o email que deseja liberar.'), 400
+        email = str(data.get('email', '')).strip().lower()
+        if not email:
+            return jsonify(success=False, message='Informe o email que deseja liberar.'), 400
+        removed = blocked_store.remove(email)
+        if not removed:
+            return jsonify(success=False, message='Esse email não está na lista de bloqueio.'), 404
+        return jsonify(success=True, email=email, items=blocked_store.entries(),
+                       message='Email liberado — voltará a receber os códigos.')
+
+    def blocked_response():
+        response = jsonify(success=False, blocked=True, quarantined=True, message=BLOCK_MESSAGE)
+        response.status_code = 403
+        return response
+
     def client_page(service):
         if not host_allowed():
             abort(404)
@@ -561,6 +712,9 @@ def register_links(app, data_dir, search, search_alls=None):
             row = authorized_row(conn, service)
         if not row:
             return jsonify(success=False, message='Link inválido ou redefinido. Solicite o link atual ao administrador.'), 403
+        # Bloqueio de recebimento vale para consulta e para codigo.
+        if blocked_store.is_blocked(row['email']):
+            return blocked_response()
         return jsonify(success=True, email=row['email'], service=service, service_name=cfg['name'],
                        filters=[{'key': p, 'label': cfg['labels'][p]} for p in cfg['platforms']])
 
@@ -576,6 +730,8 @@ def register_links(app, data_dir, search, search_alls=None):
             row = authorized_row(conn, service)
             if not row:
                 return jsonify(success=False, message='Link inválido ou redefinido.'), 403
+            if blocked_store.is_blocked(row['email']):
+                return blocked_response()
             supplied = request.get_json(silent=True) or {}
             if not isinstance(supplied, dict):
                 return jsonify(success=False, message='Consulta inválida.'), 400
@@ -607,6 +763,9 @@ def register_links(app, data_dir, search, search_alls=None):
             current = authorized_row(conn, service)
         if not current:
             return jsonify(success=False, message='Este link foi redefinido. Use o novo link.'), 403
+        # Um bloqueio aplicado durante a consulta não pode vazar o resultado.
+        if blocked_store.is_blocked(current['email']):
+            return blocked_response()
         results = []
         seen = set()
         for item in raw_results or []:
@@ -646,6 +805,82 @@ def register_links(app, data_dir, search, search_alls=None):
                         view_func=partial(client_code, service=service), methods=['POST'])
 
     app.register_blueprint(bp)
+
+    # ── Bloqueio de recebimento também na consulta do painel principal ──────
+    # A lista fica em quarantine.sqlite3, o mesmo arquivo espelhado para o JMP.
+    def _blocked_set():
+        cached = getattr(g, 'nfl_blocked_cache', None)
+        if cached is None:
+            cached = blocked_store.emails()
+            g.nfl_blocked_cache = cached
+        return cached
+
+    def _request_email():
+        data = request.get_json(silent=True)
+        data = data if isinstance(data, dict) else {}
+        return str(data.get('email') or request.args.get('email') or '').strip().lower()
+
+    def _block_reply():
+        return blocked_response()
+
+    @app.before_request
+    def block_consultation():
+        if not host_allowed():
+            return None
+        if (request.path or '') not in CONSULT_PATHS:
+            return None
+        email = _request_email()
+        if email and blocked_store.matches(email, _blocked_set()):
+            return _block_reply()
+        return None
+
+    @app.after_request
+    def filter_final_response(response):
+        if not host_allowed():
+            return response
+        path = request.path or ''
+        # Reverifica apos a busca IMAP: um bloqueio aplicado durante a consulta
+        # nao pode vazar o codigo ja coletado.
+        if path in CONSULT_PATHS:
+            email = _request_email()
+            if email and blocked_store.matches(email, blocked_store.emails()):
+                return _block_reply()
+            return response
+        if path not in INBOX_PATHS:
+            return response
+        if not response.is_json or response.status_code != 200:
+            return response
+        data = response.get_json(silent=True)
+        if not isinstance(data, dict) or not data.get('success'):
+            return response
+        blocked = blocked_store.emails()
+        if not blocked:
+            return response
+
+        def hits(value):
+            if isinstance(value, list):
+                return any(hits(item) for item in value)
+            if isinstance(value, dict):
+                return any(hits(value.get(key)) for key in
+                           ('email', 'allowed_email', 'recipient_email', 'recipients'))
+            return blocked_store.matches(value, blocked)
+
+        changed = False
+        for key in ('items', 'emails', 'allowed'):
+            values = data.get(key)
+            if isinstance(values, list):
+                kept = [item for item in values if not hits(item)]
+                if len(kept) != len(values):
+                    data[key] = kept
+                    changed = True
+        if changed:
+            if isinstance(data.get('items'), list):
+                data['count'] = len(data['items'])
+            data['quarantine_message'] = BLOCK_MESSAGE
+            data['message'] = BLOCK_MESSAGE
+            response.set_data(app.json.dumps(data))
+            response.headers['Cache-Control'] = 'no-store'
+        return response
 
 
 # Backwards-compatible alias for older call sites.
